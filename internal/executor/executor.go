@@ -42,8 +42,14 @@ func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
 
 	cmd := buildCmd(ctx, args)
 
-	stdoutPipe, _ := cmd.StdoutPipe()
-	stderrPipe, _ := cmd.StderrPipe()
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return &Result{Stderr: fmt.Sprintf("stdout pipe: %v", err), ReturnCode: -1}
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return &Result{Stderr: fmt.Sprintf("stderr pipe: %v", err), ReturnCode: -1}
+	}
 
 	if err := cmd.Start(); err != nil {
 		return &Result{Stderr: fmt.Sprintf("start: %v", err), ReturnCode: -1}
@@ -55,21 +61,26 @@ func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
 	var (
 		stdout, stderr strings.Builder
 		wg             sync.WaitGroup
+		scanErrCh      = make(chan error, 2)
 	)
 
-	collect := func(r io.Reader, buf *strings.Builder) {
+	collect := func(r io.Reader, stream string, buf *strings.Builder) {
 		defer wg.Done()
 		sc := newScanner(r)
 		for sc.Scan() {
 			buf.WriteString(sc.Text())
 			buf.WriteByte('\n')
 		}
+		if err := sc.Err(); err != nil {
+			scanErrCh <- fmt.Errorf("%s scan: %w", stream, err)
+		}
 	}
 
 	wg.Add(2)
-	go collect(stdoutPipe, &stdout)
-	go collect(stderrPipe, &stderr)
+	go collect(stdoutPipe, "stdout", &stdout)
+	go collect(stderrPipe, "stderr", &stderr)
 	wg.Wait()
+	close(scanErrCh)
 
 	_ = cmd.Wait()
 	timedOut := ctx.Err() == context.DeadlineExceeded
@@ -79,6 +90,18 @@ func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
 		rc = cmd.ProcessState.ExitCode()
 	}
 	if timedOut {
+		rc = -1
+	}
+
+	scanFailed := false
+	for scanErr := range scanErrCh {
+		scanFailed = true
+		if stderr.Len() > 0 {
+			stderr.WriteByte('\n')
+		}
+		stderr.WriteString(scanErr.Error())
+	}
+	if scanFailed && rc == 0 {
 		rc = -1
 	}
 
@@ -103,8 +126,20 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 		defer cancel()
 
 		cmd := buildCmd(ctx, args)
-		stdoutPipe, _ := cmd.StdoutPipe()
-		stderrPipe, _ := cmd.StderrPipe()
+		stdoutPipe, err := cmd.StdoutPipe()
+		if err != nil {
+			close(lines)
+			done <- &Result{Stderr: fmt.Sprintf("stdout pipe: %v", err), ReturnCode: -1}
+			close(done)
+			return
+		}
+		stderrPipe, err := cmd.StderrPipe()
+		if err != nil {
+			close(lines)
+			done <- &Result{Stderr: fmt.Sprintf("stderr pipe: %v", err), ReturnCode: -1}
+			close(done)
+			return
+		}
 
 		if err := cmd.Start(); err != nil {
 			close(lines)
@@ -119,6 +154,7 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 		var (
 			stdout, stderr strings.Builder
 			wg             sync.WaitGroup
+			scanErrCh      = make(chan error, 2)
 		)
 
 		pipe := func(r io.Reader, stream string, buf *strings.Builder) {
@@ -134,12 +170,16 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 					return
 				}
 			}
+			if err := sc.Err(); err != nil {
+				scanErrCh <- fmt.Errorf("%s scan: %w", stream, err)
+			}
 		}
 
 		wg.Add(2)
 		go pipe(stdoutPipe, "stdout", &stdout)
 		go pipe(stderrPipe, "stderr", &stderr)
 		wg.Wait()
+		close(scanErrCh)
 
 		_ = cmd.Wait()
 		timedOut := ctx.Err() == context.DeadlineExceeded
@@ -149,6 +189,18 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 			rc = cmd.ProcessState.ExitCode()
 		}
 		if timedOut {
+			rc = -1
+		}
+
+		scanFailed := false
+		for scanErr := range scanErrCh {
+			scanFailed = true
+			if stderr.Len() > 0 {
+				stderr.WriteByte('\n')
+			}
+			stderr.WriteString(scanErr.Error())
+		}
+		if scanFailed && rc == 0 {
 			rc = -1
 		}
 

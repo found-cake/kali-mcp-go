@@ -80,15 +80,21 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 		return nil, fmt.Errorf("stream: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, body)
+	}
 
 	var (
 		stdoutLines []string
 		stderrLines []string
 		returnCode  int
 		timedOut    bool
+		done        bool
 	)
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		raw := scanner.Text()
 		if !strings.HasPrefix(raw, "data: ") {
@@ -96,8 +102,8 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 		}
 		data := strings.TrimPrefix(raw, "data: ")
 		var ev dto.StreamEvent
-		if json.Unmarshal([]byte(data), &ev) != nil {
-			continue
+		if err := json.Unmarshal([]byte(data), &ev); err != nil {
+			return nil, fmt.Errorf("stream decode event: %w", err)
 		}
 		if ev.Error != "" {
 			return nil, fmt.Errorf("server: %s", ev.Error)
@@ -105,6 +111,7 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 		if ev.Done {
 			returnCode = ev.ReturnCode
 			timedOut = ev.TimedOut
+			done = true
 			break
 		}
 		switch ev.Stream {
@@ -113,6 +120,12 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 		case "stderr":
 			stderrLines = append(stderrLines, ev.Line)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("stream read: %w", err)
+	}
+	if !done {
+		return nil, fmt.Errorf("stream ended without done event")
 	}
 
 	join := func(lines []string) string {
