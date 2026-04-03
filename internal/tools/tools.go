@@ -1,13 +1,11 @@
-// Package tools defines request types and argument builders for each Kali tool.
-// Each builder is a pure function: (request) → []string args for executor.Run/Stream.
 package tools
 
 import (
 	"fmt"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"strings"
 )
 
-// splitArgs splits a space-separated string into a slice, ignoring empty strings.
 func splitArgs(s string) []string {
 	if s == "" {
 		return nil
@@ -15,79 +13,7 @@ func splitArgs(s string) []string {
 	return strings.Fields(s)
 }
 
-// ─── Request types ────────────────────────────────────────────────────────────
-
-type CommandRequest struct {
-	Command string `json:"command"`
-	Timeout int    `json:"timeout,omitempty"` // seconds; 0 → default
-}
-
-type NmapRequest struct {
-	Target         string `json:"target"`
-	ScanType       string `json:"scan_type"`       // default: -sCV
-	Ports          string `json:"ports"`           // e.g. "80,443,8000-8080"
-	AdditionalArgs string `json:"additional_args"` // default: -T4 -Pn
-}
-
-type GobusterRequest struct {
-	URL            string `json:"url"`
-	Mode           string `json:"mode"`     // dir|dns|fuzz|vhost; default: dir
-	Wordlist       string `json:"wordlist"` // default: dirb/common.txt
-	AdditionalArgs string `json:"additional_args"`
-}
-
-type DirbRequest struct {
-	URL            string `json:"url"`
-	Wordlist       string `json:"wordlist"`
-	AdditionalArgs string `json:"additional_args"`
-}
-
-type NiktoRequest struct {
-	Target         string `json:"target"`
-	AdditionalArgs string `json:"additional_args"`
-}
-
-type SQLMapRequest struct {
-	URL            string `json:"url"`
-	Data           string `json:"data"`
-	AdditionalArgs string `json:"additional_args"`
-}
-
-type MetasploitRequest struct {
-	Module  string            `json:"module"`
-	Options map[string]string `json:"options"`
-}
-
-type HydraRequest struct {
-	Target         string `json:"target"`
-	Service        string `json:"service"`
-	Username       string `json:"username"`
-	UsernameFile   string `json:"username_file"`
-	Password       string `json:"password"`
-	PasswordFile   string `json:"password_file"`
-	AdditionalArgs string `json:"additional_args"`
-}
-
-type JohnRequest struct {
-	HashFile       string `json:"hash_file"`
-	Wordlist       string `json:"wordlist"`
-	Format         string `json:"format"`
-	AdditionalArgs string `json:"additional_args"`
-}
-
-type WPScanRequest struct {
-	URL            string `json:"url"`
-	AdditionalArgs string `json:"additional_args"`
-}
-
-type Enum4linuxRequest struct {
-	Target         string `json:"target"`
-	AdditionalArgs string `json:"additional_args"` // default: -a
-}
-
-// ─── Arg builders ─────────────────────────────────────────────────────────────
-
-func NmapArgs(r NmapRequest) []string {
+func NmapArgs(r dto.NmapRequest) []string {
 	scanType := r.ScanType
 	if scanType == "" {
 		scanType = "-sCV"
@@ -106,7 +32,7 @@ func NmapArgs(r NmapRequest) []string {
 	return args
 }
 
-func GobusterArgs(r GobusterRequest) []string {
+func GobusterArgs(r dto.GobusterRequest) []string {
 	mode := r.Mode
 	if mode == "" {
 		mode = "dir"
@@ -120,7 +46,7 @@ func GobusterArgs(r GobusterRequest) []string {
 	return append(args, splitArgs(r.AdditionalArgs)...)
 }
 
-func DirbArgs(r DirbRequest) []string {
+func DirbArgs(r dto.DirbRequest) []string {
 	wordlist := r.Wordlist
 	if wordlist == "" {
 		wordlist = "/usr/share/wordlists/dirb/common.txt"
@@ -129,12 +55,12 @@ func DirbArgs(r DirbRequest) []string {
 	return append(args, splitArgs(r.AdditionalArgs)...)
 }
 
-func NiktoArgs(r NiktoRequest) []string {
+func NiktoArgs(r dto.NiktoRequest) []string {
 	args := []string{"nikto", "-h", r.Target}
 	return append(args, splitArgs(r.AdditionalArgs)...)
 }
 
-func SQLMapArgs(r SQLMapRequest) []string {
+func SQLMapArgs(r dto.SQLMapRequest) []string {
 	args := []string{"sqlmap", "-u", r.URL, "--batch"}
 	if r.Data != "" {
 		args = append(args, "--data", r.Data)
@@ -142,8 +68,7 @@ func SQLMapArgs(r SQLMapRequest) []string {
 	return append(args, splitArgs(r.AdditionalArgs)...)
 }
 
-// MetasploitScript returns the RC script content for msfconsole.
-func MetasploitScript(r MetasploitRequest) string {
+func MetasploitScript(r dto.MetasploitRequest) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "use %s\n", r.Module)
 	for k, v := range r.Options {
@@ -157,7 +82,7 @@ func MetasploitArgs(rcFile string) []string {
 	return []string{"msfconsole", "-q", "-r", rcFile}
 }
 
-func HydraArgs(r HydraRequest) []string {
+func HydraArgs(r dto.HydraRequest) []string {
 	args := []string{"hydra", "-t", "4"}
 	if r.Username != "" {
 		args = append(args, "-l", r.Username)
@@ -173,7 +98,7 @@ func HydraArgs(r HydraRequest) []string {
 	return append(args, splitArgs(r.AdditionalArgs)...)
 }
 
-func JohnArgs(r JohnRequest) []string {
+func JohnArgs(r dto.JohnRequest) []string {
 	wordlist := r.Wordlist
 	if wordlist == "" {
 		wordlist = "/usr/share/wordlists/rockyou.txt"
@@ -187,12 +112,12 @@ func JohnArgs(r JohnRequest) []string {
 	return append(args, r.HashFile)
 }
 
-func WPScanArgs(r WPScanRequest) []string {
+func WPScanArgs(r dto.WPScanRequest) []string {
 	args := []string{"wpscan", "--url", r.URL}
 	return append(args, splitArgs(r.AdditionalArgs)...)
 }
 
-func Enum4linuxArgs(r Enum4linuxRequest) []string {
+func Enum4linuxArgs(r dto.Enum4linuxRequest) []string {
 	extra := r.AdditionalArgs
 	if extra == "" {
 		extra = "-a"
@@ -201,8 +126,6 @@ func Enum4linuxArgs(r Enum4linuxRequest) []string {
 	args = append(args, splitArgs(extra)...)
 	return append(args, r.Target)
 }
-
-// ValidGobusterMode checks whether the mode string is a valid gobuster mode.
 func ValidGobusterMode(mode string) bool {
 	switch mode {
 	case "", "dir", "dns", "fuzz", "vhost":

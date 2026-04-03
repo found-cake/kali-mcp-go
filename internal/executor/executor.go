@@ -1,4 +1,3 @@
-// Package executor handles subprocess execution with streaming output support.
 package executor
 
 import (
@@ -15,7 +14,6 @@ import (
 
 const DefaultTimeout = 180 * time.Second
 
-// Result is the collected output from a finished command.
 type Result struct {
 	Stdout     string
 	Stderr     string
@@ -23,8 +21,6 @@ type Result struct {
 	TimedOut   bool
 }
 
-// Success returns true when the command completed without error,
-// or timed-out but still produced useful output.
 func (r *Result) Success() bool {
 	if r.TimedOut {
 		return r.Stdout != "" || r.Stderr != ""
@@ -32,35 +28,11 @@ func (r *Result) Success() bool {
 	return r.ReturnCode == 0
 }
 
-// Format returns a human-readable merged output suitable for MCP tool results.
-func (r *Result) Format() string {
-	var sb strings.Builder
-	if r.Stdout != "" {
-		sb.WriteString(r.Stdout)
-	}
-	if r.Stderr != "" {
-		if sb.Len() > 0 {
-			sb.WriteString("\n[stderr]\n")
-		}
-		sb.WriteString(r.Stderr)
-	}
-	if r.TimedOut {
-		sb.WriteString("\n\n[WARNING: timed out — partial results above]")
-	}
-	if sb.Len() == 0 {
-		sb.WriteString("(no output)")
-	}
-	return sb.String()
-}
-
-// Line is a single output line from a streaming execution.
 type Line struct {
-	Stream string // "stdout" | "stderr"
+	Stream string
 	Text   string
 }
 
-// Run executes args and returns collected output.
-// args[0] is the binary; if len==1, it is run via bash -c (shell mode).
 func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -77,9 +49,11 @@ func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
 		return &Result{Stderr: fmt.Sprintf("start: %v", err), ReturnCode: -1}
 	}
 
+	cancelPipeClose := closePipesOnCancel(ctx, stdoutPipe, stderrPipe)
+	defer close(cancelPipeClose)
+
 	var (
 		stdout, stderr strings.Builder
-		mu             sync.Mutex
 		wg             sync.WaitGroup
 	)
 
@@ -87,10 +61,8 @@ func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
 		defer wg.Done()
 		sc := newScanner(r)
 		for sc.Scan() {
-			mu.Lock()
 			buf.WriteString(sc.Text())
 			buf.WriteByte('\n')
-			mu.Unlock()
 		}
 	}
 
@@ -118,9 +90,6 @@ func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
 	}
 }
 
-// Stream executes args and sends lines to the returned channel.
-// The channel is closed when the process finishes or the context is cancelled.
-// done receives the final Result after the channel is closed.
 func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan Line, <-chan *Result) {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -130,9 +99,6 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 	done := make(chan *Result, 1)
 
 	go func() {
-		defer close(lines)
-		defer close(done)
-
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
@@ -141,13 +107,17 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 		stderrPipe, _ := cmd.StderrPipe()
 
 		if err := cmd.Start(); err != nil {
+			close(lines)
 			done <- &Result{Stderr: fmt.Sprintf("start: %v", err), ReturnCode: -1}
+			close(done)
 			return
 		}
 
+		cancelPipeClose := closePipesOnCancel(ctx, stdoutPipe, stderrPipe)
+		defer close(cancelPipeClose)
+
 		var (
 			stdout, stderr strings.Builder
-			mu             sync.Mutex
 			wg             sync.WaitGroup
 		)
 
@@ -156,10 +126,8 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 			sc := newScanner(r)
 			for sc.Scan() {
 				text := sc.Text()
-				mu.Lock()
 				buf.WriteString(text)
 				buf.WriteByte('\n')
-				mu.Unlock()
 				select {
 				case lines <- Line{Stream: stream, Text: text}:
 				case <-ctx.Done():
@@ -184,18 +152,18 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 			rc = -1
 		}
 
+		close(lines)
 		done <- &Result{
 			Stdout:     stdout.String(),
 			Stderr:     stderr.String(),
 			ReturnCode: rc,
 			TimedOut:   timedOut,
 		}
+		close(done)
 	}()
 
 	return lines, done
 }
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
 
 func buildCmd(ctx context.Context, args []string) *exec.Cmd {
 	if len(args) == 1 {
@@ -210,14 +178,25 @@ func newScanner(r io.Reader) *bufio.Scanner {
 	return sc
 }
 
-// Which checks whether a binary exists on PATH.
+func closePipesOnCancel(ctx context.Context, pipes ...io.ReadCloser) chan struct{} {
+	stop := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			for _, p := range pipes {
+				_ = p.Close()
+			}
+		case <-stop:
+		}
+	}()
+	return stop
+}
+
 func Which(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
 }
 
-// WriteTemp writes content to a temp file and returns its path.
-// The caller is responsible for removing it.
 func WriteTemp(prefix, content string) (string, error) {
 	f, err := os.CreateTemp("", prefix+"_*.rc")
 	if err != nil {

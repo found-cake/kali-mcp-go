@@ -11,6 +11,7 @@ import (
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -26,7 +27,6 @@ func main() {
 	log.SetPrefix("[kali-server] ")
 
 	app := fiber.New(fiber.Config{
-		// No read/write timeout — long-running tools (nmap, gobuster) need time
 		ReadTimeout:  0,
 		WriteTimeout: 0,
 		IdleTimeout:  5 * time.Minute,
@@ -43,8 +43,6 @@ func main() {
 	}
 	log.Fatal(app.Listen(addr, listenCfg))
 }
-
-// ─── Routes ───────────────────────────────────────────────────────────────────
 
 func registerRoutes(app *fiber.App) {
 	app.Post("/api/command", handleCommand)
@@ -64,19 +62,8 @@ func registerRoutes(app *fiber.App) {
 	app.Get("/health", handleHealth)
 }
 
-// ─── Response helpers ─────────────────────────────────────────────────────────
-
-type apiResult struct {
-	Stdout         string `json:"stdout"`
-	Stderr         string `json:"stderr"`
-	ReturnCode     int    `json:"return_code"`
-	Success        bool   `json:"success"`
-	TimedOut       bool   `json:"timed_out"`
-	PartialResults bool   `json:"partial_results"`
-}
-
-func toAPIResult(r *executor.Result) apiResult {
-	return apiResult{
+func toAPIResult(r *executor.Result) dto.ToolResult {
+	return dto.ToolResult{
 		Stdout:         r.Stdout,
 		Stderr:         r.Stderr,
 		ReturnCode:     r.ReturnCode,
@@ -90,15 +77,12 @@ func badRequest(c fiber.Ctx, msg string) error {
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": msg})
 }
 
-// bindJSON binds the request body using the v3 Bind API.
 func bindJSON(c fiber.Ctx, dst any) error {
 	return c.Bind().Body(dst)
 }
 
-// ─── Handlers ─────────────────────────────────────────────────────────────────
-
 func handleCommand(c fiber.Ctx) error {
-	var req tools.CommandRequest
+	var req dto.CommandRequest
 	if err := bindJSON(c, &req); err != nil || req.Command == "" {
 		return badRequest(c, "command is required")
 	}
@@ -107,11 +91,8 @@ func handleCommand(c fiber.Ctx) error {
 	return c.JSON(toAPIResult(result))
 }
 
-// handleCommandStream streams stdout/stderr as SSE using v3's SendStreamWriter.
-// Each event: `data: {"stream":"stdout"|"stderr","line":"..."}\n\n`
-// Final event: `data: {"done":true,"return_code":N,"timed_out":bool}\n\n`
 func handleCommandStream(c fiber.Ctx) error {
-	var req tools.CommandRequest
+	var req dto.CommandRequest
 	if err := bindJSON(c, &req); err != nil || req.Command == "" {
 		return badRequest(c, "command is required")
 	}
@@ -123,24 +104,16 @@ func handleCommandStream(c fiber.Ctx) error {
 
 	lines, done := executor.Stream(c.Context(), timeout, []string{req.Command})
 
-	// v3: SendStreamWriter receives *bufio.Writer directly — no fasthttp import needed
 	return c.SendStreamWriter(func(w *bufio.Writer) {
 		for line := range lines {
-			payload, _ := json.Marshal(map[string]string{
-				"stream": line.Stream,
-				"line":   line.Text,
-			})
+			payload, _ := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
 			fmt.Fprintf(w, "data: %s\n\n", payload)
 			if err := w.Flush(); err != nil {
-				return // client disconnected
+				return
 			}
 		}
 		if result := <-done; result != nil {
-			payload, _ := json.Marshal(map[string]any{
-				"done":        true,
-				"return_code": result.ReturnCode,
-				"timed_out":   result.TimedOut,
-			})
+			payload, _ := json.Marshal(dto.StreamEvent{Done: true, ReturnCode: result.ReturnCode, TimedOut: result.TimedOut})
 			fmt.Fprintf(w, "data: %s\n\n", payload)
 			w.Flush()
 		}
@@ -148,7 +121,7 @@ func handleCommandStream(c fiber.Ctx) error {
 }
 
 func handleNmap(c fiber.Ctx) error {
-	var req tools.NmapRequest
+	var req dto.NmapRequest
 	if err := bindJSON(c, &req); err != nil || req.Target == "" {
 		return badRequest(c, "target is required")
 	}
@@ -156,7 +129,7 @@ func handleNmap(c fiber.Ctx) error {
 }
 
 func handleGobuster(c fiber.Ctx) error {
-	var req tools.GobusterRequest
+	var req dto.GobusterRequest
 	if err := bindJSON(c, &req); err != nil || req.URL == "" {
 		return badRequest(c, "url is required")
 	}
@@ -167,7 +140,7 @@ func handleGobuster(c fiber.Ctx) error {
 }
 
 func handleDirb(c fiber.Ctx) error {
-	var req tools.DirbRequest
+	var req dto.DirbRequest
 	if err := bindJSON(c, &req); err != nil || req.URL == "" {
 		return badRequest(c, "url is required")
 	}
@@ -175,7 +148,7 @@ func handleDirb(c fiber.Ctx) error {
 }
 
 func handleNikto(c fiber.Ctx) error {
-	var req tools.NiktoRequest
+	var req dto.NiktoRequest
 	if err := bindJSON(c, &req); err != nil || req.Target == "" {
 		return badRequest(c, "target is required")
 	}
@@ -183,7 +156,7 @@ func handleNikto(c fiber.Ctx) error {
 }
 
 func handleSQLMap(c fiber.Ctx) error {
-	var req tools.SQLMapRequest
+	var req dto.SQLMapRequest
 	if err := bindJSON(c, &req); err != nil || req.URL == "" {
 		return badRequest(c, "url is required")
 	}
@@ -191,7 +164,7 @@ func handleSQLMap(c fiber.Ctx) error {
 }
 
 func handleMetasploit(c fiber.Ctx) error {
-	var req tools.MetasploitRequest
+	var req dto.MetasploitRequest
 	if err := bindJSON(c, &req); err != nil || req.Module == "" {
 		return badRequest(c, "module is required")
 	}
@@ -205,7 +178,7 @@ func handleMetasploit(c fiber.Ctx) error {
 }
 
 func handleHydra(c fiber.Ctx) error {
-	var req tools.HydraRequest
+	var req dto.HydraRequest
 	if err := bindJSON(c, &req); err != nil || req.Target == "" || req.Service == "" {
 		return badRequest(c, "target and service are required")
 	}
@@ -219,7 +192,7 @@ func handleHydra(c fiber.Ctx) error {
 }
 
 func handleJohn(c fiber.Ctx) error {
-	var req tools.JohnRequest
+	var req dto.JohnRequest
 	if err := bindJSON(c, &req); err != nil || req.HashFile == "" {
 		return badRequest(c, "hash_file is required")
 	}
@@ -227,7 +200,7 @@ func handleJohn(c fiber.Ctx) error {
 }
 
 func handleWPScan(c fiber.Ctx) error {
-	var req tools.WPScanRequest
+	var req dto.WPScanRequest
 	if err := bindJSON(c, &req); err != nil || req.URL == "" {
 		return badRequest(c, "url is required")
 	}
@@ -235,7 +208,7 @@ func handleWPScan(c fiber.Ctx) error {
 }
 
 func handleEnum4linux(c fiber.Ctx) error {
-	var req tools.Enum4linuxRequest
+	var req dto.Enum4linuxRequest
 	if err := bindJSON(c, &req); err != nil || req.Target == "" {
 		return badRequest(c, "target is required")
 	}
@@ -253,10 +226,10 @@ func handleHealth(c fiber.Ctx) error {
 			allOK = false
 		}
 	}
-	return c.JSON(fiber.Map{
-		"status":                        "healthy",
-		"message":                       "kali-server (Go/Fiber v3) running",
-		"tools_status":                  status,
-		"all_essential_tools_available": allOK,
+	return c.JSON(dto.HealthResult{
+		Status:                     "healthy",
+		Message:                    "kali-server (Go/Fiber v3) running",
+		ToolsStatus:                status,
+		AllEssentialToolsAvailable: allOK,
 	})
 }
