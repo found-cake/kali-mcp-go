@@ -4,13 +4,90 @@ import (
 	"fmt"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"strings"
+	"unicode"
 )
 
 func splitArgs(s string) []string {
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil
 	}
-	return strings.Fields(s)
+	parts, err := shellSplit(s)
+	if err != nil {
+		return strings.Fields(s)
+	}
+	return parts
+}
+
+func shellSplit(s string) ([]string, error) {
+	var (
+		args         []string
+		current      strings.Builder
+		quote        rune
+		escaped      bool
+		tokenStarted bool
+	)
+
+	flush := func() {
+		if !tokenStarted {
+			return
+		}
+		args = append(args, current.String())
+		current.Reset()
+		tokenStarted = false
+	}
+
+	for _, r := range s {
+		switch {
+		case escaped:
+			current.WriteRune(r)
+			escaped = false
+			tokenStarted = true
+
+		case quote == '\'':
+			if r == '\'' {
+				quote = 0
+			} else {
+				current.WriteRune(r)
+				tokenStarted = true
+			}
+
+		case quote == '"':
+			if r == '"' {
+				quote = 0
+			} else if r == '\\' {
+				escaped = true
+			} else {
+				current.WriteRune(r)
+				tokenStarted = true
+			}
+
+		default:
+			switch {
+			case unicode.IsSpace(r):
+				flush()
+			case r == '\'' || r == '"':
+				quote = r
+				tokenStarted = true
+			case r == '\\':
+				escaped = true
+				tokenStarted = true
+			default:
+				current.WriteRune(r)
+				tokenStarted = true
+			}
+		}
+	}
+
+	if escaped {
+		return nil, fmt.Errorf("unterminated escape")
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("unterminated quote")
+	}
+	flush()
+
+	return args, nil
 }
 
 func NmapArgs(r dto.NmapRequest) []string {

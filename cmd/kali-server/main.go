@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
@@ -85,13 +86,17 @@ func bindJSON(c fiber.Ctx, dst any) error {
 func parseRequest[T any](c fiber.Ctx, validate func(T) error) (T, error) {
 	var req T
 	bindErr := bindJSON(c, &req)
-	if err := validate(req); err != nil {
-		return req, err
-	}
 	if bindErr != nil {
 		return req, fmt.Errorf("invalid request body")
 	}
+	if err := validate(req); err != nil {
+		return req, err
+	}
 	return req, nil
+}
+
+func containsLineBreak(s string) bool {
+	return strings.ContainsAny(s, "\r\n")
 }
 
 func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) []string) error {
@@ -191,10 +196,7 @@ func handleNikto(c fiber.Ctx) error {
 }
 
 func handleTshark(c fiber.Ctx) error {
-	return runTool(c, func(req dto.TsharkRequest) error {
-		if req.Interface == "" && req.ReadFile == "" {
-			return fmt.Errorf("interface or read_file is required")
-		}
+	return runTool(c, func(dto.TsharkRequest) error {
 		return nil
 	}, tools.TsharkArgs)
 }
@@ -212,6 +214,17 @@ func handleMetasploit(c fiber.Ctx) error {
 	req, err := parseRequest(c, func(r dto.MetasploitRequest) error {
 		if r.Module == "" {
 			return fmt.Errorf("module is required")
+		}
+		if containsLineBreak(r.Module) {
+			return fmt.Errorf("module must not contain line breaks")
+		}
+		for k, v := range r.Options {
+			if k == "" {
+				return fmt.Errorf("options keys must be non-empty")
+			}
+			if containsLineBreak(k) || containsLineBreak(v) {
+				return fmt.Errorf("options must not contain line breaks")
+			}
 		}
 		return nil
 	})
@@ -270,7 +283,7 @@ func handleEnum4linux(c fiber.Ctx) error {
 }
 
 func handleHealth(c fiber.Ctx) error {
-	essentials := []string{"nmap", "gobuster", "dirb", "nikto"}
+	essentials := []string{"nmap", "gobuster", "dirb", "nikto", "tshark"}
 	status := make(map[string]bool, len(essentials))
 	allOK := true
 	for _, t := range essentials {
