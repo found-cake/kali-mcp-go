@@ -60,6 +60,39 @@ func NiktoArgs(r dto.NiktoRequest) []string {
 	return append(args, splitArgs(r.AdditionalArgs)...)
 }
 
+func TsharkArgs(r dto.TsharkRequest) []string {
+	args := []string{"tshark"}
+
+	if r.ReadFile != "" {
+		args = append(args, "-r", r.ReadFile)
+	} else if r.Interface != "" {
+		args = append(args, "-i", r.Interface)
+	}
+	if r.CaptureFilter != "" {
+		args = append(args, "-f", r.CaptureFilter)
+	}
+	if r.DisplayFilter != "" {
+		args = append(args, "-Y", r.DisplayFilter)
+	}
+	if r.PacketCount != "" {
+		args = append(args, "-c", r.PacketCount)
+	}
+	if r.Duration != "" {
+		args = append(args, "-a", "duration:"+r.Duration)
+	}
+	if r.OutputFields != "" {
+		args = append(args, "-T", "fields")
+		for _, field := range strings.Split(r.OutputFields, ",") {
+			trimmed := strings.TrimSpace(field)
+			if trimmed != "" {
+				args = append(args, "-e", trimmed)
+			}
+		}
+	}
+
+	return append(args, splitArgs(r.AdditionalArgs)...)
+}
+
 func SQLMapArgs(r dto.SQLMapRequest) []string {
 	args := []string{"sqlmap", "-u", r.URL, "--batch"}
 	if r.Data != "" {

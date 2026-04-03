@@ -30,6 +30,17 @@ type NiktoRequest struct {
 	AdditionalArgs string `json:"additional_args" jsonschema:"extra nikto arguments"`
 }
 
+type TsharkRequest struct {
+	Interface      string `json:"interface" jsonschema:"network interface for live capture e.g. eth0"`
+	CaptureFilter  string `json:"capture_filter" jsonschema:"BPF capture filter e.g. tcp port 80"`
+	DisplayFilter  string `json:"display_filter" jsonschema:"Wireshark display filter"`
+	PacketCount    string `json:"packet_count" jsonschema:"number of packets to capture"`
+	Duration       string `json:"duration" jsonschema:"capture duration in seconds"`
+	ReadFile       string `json:"read_file" jsonschema:"pcap file path to read from"`
+	OutputFields   string `json:"output_fields" jsonschema:"comma-separated fields to extract"`
+	AdditionalArgs string `json:"additional_args" jsonschema:"extra tshark arguments"`
+}
+
 type SQLMapRequest struct {
 	URL            string `json:"url" jsonschema:"required,target URL"`
 	Data           string `json:"data" jsonschema:"POST data string"`

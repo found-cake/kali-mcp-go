@@ -52,6 +52,7 @@ func registerRoutes(app *fiber.App) {
 	app.Post("/api/tools/gobuster", handleGobuster)
 	app.Post("/api/tools/dirb", handleDirb)
 	app.Post("/api/tools/nikto", handleNikto)
+	app.Post("/api/tools/tshark", handleTshark)
 	app.Post("/api/tools/sqlmap", handleSQLMap)
 	app.Post("/api/tools/metasploit", handleMetasploit)
 	app.Post("/api/tools/hydra", handleHydra)
@@ -187,6 +188,15 @@ func handleNikto(c fiber.Ctx) error {
 		}
 		return nil
 	}, tools.NiktoArgs)
+}
+
+func handleTshark(c fiber.Ctx) error {
+	return runTool(c, func(req dto.TsharkRequest) error {
+		if req.Interface == "" && req.ReadFile == "" {
+			return fmt.Errorf("interface or read_file is required")
+		}
+		return nil
+	}, tools.TsharkArgs)
 }
 
 func handleSQLMap(c fiber.Ctx) error {

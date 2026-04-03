@@ -60,6 +60,7 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "api/tools/gobuster")
 	addPostTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "api/tools/dirb")
 	addPostTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "api/tools/nikto")
+	addPostTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "api/tools/tshark")
 	addPostTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "api/tools/sqlmap")
 	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "api/tools/metasploit")
 	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack.", "api/tools/hydra")
