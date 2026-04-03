@@ -3,7 +3,9 @@ package executor
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"io"
 	"os"
 	"os/exec"
@@ -11,8 +13,6 @@ import (
 	"sync"
 	"time"
 )
-
-const DefaultTimeout = 180 * time.Second
 
 type Result struct {
 	Stdout     string
@@ -60,7 +60,7 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 
 func execute(ctx context.Context, timeout time.Duration, args []string, emit func(context.Context, Line) bool) *Result {
 	if timeout <= 0 {
-		timeout = DefaultTimeout
+		timeout = dto.DefaultTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -111,7 +111,7 @@ func execute(ctx context.Context, timeout time.Duration, args []string, emit fun
 	wg.Wait()
 	close(scanErrCh)
 
-	_ = cmd.Wait()
+	waitErr := cmd.Wait()
 	timedOut := ctx.Err() == context.DeadlineExceeded
 
 	rc := 0
@@ -120,6 +120,18 @@ func execute(ctx context.Context, timeout time.Duration, args []string, emit fun
 	}
 	if timedOut {
 		rc = -1
+	}
+	if waitErr != nil && !timedOut {
+		var exitErr *exec.ExitError
+		if !errors.As(waitErr, &exitErr) {
+			if stderr.Len() > 0 {
+				stderr.WriteByte('\n')
+			}
+			fmt.Fprintf(&stderr, "wait: %v", waitErr)
+			if rc == 0 {
+				rc = -1
+			}
+		}
 	}
 
 	scanFailed := false

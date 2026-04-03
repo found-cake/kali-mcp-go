@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,51 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
+
+var essentialToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark"}
+
+var exposedToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark", "sqlmap", "msfconsole", "hydra", "john", "wpscan", "enum4linux"}
+
+func toolStatus(lookup func(string) bool) map[string]bool {
+	status := make(map[string]bool, len(exposedToolBinaries))
+	dirWordlistReady := tools.WordlistExists(tools.DefaultDirWordlistPath())
+	johnWordlistReady := tools.WordlistExists(tools.DefaultJohnWordlistPath())
+
+	for _, toolName := range exposedToolBinaries {
+		ready := lookup(toolName)
+		switch toolName {
+		case "gobuster", "dirb":
+			ready = ready && dirWordlistReady
+		case "john":
+			ready = ready && johnWordlistReady
+		}
+		status[toolName] = ready
+	}
+
+	return status
+}
+
+func allEssentialToolsAvailable(status map[string]bool) bool {
+	for _, toolName := range essentialToolBinaries {
+		if !status[toolName] {
+			return false
+		}
+	}
+	return true
+}
+
+func terminalStreamError(result *executor.Result, streamedStderr string) string {
+	if result == nil || result.ReturnCode == 0 || result.Stderr == "" {
+		return ""
+	}
+
+	terminalErr := result.Stderr
+	if streamedStderr != "" && strings.HasPrefix(terminalErr, streamedStderr) {
+		terminalErr = strings.TrimPrefix(terminalErr, streamedStderr)
+	}
+
+	return strings.TrimLeft(terminalErr, "\n")
+}
 
 func main() {
 	var (
@@ -99,12 +145,72 @@ func containsLineBreak(s string) bool {
 	return strings.ContainsAny(s, "\r\n")
 }
 
-func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) []string) error {
+func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
 	req, err := parseRequest(c, validate)
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, argsFor(req))))
+	args, err := argsFor(req)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, args)))
+}
+
+func validatePositiveInt(name, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("%s must be a positive integer", name)
+	}
+	return nil
+}
+
+func validateTsharkRequest(req dto.TsharkRequest) error {
+	readFile := strings.TrimSpace(req.ReadFile)
+	iface := strings.TrimSpace(req.Interface)
+	switch {
+	case readFile == "" && iface == "":
+		return fmt.Errorf("read_file or interface is required")
+	case readFile != "" && iface != "":
+		return fmt.Errorf("read_file and interface cannot be used together")
+	}
+	if err := validatePositiveInt("packet_count", req.PacketCount); err != nil {
+		return err
+	}
+	if err := validatePositiveInt("duration", req.Duration); err != nil {
+		return err
+	}
+	if strings.TrimSpace(req.OutputFields) != "" {
+		for field := range strings.SplitSeq(req.OutputFields, ",") {
+			if strings.TrimSpace(field) != "" {
+				return nil
+			}
+		}
+		return fmt.Errorf("output_fields must contain at least one field")
+	}
+	return nil
+}
+
+func validateHydraRequest(req dto.HydraRequest) error {
+	if req.Target == "" || req.Service == "" {
+		return fmt.Errorf("target and service are required")
+	}
+	if req.Username != "" && req.UsernameFile != "" {
+		return fmt.Errorf("username and username_file cannot be used together")
+	}
+	if req.Password != "" && req.PasswordFile != "" {
+		return fmt.Errorf("password and password_file cannot be used together")
+	}
+	if req.Username == "" && req.UsernameFile == "" {
+		return fmt.Errorf("username or username_file is required")
+	}
+	if req.Password == "" && req.PasswordFile == "" {
+		return fmt.Errorf("password or password_file is required")
+	}
+	return nil
 }
 
 func handleCommand(c fiber.Ctx) error {
@@ -141,7 +247,12 @@ func handleCommandStream(c fiber.Ctx) error {
 	lines, done := executor.Stream(c.Context(), timeout, []string{req.Command})
 
 	return c.SendStreamWriter(func(w *bufio.Writer) {
+		var streamedStderr strings.Builder
 		for line := range lines {
+			if line.Stream == "stderr" {
+				streamedStderr.WriteString(line.Text)
+				streamedStderr.WriteByte('\n')
+			}
 			payload, _ := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
 			fmt.Fprintf(w, "data: %s\n\n", payload)
 			if err := w.Flush(); err != nil {
@@ -149,7 +260,11 @@ func handleCommandStream(c fiber.Ctx) error {
 			}
 		}
 		if result := <-done; result != nil {
-			payload, _ := json.Marshal(dto.StreamEvent{Done: true, ReturnCode: result.ReturnCode, TimedOut: result.TimedOut})
+			doneEvent := dto.StreamEvent{Done: true, ReturnCode: result.ReturnCode, TimedOut: result.TimedOut}
+			if terminalErr := terminalStreamError(result, streamedStderr.String()); terminalErr != "" {
+				doneEvent.Error = terminalErr
+			}
+			payload, _ := json.Marshal(doneEvent)
 			fmt.Fprintf(w, "data: %s\n\n", payload)
 			w.Flush()
 		}
@@ -196,9 +311,7 @@ func handleNikto(c fiber.Ctx) error {
 }
 
 func handleTshark(c fiber.Ctx) error {
-	return runTool(c, func(dto.TsharkRequest) error {
-		return nil
-	}, tools.TsharkArgs)
+	return runTool(c, validateTsharkRequest, tools.TsharkArgs)
 }
 
 func handleSQLMap(c fiber.Ctx) error {
@@ -241,18 +354,7 @@ func handleMetasploit(c fiber.Ctx) error {
 }
 
 func handleHydra(c fiber.Ctx) error {
-	return runTool(c, func(req dto.HydraRequest) error {
-		if req.Target == "" || req.Service == "" {
-			return fmt.Errorf("target and service are required")
-		}
-		if req.Username == "" && req.UsernameFile == "" {
-			return fmt.Errorf("username or username_file is required")
-		}
-		if req.Password == "" && req.PasswordFile == "" {
-			return fmt.Errorf("password or password_file is required")
-		}
-		return nil
-	}, tools.HydraArgs)
+	return runTool(c, validateHydraRequest, tools.HydraArgs)
 }
 
 func handleJohn(c fiber.Ctx) error {
@@ -283,20 +385,19 @@ func handleEnum4linux(c fiber.Ctx) error {
 }
 
 func handleHealth(c fiber.Ctx) error {
-	essentials := []string{"nmap", "gobuster", "dirb", "nikto", "tshark"}
-	status := make(map[string]bool, len(essentials))
-	allOK := true
-	for _, t := range essentials {
-		ok := executor.Which(t)
-		status[t] = ok
-		if !ok {
-			allOK = false
-		}
+	status := toolStatus(executor.Which)
+	allEssentialReady := allEssentialToolsAvailable(status)
+	healthStatus := "healthy"
+	message := "kali-server (Go/Fiber v3) running"
+	if !allEssentialReady {
+		healthStatus = "degraded"
+		message = "kali-server (Go/Fiber v3) running with missing essential tools"
 	}
+
 	return c.JSON(dto.HealthResult{
-		Status:                     "healthy",
-		Message:                    "kali-server (Go/Fiber v3) running",
+		Status:                     healthStatus,
+		Message:                    message,
 		ToolsStatus:                status,
-		AllEssentialToolsAvailable: allOK,
+		AllEssentialToolsAvailable: allEssentialReady,
 	})
 }

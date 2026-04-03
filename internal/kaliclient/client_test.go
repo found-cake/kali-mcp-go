@@ -8,7 +8,33 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func TestTimeoutForBodyUsesConfiguredBaseTimeoutPlusGrace(t *testing.T) {
+	t.Parallel()
+
+	client := New("http://example.com", 30*time.Second)
+
+	got := client.timeoutForBody(struct{}{})
+	want := 35 * time.Second
+	if got != want {
+		t.Fatalf("expected timeout %s, got %s", want, got)
+	}
+}
+
+func TestTimeoutForBodyExtendsForLongCommandRequests(t *testing.T) {
+	t.Parallel()
+
+	client := New("http://example.com", 30*time.Second)
+
+	got := client.timeoutForBody(dto.CommandRequest{Timeout: 90})
+	want := 95 * time.Second
+	if got != want {
+		t.Fatalf("expected timeout %s, got %s", want, got)
+	}
+}
 
 func TestStreamReturnsServerStatusError(t *testing.T) {
 	t.Parallel()
@@ -84,5 +110,57 @@ func TestStreamParsesValidEvents(t *testing.T) {
 	}
 	if res.TimedOut {
 		t.Fatalf("expected timed_out=false")
+	}
+	if !res.Success {
+		t.Fatalf("expected success=true")
+	}
+	if res.PartialResults {
+		t.Fatalf("expected partial_results=false")
+	}
+}
+
+func TestStreamMarksPartialTimedOutResults(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"stream\":\"stdout\",\"line\":\"hello\"}\n\n")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":-1,\"timed_out\":true}\n\n")
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second)
+	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected success=true for partial timed out result")
+	}
+	if !res.PartialResults {
+		t.Fatalf("expected partial_results=true")
+	}
+}
+
+func TestStreamAppendsTerminalDoneErrorToStderr(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"stream\":\"stdout\",\"line\":\"hello\"}\n\n")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":-1,\"timed_out\":false,\"error\":\"wait: process interrupted\"}\n\n")
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second)
+	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !strings.Contains(res.Stderr, "wait: process interrupted") {
+		t.Fatalf("expected terminal done error in stderr, got %q", res.Stderr)
+	}
+	if res.Success {
+		t.Fatalf("expected success=false for failed result")
 	}
 }

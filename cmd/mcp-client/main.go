@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 func main() {
 	var (
 		serverURL = flag.String("server", "http://127.0.0.1:5000", "kali-server URL")
-		timeout   = flag.Int("timeout", 300, "request timeout (seconds)")
+		timeout   = flag.Int("timeout", dto.DefaultTimeoutSeconds, "base request timeout in seconds (execute_command can extend per call)")
 		debug     = flag.Bool("debug", false, "verbose stderr logging")
 	)
 	flag.Parse()
@@ -76,19 +77,35 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 		if err != nil {
 			return nil, struct{}{}, err
 		}
-		var sb strings.Builder
-		fmt.Fprintf(&sb, "status: %s\n%s\n\ntools:\n", h.Status, h.Message)
-		for tool, ok := range h.ToolsStatus {
-			if ok {
-				fmt.Fprintf(&sb, "  ✓ %s\n", tool)
-			} else {
-				fmt.Fprintf(&sb, "  ✗ %s (missing)\n", tool)
-			}
-		}
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: sb.String()}},
+			Content: []mcp.Content{&mcp.TextContent{Text: formatHealthSummary(h)}},
 		}, struct{}{}, nil
 	})
+}
+
+func formatHealthSummary(h *dto.HealthResult) string {
+	var sb strings.Builder
+	readiness := "no"
+	if h.AllEssentialToolsAvailable {
+		readiness = "yes"
+	}
+
+	toolNames := make([]string, 0, len(h.ToolsStatus))
+	for toolName := range h.ToolsStatus {
+		toolNames = append(toolNames, toolName)
+	}
+	sort.Strings(toolNames)
+
+	fmt.Fprintf(&sb, "status: %s\n%s\nessential tools ready: %s\n\ntools:\n", h.Status, h.Message, readiness)
+	for _, toolName := range toolNames {
+		if h.ToolsStatus[toolName] {
+			fmt.Fprintf(&sb, "  ✓ %s\n", toolName)
+		} else {
+			fmt.Fprintf(&sb, "  ✗ %s (missing)\n", toolName)
+		}
+	}
+
+	return sb.String()
 }
 
 func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, description string) {

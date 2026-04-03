@@ -2,7 +2,7 @@ package dto
 
 type CommandRequest struct {
 	Command string `json:"command" jsonschema:"required,the shell command to run on Kali"`
-	Timeout int    `json:"timeout,omitempty" jsonschema:"timeout in seconds (0 = default 180s)"`
+	Timeout int    `json:"timeout,omitempty" jsonschema:"timeout in seconds (0 = default 300s)"`
 }
 
 type NmapRequest struct {
@@ -31,12 +31,12 @@ type NiktoRequest struct {
 }
 
 type TsharkRequest struct {
-	Interface      string `json:"interface" jsonschema:"network interface for live capture e.g. eth0"`
+	Interface      string `json:"interface" jsonschema:"network interface for live capture e.g. eth0; mutually exclusive with read_file; provide exactly one of interface or read_file"`
 	CaptureFilter  string `json:"capture_filter" jsonschema:"BPF capture filter e.g. tcp port 80"`
 	DisplayFilter  string `json:"display_filter" jsonschema:"Wireshark display filter"`
-	PacketCount    string `json:"packet_count" jsonschema:"number of packets to capture"`
-	Duration       string `json:"duration" jsonschema:"capture duration in seconds"`
-	ReadFile       string `json:"read_file" jsonschema:"pcap file path to read from"`
+	PacketCount    string `json:"packet_count" jsonschema:"number of packets to capture (positive integer)"`
+	Duration       string `json:"duration" jsonschema:"capture duration in seconds (positive integer)"`
+	ReadFile       string `json:"read_file" jsonschema:"pcap file path to read from; mutually exclusive with interface; provide exactly one of read_file or interface"`
 	OutputFields   string `json:"output_fields" jsonschema:"comma-separated fields to extract"`
 	AdditionalArgs string `json:"additional_args" jsonschema:"extra tshark arguments"`
 }
@@ -55,10 +55,10 @@ type MetasploitRequest struct {
 type HydraRequest struct {
 	Target         string `json:"target" jsonschema:"required,target IP or hostname"`
 	Service        string `json:"service" jsonschema:"required,service e.g. ssh ftp http-post-form"`
-	Username       string `json:"username" jsonschema:"single username"`
-	UsernameFile   string `json:"username_file" jsonschema:"path to username list"`
-	Password       string `json:"password" jsonschema:"single password"`
-	PasswordFile   string `json:"password_file" jsonschema:"path to password list"`
+	Username       string `json:"username" jsonschema:"single username; mutually exclusive with username_file; provide exactly one of username or username_file"`
+	UsernameFile   string `json:"username_file" jsonschema:"path to username list; mutually exclusive with username"`
+	Password       string `json:"password" jsonschema:"single password; mutually exclusive with password_file; provide exactly one of password or password_file"`
+	PasswordFile   string `json:"password_file" jsonschema:"path to password list; mutually exclusive with password"`
 	AdditionalArgs string `json:"additional_args" jsonschema:"extra hydra arguments"`
 }
 
