@@ -49,3 +49,28 @@ func TestStreamReportsScannerError(t *testing.T) {
 		t.Fatalf("expected stdout scan error in stderr, got %q", res.Stderr)
 	}
 }
+
+func TestStreamDeliversDoneAfterLineDrain(t *testing.T) {
+	t.Parallel()
+
+	lines, done := Stream(context.Background(), 5*time.Second, []string{"printf 'ok\\n'"})
+
+	lineCount := 0
+	for range lines {
+		lineCount++
+	}
+	if lineCount == 0 {
+		t.Fatal("expected at least one streamed line")
+	}
+
+	res, ok := <-done
+	if !ok {
+		t.Fatal("expected done result before channel close")
+	}
+	if res == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if res.ReturnCode != 0 {
+		t.Fatalf("expected return code 0, got %d", res.ReturnCode)
+	}
+}

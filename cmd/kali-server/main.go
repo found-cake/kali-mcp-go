@@ -81,10 +81,35 @@ func bindJSON(c fiber.Ctx, dst any) error {
 	return c.Bind().Body(dst)
 }
 
+func parseRequest[T any](c fiber.Ctx, validate func(T) error) (T, error) {
+	var req T
+	bindErr := bindJSON(c, &req)
+	if err := validate(req); err != nil {
+		return req, err
+	}
+	if bindErr != nil {
+		return req, fmt.Errorf("invalid request body")
+	}
+	return req, nil
+}
+
+func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) []string) error {
+	req, err := parseRequest(c, validate)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, argsFor(req))))
+}
+
 func handleCommand(c fiber.Ctx) error {
-	var req dto.CommandRequest
-	if err := bindJSON(c, &req); err != nil || req.Command == "" {
-		return badRequest(c, "command is required")
+	req, err := parseRequest(c, func(r dto.CommandRequest) error {
+		if r.Command == "" {
+			return fmt.Errorf("command is required")
+		}
+		return nil
+	})
+	if err != nil {
+		return badRequest(c, err.Error())
 	}
 	timeout := time.Duration(req.Timeout) * time.Second
 	result := executor.Run(c.Context(), timeout, []string{req.Command})
@@ -92,9 +117,14 @@ func handleCommand(c fiber.Ctx) error {
 }
 
 func handleCommandStream(c fiber.Ctx) error {
-	var req dto.CommandRequest
-	if err := bindJSON(c, &req); err != nil || req.Command == "" {
-		return badRequest(c, "command is required")
+	req, err := parseRequest(c, func(r dto.CommandRequest) error {
+		if r.Command == "" {
+			return fmt.Errorf("command is required")
+		}
+		return nil
+	})
+	if err != nil {
+		return badRequest(c, err.Error())
 	}
 	timeout := time.Duration(req.Timeout) * time.Second
 
@@ -121,52 +151,62 @@ func handleCommandStream(c fiber.Ctx) error {
 }
 
 func handleNmap(c fiber.Ctx) error {
-	var req dto.NmapRequest
-	if err := bindJSON(c, &req); err != nil || req.Target == "" {
-		return badRequest(c, "target is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.NmapArgs(req))))
+	return runTool(c, func(req dto.NmapRequest) error {
+		if req.Target == "" {
+			return fmt.Errorf("target is required")
+		}
+		return nil
+	}, tools.NmapArgs)
 }
 
 func handleGobuster(c fiber.Ctx) error {
-	var req dto.GobusterRequest
-	if err := bindJSON(c, &req); err != nil || req.URL == "" {
-		return badRequest(c, "url is required")
-	}
-	if !tools.ValidGobusterMode(req.Mode) {
-		return badRequest(c, "mode must be dir|dns|fuzz|vhost")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.GobusterArgs(req))))
+	return runTool(c, func(req dto.GobusterRequest) error {
+		if req.URL == "" {
+			return fmt.Errorf("url is required")
+		}
+		if !tools.ValidGobusterMode(req.Mode) {
+			return fmt.Errorf("mode must be dir|dns|fuzz|vhost")
+		}
+		return nil
+	}, tools.GobusterArgs)
 }
 
 func handleDirb(c fiber.Ctx) error {
-	var req dto.DirbRequest
-	if err := bindJSON(c, &req); err != nil || req.URL == "" {
-		return badRequest(c, "url is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.DirbArgs(req))))
+	return runTool(c, func(req dto.DirbRequest) error {
+		if req.URL == "" {
+			return fmt.Errorf("url is required")
+		}
+		return nil
+	}, tools.DirbArgs)
 }
 
 func handleNikto(c fiber.Ctx) error {
-	var req dto.NiktoRequest
-	if err := bindJSON(c, &req); err != nil || req.Target == "" {
-		return badRequest(c, "target is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.NiktoArgs(req))))
+	return runTool(c, func(req dto.NiktoRequest) error {
+		if req.Target == "" {
+			return fmt.Errorf("target is required")
+		}
+		return nil
+	}, tools.NiktoArgs)
 }
 
 func handleSQLMap(c fiber.Ctx) error {
-	var req dto.SQLMapRequest
-	if err := bindJSON(c, &req); err != nil || req.URL == "" {
-		return badRequest(c, "url is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.SQLMapArgs(req))))
+	return runTool(c, func(req dto.SQLMapRequest) error {
+		if req.URL == "" {
+			return fmt.Errorf("url is required")
+		}
+		return nil
+	}, tools.SQLMapArgs)
 }
 
 func handleMetasploit(c fiber.Ctx) error {
-	var req dto.MetasploitRequest
-	if err := bindJSON(c, &req); err != nil || req.Module == "" {
-		return badRequest(c, "module is required")
+	req, err := parseRequest(c, func(r dto.MetasploitRequest) error {
+		if r.Module == "" {
+			return fmt.Errorf("module is required")
+		}
+		return nil
+	})
+	if err != nil {
+		return badRequest(c, err.Error())
 	}
 	script := tools.MetasploitScript(req)
 	rcFile, err := executor.WriteTemp("msf", script)
@@ -178,41 +218,45 @@ func handleMetasploit(c fiber.Ctx) error {
 }
 
 func handleHydra(c fiber.Ctx) error {
-	var req dto.HydraRequest
-	if err := bindJSON(c, &req); err != nil || req.Target == "" || req.Service == "" {
-		return badRequest(c, "target and service are required")
-	}
-	if req.Username == "" && req.UsernameFile == "" {
-		return badRequest(c, "username or username_file is required")
-	}
-	if req.Password == "" && req.PasswordFile == "" {
-		return badRequest(c, "password or password_file is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.HydraArgs(req))))
+	return runTool(c, func(req dto.HydraRequest) error {
+		if req.Target == "" || req.Service == "" {
+			return fmt.Errorf("target and service are required")
+		}
+		if req.Username == "" && req.UsernameFile == "" {
+			return fmt.Errorf("username or username_file is required")
+		}
+		if req.Password == "" && req.PasswordFile == "" {
+			return fmt.Errorf("password or password_file is required")
+		}
+		return nil
+	}, tools.HydraArgs)
 }
 
 func handleJohn(c fiber.Ctx) error {
-	var req dto.JohnRequest
-	if err := bindJSON(c, &req); err != nil || req.HashFile == "" {
-		return badRequest(c, "hash_file is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.JohnArgs(req))))
+	return runTool(c, func(req dto.JohnRequest) error {
+		if req.HashFile == "" {
+			return fmt.Errorf("hash_file is required")
+		}
+		return nil
+	}, tools.JohnArgs)
 }
 
 func handleWPScan(c fiber.Ctx) error {
-	var req dto.WPScanRequest
-	if err := bindJSON(c, &req); err != nil || req.URL == "" {
-		return badRequest(c, "url is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.WPScanArgs(req))))
+	return runTool(c, func(req dto.WPScanRequest) error {
+		if req.URL == "" {
+			return fmt.Errorf("url is required")
+		}
+		return nil
+	}, tools.WPScanArgs)
 }
 
 func handleEnum4linux(c fiber.Ctx) error {
-	var req dto.Enum4linuxRequest
-	if err := bindJSON(c, &req); err != nil || req.Target == "" {
-		return badRequest(c, "target is required")
-	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.Enum4linuxArgs(req))))
+	return runTool(c, func(req dto.Enum4linuxRequest) error {
+		if req.Target == "" {
+			return fmt.Errorf("target is required")
+		}
+		return nil
+	}, tools.Enum4linuxArgs)
 }
 
 func handleHealth(c fiber.Ctx) error {
