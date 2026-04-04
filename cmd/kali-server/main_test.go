@@ -361,3 +361,105 @@ func TestTerminalStreamErrorRemovesAlreadyStreamedStderrPrefix(t *testing.T) {
 		t.Fatalf("expected terminal error %q, got %q", want, got)
 	}
 }
+
+func TestRegisterRoutesRejectsMissingBearerToken(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	registerRoutes(app, "secret-token")
+
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", fiber.StatusUnauthorized, resp.StatusCode)
+	}
+}
+
+func TestRegisterRoutesAcceptsValidBearerToken(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	registerRoutes(app, "secret-token")
+
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer secret-token")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d after auth passed, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+}
+
+func TestRegisterRoutesRejectsInvalidBearerToken(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	registerRoutes(app, "secret-token")
+
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer wrong-token")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", fiber.StatusUnauthorized, resp.StatusCode)
+	}
+}
+
+func TestRunToolRejectsEmptyCommandSlice(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/empty", func(c fiber.Ctx) error {
+		return runTool(c, func(_ struct{}) error { return nil }, func(_ struct{}) ([]string, error) {
+			return []string{}, nil
+		})
+	})
+
+	req, err := http.NewRequest(http.MethodPost, "/empty", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(respBody), "internal error: no command generated") {
+		t.Fatalf("expected empty command error, got %s", string(respBody))
+	}
+}

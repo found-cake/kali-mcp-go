@@ -2,13 +2,19 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
@@ -20,6 +26,8 @@ import (
 var essentialToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark"}
 
 var exposedToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark", "sqlmap", "msfconsole", "hydra", "john", "wpscan", "enum4linux"}
+
+const shutdownTimeout = 10 * time.Second
 
 func toolStatus(lookup func(string) bool) map[string]bool {
 	status := make(map[string]bool, len(exposedToolBinaries))
@@ -69,6 +77,10 @@ func main() {
 		debug = flag.Bool("debug", false, "verbose logging")
 	)
 	flag.Parse()
+	apiToken := strings.TrimSpace(os.Getenv(dto.APITokenEnv))
+	if apiToken == "" {
+		log.Fatalf("%s must be set", dto.APITokenEnv)
+	}
 
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("[kali-server] ")
@@ -79,7 +91,7 @@ func main() {
 		IdleTimeout:  5 * time.Minute,
 	})
 
-	registerRoutes(app)
+	registerRoutes(app, apiToken)
 
 	addr := fmt.Sprintf("%s:%d", *ip, *port)
 	log.Printf("listening on %s", addr)
@@ -88,26 +100,68 @@ func main() {
 		DisableStartupMessage: !*debug,
 		EnablePrintRoutes:     *debug,
 	}
-	log.Fatal(app.Listen(addr, listenCfg))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- app.Listen(addr, listenCfg)
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	select {
+	case sig := <-sigCh:
+		log.Printf("received %s, shutting down", sig)
+		if err := app.ShutdownWithTimeout(shutdownTimeout); err != nil {
+			log.Fatalf("shutdown: %v", err)
+		}
+		if err := <-errCh; err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Fatalf("listen after shutdown: %v", err)
+		}
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Fatal(err)
+		}
+	}
 }
 
-func registerRoutes(app *fiber.App) {
-	app.Post("/api/command", handleCommand)
-	app.Post("/api/command/stream", handleCommandStream)
+func registerRoutes(app *fiber.App, apiToken string) {
+	api := app.Group("/api", bearerAuthMiddleware(apiToken))
 
-	app.Post("/api/tools/nmap", handleNmap)
-	app.Post("/api/tools/gobuster", handleGobuster)
-	app.Post("/api/tools/dirb", handleDirb)
-	app.Post("/api/tools/nikto", handleNikto)
-	app.Post("/api/tools/tshark", handleTshark)
-	app.Post("/api/tools/sqlmap", handleSQLMap)
-	app.Post("/api/tools/metasploit", handleMetasploit)
-	app.Post("/api/tools/hydra", handleHydra)
-	app.Post("/api/tools/john", handleJohn)
-	app.Post("/api/tools/wpscan", handleWPScan)
-	app.Post("/api/tools/enum4linux", handleEnum4linux)
+	api.Post("/command", handleCommand)
+	api.Post("/command/stream", handleCommandStream)
+
+	api.Post("/tools/nmap", handleNmap)
+	api.Post("/tools/gobuster", handleGobuster)
+	api.Post("/tools/dirb", handleDirb)
+	api.Post("/tools/nikto", handleNikto)
+	api.Post("/tools/tshark", handleTshark)
+	api.Post("/tools/sqlmap", handleSQLMap)
+	api.Post("/tools/metasploit", handleMetasploit)
+	api.Post("/tools/hydra", handleHydra)
+	api.Post("/tools/john", handleJohn)
+	api.Post("/tools/wpscan", handleWPScan)
+	api.Post("/tools/enum4linux", handleEnum4linux)
 
 	app.Get("/health", handleHealth)
+}
+
+func bearerAuthMiddleware(apiToken string) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		authHeader := strings.TrimSpace(c.Get(fiber.HeaderAuthorization))
+		const prefix = "Bearer "
+		if !strings.HasPrefix(authHeader, prefix) {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing bearer token"})
+		}
+		providedToken := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
+		providedSum := sha256.Sum256([]byte(providedToken))
+		expectedSum := sha256.Sum256([]byte(apiToken))
+		if subtle.ConstantTimeCompare(providedSum[:], expectedSum[:]) != 1 {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid bearer token"})
+		}
+		return c.Next()
+	}
 }
 
 func toAPIResult(r *executor.Result) dto.ToolResult {
@@ -154,7 +208,10 @@ func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]stri
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, args)))
+	if len(args) == 0 {
+		return badRequest(c, "internal error: no command generated")
+	}
+	return c.JSON(toAPIResult(executor.RunExec(c.Context(), 0, args[0], args[1:]...)))
 }
 
 func validatePositiveInt(name, value string) error {
@@ -183,15 +240,26 @@ func validateTsharkRequest(req dto.TsharkRequest) error {
 	if err := validatePositiveInt("duration", req.Duration); err != nil {
 		return err
 	}
-	if strings.TrimSpace(req.OutputFields) != "" {
-		for field := range strings.SplitSeq(req.OutputFields, ",") {
-			if strings.TrimSpace(field) != "" {
-				return nil
-			}
-		}
+	if strings.TrimSpace(req.OutputFields) != "" && !hasNonEmptyCSVField(req.OutputFields) {
 		return fmt.Errorf("output_fields must contain at least one field")
 	}
 	return nil
+}
+
+func hasNonEmptyCSVField(value string) bool {
+	for field := range strings.SplitSeq(value, ",") {
+		if strings.TrimSpace(field) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func commandTimeout(seconds int) time.Duration {
+	if seconds <= 0 {
+		return dto.DefaultTimeout
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func validateHydraRequest(req dto.HydraRequest) error {
@@ -223,8 +291,8 @@ func handleCommand(c fiber.Ctx) error {
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	timeout := time.Duration(req.Timeout) * time.Second
-	result := executor.Run(c.Context(), timeout, []string{req.Command})
+	timeout := commandTimeout(req.Timeout)
+	result := executor.RunShell(c.Context(), timeout, req.Command)
 	return c.JSON(toAPIResult(result))
 }
 
@@ -238,13 +306,13 @@ func handleCommandStream(c fiber.Ctx) error {
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	timeout := time.Duration(req.Timeout) * time.Second
+	timeout := commandTimeout(req.Timeout)
 
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("X-Accel-Buffering", "no")
 
-	lines, done := executor.Stream(c.Context(), timeout, []string{req.Command})
+	lines, done := executor.StreamShell(c.Context(), timeout, req.Command)
 
 	return c.SendStreamWriter(func(w *bufio.Writer) {
 		var streamedStderr strings.Builder
@@ -260,7 +328,8 @@ func handleCommandStream(c fiber.Ctx) error {
 			}
 		}
 		if result := <-done; result != nil {
-			doneEvent := dto.StreamEvent{Done: true, ReturnCode: result.ReturnCode, TimedOut: result.TimedOut}
+			returnCode := result.ReturnCode
+			doneEvent := dto.StreamEvent{Done: true, ReturnCode: &returnCode, TimedOut: result.TimedOut}
 			if terminalErr := terminalStreamError(result, streamedStderr.String()); terminalErr != "" {
 				doneEvent.Error = terminalErr
 			}
@@ -350,7 +419,8 @@ func handleMetasploit(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	defer os.Remove(rcFile)
-	return c.JSON(toAPIResult(executor.Run(c.Context(), 0, tools.MetasploitArgs(rcFile))))
+	args := tools.MetasploitArgs(rcFile)
+	return c.JSON(toAPIResult(executor.RunExec(c.Context(), 0, args[0], args[1:]...)))
 }
 
 func handleHydra(c fiber.Ctx) error {
