@@ -9,20 +9,24 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func TestTsharkArgsUsesReadFileOverInterface(t *testing.T) {
+func TestTsharkArgsRejectsConflictingReadFileAndInterface(t *testing.T) {
 	t.Parallel()
 
-	args, err := TsharkArgs(dto.TsharkRequest{
+	_, err := TsharkArgs(dto.TsharkRequest{
 		Interface: "eth0",
 		ReadFile:  "/tmp/capture.pcap",
 	})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "cannot be used together") {
+		t.Fatalf("expected conflicting source error, got %v", err)
 	}
+}
 
-	want := []string{"tshark", "-r", "/tmp/capture.pcap"}
-	if !reflect.DeepEqual(args, want) {
-		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
+func TestTsharkArgsRejectsMissingReadFileAndInterface(t *testing.T) {
+	t.Parallel()
+
+	_, err := TsharkArgs(dto.TsharkRequest{})
+	if err == nil || !strings.Contains(err.Error(), "is required") {
+		t.Fatalf("expected missing source error, got %v", err)
 	}
 }
 
@@ -128,6 +132,24 @@ func TestMetasploitScriptUsesExploitForExploitModules(t *testing.T) {
 	script := MetasploitScript(dto.MetasploitRequest{Module: "exploit/multi/handler"})
 	if !strings.Contains(script, "\nexploit\nexit -y\n") {
 		t.Fatalf("expected exploit + exit in script, got %q", script)
+	}
+}
+
+func TestMetasploitScriptSortsOptionsDeterministically(t *testing.T) {
+	t.Parallel()
+
+	script := MetasploitScript(dto.MetasploitRequest{
+		Module: "auxiliary/scanner/http/title",
+		Options: map[string]string{
+			"RPORT":  "8080",
+			"RHOSTS": "10.0.0.1",
+			"SSL":    "true",
+		},
+	})
+
+	want := "use auxiliary/scanner/http/title\nset RHOSTS 10.0.0.1\nset RPORT 8080\nset SSL true\nrun\nexit -y\n"
+	if script != want {
+		t.Fatalf("script mismatch\nwant:\n%s\ngot:\n%s", want, script)
 	}
 }
 

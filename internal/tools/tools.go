@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -193,12 +194,21 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 }
 
 func TsharkArgs(r dto.TsharkRequest) ([]string, error) {
+	readFile := strings.TrimSpace(r.ReadFile)
+	iface := strings.TrimSpace(r.Interface)
+	switch {
+	case readFile == "" && iface == "":
+		return nil, fmt.Errorf("read_file or interface is required")
+	case readFile != "" && iface != "":
+		return nil, fmt.Errorf("read_file and interface cannot be used together")
+	}
+
 	args := []string{"tshark"}
 
-	if r.ReadFile != "" {
-		args = append(args, "-r", r.ReadFile)
-	} else if r.Interface != "" {
-		args = append(args, "-i", r.Interface)
+	if readFile != "" {
+		args = append(args, "-r", readFile)
+	} else {
+		args = append(args, "-i", iface)
 	}
 	if r.CaptureFilter != "" {
 		args = append(args, "-f", r.CaptureFilter)
@@ -236,7 +246,13 @@ func SQLMapArgs(r dto.SQLMapRequest) ([]string, error) {
 func MetasploitScript(r dto.MetasploitRequest) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "use %s\n", r.Module)
-	for k, v := range r.Options {
+	optionKeys := make([]string, 0, len(r.Options))
+	for k := range r.Options {
+		optionKeys = append(optionKeys, k)
+	}
+	sort.Strings(optionKeys)
+	for _, k := range optionKeys {
+		v := r.Options[k]
 		fmt.Fprintf(&sb, "set %s %s\n", k, v)
 	}
 	sb.WriteString(metasploitAction(r.Module))
