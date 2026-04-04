@@ -33,16 +33,25 @@ type Line struct {
 	Text   string
 }
 
-func Run(ctx context.Context, timeout time.Duration, args []string) *Result {
-	return execute(ctx, timeout, args, nil)
+type commandSpec struct {
+	name string
+	args []string
 }
 
-func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan Line, <-chan *Result) {
+func RunExec(ctx context.Context, timeout time.Duration, name string, args ...string) *Result {
+	return execute(ctx, timeout, commandSpec{name: name, args: args}, nil)
+}
+
+func RunShell(ctx context.Context, timeout time.Duration, command string) *Result {
+	return execute(ctx, timeout, commandSpec{name: "bash", args: []string{"-c", command}}, nil)
+}
+
+func StreamShell(ctx context.Context, timeout time.Duration, command string) (<-chan Line, <-chan *Result) {
 	lines := make(chan Line, 256)
 	done := make(chan *Result, 1)
 
 	go func() {
-		result := execute(ctx, timeout, args, func(execCtx context.Context, line Line) bool {
+		result := execute(ctx, timeout, commandSpec{name: "bash", args: []string{"-c", command}}, func(execCtx context.Context, line Line) bool {
 			select {
 			case lines <- line:
 				return true
@@ -58,14 +67,14 @@ func Stream(ctx context.Context, timeout time.Duration, args []string) (<-chan L
 	return lines, done
 }
 
-func execute(ctx context.Context, timeout time.Duration, args []string, emit func(context.Context, Line) bool) *Result {
+func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, emit func(context.Context, Line) bool) *Result {
 	if timeout <= 0 {
 		timeout = dto.DefaultTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := buildCmd(ctx, args)
+	cmd := exec.CommandContext(ctx, cmdSpec.name, cmdSpec.args...)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -154,13 +163,6 @@ func execute(ctx context.Context, timeout time.Duration, args []string, emit fun
 	}
 }
 
-func buildCmd(ctx context.Context, args []string) *exec.Cmd {
-	if len(args) == 1 {
-		return exec.CommandContext(ctx, "bash", "-c", args[0])
-	}
-	return exec.CommandContext(ctx, args[0], args[1:]...)
-}
-
 func newScanner(r io.Reader) *bufio.Scanner {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
@@ -191,7 +193,15 @@ func WriteTemp(prefix, content string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	_, err = f.WriteString(content)
-	return f.Name(), err
+	name := f.Name()
+	if _, err := f.WriteString(content); err != nil {
+		f.Close()
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
 }

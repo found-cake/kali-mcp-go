@@ -10,7 +10,7 @@ import (
 func TestRunReportsScannerError(t *testing.T) {
 	t.Parallel()
 
-	res := Run(context.Background(), 10*time.Second, []string{"yes a | head -c 2200000 | tr -d '\\n'"})
+	res := RunShell(context.Background(), 10*time.Second, "yes a | head -c 2200000 | tr -d '\\n'")
 	if res == nil {
 		t.Fatal("expected result, got nil")
 	}
@@ -28,7 +28,7 @@ func TestRunReportsScannerError(t *testing.T) {
 func TestStreamReportsScannerError(t *testing.T) {
 	t.Parallel()
 
-	lines, done := Stream(context.Background(), 10*time.Second, []string{"yes a | head -c 2200000 | tr -d '\\n'"})
+	lines, done := StreamShell(context.Background(), 10*time.Second, "yes a | head -c 2200000 | tr -d '\\n'")
 	for range lines {
 	}
 
@@ -53,7 +53,7 @@ func TestStreamReportsScannerError(t *testing.T) {
 func TestStreamDeliversDoneAfterLineDrain(t *testing.T) {
 	t.Parallel()
 
-	lines, done := Stream(context.Background(), 5*time.Second, []string{"printf 'ok\\n'"})
+	lines, done := StreamShell(context.Background(), 5*time.Second, "printf 'ok\\n'")
 
 	lineCount := 0
 	for range lines {
