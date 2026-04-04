@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -430,6 +431,65 @@ func TestRegisterRoutesRejectsInvalidBearerToken(t *testing.T) {
 
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("expected status %d, got %d", fiber.StatusUnauthorized, resp.StatusCode)
+	}
+}
+
+func TestNewAppWithDebugLogsRequests(t *testing.T) {
+	t.Parallel()
+
+	var lines []string
+	app := newApp("secret-token", true, func(format string, args ...any) {
+		lines = append(lines, fmt.Sprintf(format, args...))
+	})
+
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", fiber.StatusUnauthorized, resp.StatusCode)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("expected one debug log line, got %d (%v)", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "POST /api/tools/nmap -> 401 (") {
+		t.Fatalf("expected method/path/status log line, got %q", lines[0])
+	}
+}
+
+func TestNewAppWithoutDebugDoesNotLogRequests(t *testing.T) {
+	t.Parallel()
+
+	logged := false
+	app := newApp("secret-token", false, func(string, ...any) {
+		logged = true
+	})
+
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", fiber.StatusUnauthorized, resp.StatusCode)
+	}
+	if logged {
+		t.Fatal("expected debug logging to stay disabled")
 	}
 }
 

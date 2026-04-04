@@ -29,6 +29,8 @@ var exposedToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark"
 
 const shutdownTimeout = 10 * time.Second
 
+type logPrinter func(format string, args ...any)
+
 func toolStatus(lookup func(string) bool) map[string]bool {
 	status := make(map[string]bool, len(exposedToolBinaries))
 	dirWordlistReady := tools.WordlistExists(tools.DefaultDirWordlistPath())
@@ -85,13 +87,7 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("[kali-server] ")
 
-	app := fiber.New(fiber.Config{
-		ReadTimeout:  0,
-		WriteTimeout: 0,
-		IdleTimeout:  5 * time.Minute,
-	})
-
-	registerRoutes(app, apiToken)
+	app := newApp(apiToken, *debug, log.Printf)
 
 	addr := fmt.Sprintf("%s:%d", *ip, *port)
 	log.Printf("listening on %s", addr)
@@ -123,6 +119,33 @@ func main() {
 		if err != nil && !errors.Is(err, net.ErrClosed) {
 			log.Fatal(err)
 		}
+	}
+}
+
+func newApp(apiToken string, debug bool, print logPrinter) *fiber.App {
+	app := fiber.New(fiber.Config{
+		ReadTimeout:  0,
+		WriteTimeout: 0,
+		IdleTimeout:  5 * time.Minute,
+	})
+	if debug {
+		app.Use(debugRequestLogMiddleware(print))
+	}
+
+	registerRoutes(app, apiToken)
+	return app
+}
+
+func debugRequestLogMiddleware(print logPrinter) fiber.Handler {
+	if print == nil {
+		print = func(string, ...any) {}
+	}
+
+	return func(c fiber.Ctx) error {
+		start := time.Now()
+		err := c.Next()
+		print("%s %s -> %d (%s)", c.Method(), c.Path(), c.Response().StatusCode(), time.Since(start).Round(time.Microsecond))
+		return err
 	}
 }
 
