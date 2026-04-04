@@ -6,7 +6,7 @@ type ToolResult struct {
 	Stdout         string `json:"stdout"`
 	Stderr         string `json:"stderr"`
 	ReturnCode     int    `json:"return_code"`
-	Success        bool   `json:"success,omitempty"`
+	Success        bool   `json:"success"`
 	TimedOut       bool   `json:"timed_out"`
 	PartialResults bool   `json:"partial_results,omitempty"`
 }
