@@ -15,7 +15,7 @@ import (
 func TestTimeoutForBodyUsesConfiguredBaseTimeoutPlusGrace(t *testing.T) {
 	t.Parallel()
 
-	client := New("http://example.com", 30*time.Second)
+	client := New("http://example.com", 30*time.Second, "")
 
 	got := client.timeoutForBody(struct{}{})
 	want := 35 * time.Second
@@ -27,7 +27,7 @@ func TestTimeoutForBodyUsesConfiguredBaseTimeoutPlusGrace(t *testing.T) {
 func TestTimeoutForBodyExtendsForLongCommandRequests(t *testing.T) {
 	t.Parallel()
 
-	client := New("http://example.com", 30*time.Second)
+	client := New("http://example.com", 30*time.Second, "")
 
 	got := client.timeoutForBody(dto.CommandRequest{Timeout: 90})
 	want := 95 * time.Second
@@ -45,7 +45,7 @@ func TestStreamReturnsServerStatusError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL, 5*time.Second)
+	client := New(ts.URL, 5*time.Second, "")
 	_, err := client.Stream(context.Background(), map[string]string{"command": "id"})
 	if err == nil || !strings.Contains(err.Error(), "server error 500") {
 		t.Fatalf("expected server status error, got %v", err)
@@ -61,7 +61,7 @@ func TestStreamReturnsDecodeErrorOnMalformedEvent(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL, 5*time.Second)
+	client := New(ts.URL, 5*time.Second, "")
 	_, err := client.Stream(context.Background(), map[string]string{"command": "id"})
 	if err == nil || !strings.Contains(err.Error(), "stream decode event") {
 		t.Fatalf("expected decode error, got %v", err)
@@ -77,7 +77,7 @@ func TestStreamRequiresDoneEvent(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL, 5*time.Second)
+	client := New(ts.URL, 5*time.Second, "")
 	_, err := client.Stream(context.Background(), map[string]string{"command": "id"})
 	if err == nil || !strings.Contains(err.Error(), "without done event") {
 		t.Fatalf("expected missing done event error, got %v", err)
@@ -94,7 +94,7 @@ func TestStreamParsesValidEvents(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL, 5*time.Second)
+	client := New(ts.URL, 5*time.Second, "")
 	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -129,7 +129,7 @@ func TestStreamMarksPartialTimedOutResults(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL, 5*time.Second)
+	client := New(ts.URL, 5*time.Second, "")
 	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -152,7 +152,7 @@ func TestStreamAppendsTerminalDoneErrorToStderr(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := New(ts.URL, 5*time.Second)
+	client := New(ts.URL, 5*time.Second, "")
 	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -162,5 +162,41 @@ func TestStreamAppendsTerminalDoneErrorToStderr(t *testing.T) {
 	}
 	if res.Success {
 		t.Fatalf("expected success=false for failed result")
+	}
+}
+
+func TestPostAddsBearerAuthorizationHeader(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer secret-token" {
+			t.Fatalf("expected bearer token, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"stdout":"ok","stderr":"","return_code":0,"success":true,"timed_out":false}`)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second, "secret-token")
+	if _, err := client.Post(context.Background(), "/api/tools/nmap", map[string]string{"target": "127.0.0.1"}); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestHealthOmitsBearerAuthorizationHeader(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Fatalf("expected no bearer token on health request, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"healthy","message":"ok","tools_status":{},"all_essential_tools_available":true}`)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second, "secret-token")
+	if _, err := client.Health(context.Background()); err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 }

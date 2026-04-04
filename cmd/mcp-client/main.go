@@ -27,7 +27,7 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("[mcp-client] ")
 
-	kali := kaliclient.New(*serverURL, time.Duration(*timeout)*time.Second)
+	kali := kaliclient.New(*serverURL, time.Duration(*timeout)*time.Second, os.Getenv(dto.APITokenEnv))
 
 	if h, err := kali.Health(context.Background()); err != nil {
 		log.Printf("WARNING: cannot reach %s: %v", *serverURL, err)

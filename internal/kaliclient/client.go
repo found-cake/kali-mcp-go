@@ -16,20 +16,28 @@ import (
 
 type Client struct {
 	base    string
+	token   string
 	timeout time.Duration
 	http    *http.Client
 }
 
 const requestTimeoutGrace = 5 * time.Second
 
-func New(baseURL string, timeout time.Duration) *Client {
+func New(baseURL string, timeout time.Duration, token string) *Client {
 	if timeout <= 0 {
 		timeout = dto.DefaultTimeout
 	}
 	return &Client{
 		base:    strings.TrimRight(baseURL, "/"),
+		token:   strings.TrimSpace(token),
 		timeout: timeout,
 		http:    &http.Client{},
+	}
+}
+
+func (c *Client) authorize(req *http.Request) {
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 }
 
@@ -72,6 +80,7 @@ func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.Tool
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.authorize(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -80,8 +89,8 @@ func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.Tool
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, body)
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, respBody)
 	}
 
 	var result dto.ToolResult
@@ -109,6 +118,7 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
+	c.authorize(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -116,8 +126,8 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, body)
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, respBody)
 	}
 
 	var (
@@ -145,7 +155,10 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 			return nil, fmt.Errorf("server: %s", ev.Error)
 		}
 		if ev.Done {
-			returnCode = ev.ReturnCode
+			if ev.ReturnCode == nil {
+				return nil, fmt.Errorf("stream done event missing return_code")
+			}
+			returnCode = *ev.ReturnCode
 			timedOut = ev.TimedOut
 			finalError = ev.Error
 			done = true
