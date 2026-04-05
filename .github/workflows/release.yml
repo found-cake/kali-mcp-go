@@ -1,0 +1,205 @@
+name: Release
+permissions:
+  contents: write
+  vulnerability-alerts: read
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  validate_tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag format
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${GITHUB_REF_NAME}. Expected format: vx.y.z"
+            exit 1
+          fi
+
+  verify:
+    needs: validate_tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+      
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Run tests
+        run: go test ./...
+
+  check_security:
+    needs: validate_tag
+    runs-on: ubuntu-latest
+
+    steps:
+      # checkout 추가: 일관성 및 gh CLI 컨텍스트 보장
+      - uses: actions/checkout@v6
+
+      - name: Block release on open Dependabot alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          has_open_alert=$(gh api "repos/${GITHUB_REPOSITORY}/dependabot/alerts?state=open&per_page=1" --jq 'length > 0')
+          if [ "$has_open_alert" = "true" ]; then
+            echo "Open Dependabot alerts found"
+            exit 1
+          fi
+
+  build:
+    needs:
+      - verify
+      - check_security
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # kali-server: Linux only
+          - id: kali-server-linux-amd64
+            runs_on: ubuntu-latest
+            artifact_name: kali-server_linux_amd64
+            main: ./cmd/kali-server
+            goos: linux
+            goarch: amd64
+          - id: kali-server-linux-arm64
+            runs_on: ubuntu-latest
+            artifact_name: kali-server_linux_arm64
+            main: ./cmd/kali-server
+            goos: linux
+            goarch: arm64
+          # mcp-client: Linux / Windows / macOS
+          - id: mcp-client-linux-amd64
+            runs_on: ubuntu-latest
+            artifact_name: mcp-client_linux_amd64
+            main: ./cmd/mcp-client
+            goos: linux
+            goarch: amd64
+          - id: mcp-client-linux-arm64
+            runs_on: ubuntu-latest
+            artifact_name: mcp-client_linux_arm64
+            main: ./cmd/mcp-client
+            goos: linux
+            goarch: arm64
+          - id: mcp-client-windows-amd64
+            runs_on: windows-latest
+            artifact_name: mcp-client_windows_amd64.exe
+            main: ./cmd/mcp-client
+            goos: windows
+            goarch: amd64
+          - id: mcp-client-windows-arm64
+            runs_on: windows-latest
+            artifact_name: mcp-client_windows_arm64.exe
+            main: ./cmd/mcp-client
+            goos: windows
+            goarch: arm64
+          - id: mcp-client-darwin-arm64
+            runs_on: macos-latest
+            artifact_name: mcp-client_darwin_arm64
+            main: ./cmd/mcp-client
+            goos: darwin
+            goarch: arm64
+          - id: mcp-client-darwin-amd64
+            runs_on: macos-latest
+            artifact_name: mcp-client_darwin_amd64
+            main: ./cmd/mcp-client
+            goos: darwin
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - name: Build artifact
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w" -o dist/${{ matrix.artifact_name }} ${{ matrix.main }}
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v8
+        with:
+          name: ${{ matrix.id }}
+          path: dist/${{ matrix.artifact_name }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: '*'
+          merge-multiple: true
+
+      # 바이너리 무결성 검증을 위한 SHA256 체크섬 생성
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes --title "${GITHUB_REF_NAME}"
+
+  cleanup_failed_release:
+    needs:
+      - verify
+      - check_security
+      - build
+      - release
+    # verify, check_security, build, release 중 하나라도 실패하면 cleanup 실행
+    if: |
+      always() && (
+        needs.verify.result == 'failure' ||
+        needs.check_security.result == 'failure' ||
+        needs.build.result == 'failure' ||
+        needs.release.result == 'failure'
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Delete partial release if it exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 && gh release delete "${GITHUB_REF_NAME}" --yes || true
+
+      - name: Delete failed tag from remote
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push origin ":refs/tags/${GITHUB_REF_NAME}"
