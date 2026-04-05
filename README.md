@@ -78,6 +78,10 @@ curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/kali-
 curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_linux_amd64 \
   -o mcp-client && chmod +x mcp-client
 
+# Linux arm64
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_linux_arm64 \
+  -o mcp-client && chmod +x mcp-client
+
 # macOS Apple Silicon
 curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_darwin_arm64 \
   -o mcp-client && chmod +x mcp-client
