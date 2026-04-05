@@ -1,7 +1,6 @@
 name: Release
 permissions:
   contents: write
-  vulnerability-alerts: read
 
 on:
   push:
