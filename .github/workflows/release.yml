@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # checkout 추가: 일관성 및 gh CLI 컨텍스트 보장
+      # Add checkout to ensure consistency and provide gh CLI context
       - uses: actions/checkout@v6
 
       - name: Block release on open Dependabot alerts
@@ -159,7 +159,7 @@ jobs:
           pattern: '*'
           merge-multiple: true
 
-      # 바이너리 무결성 검증을 위한 SHA256 체크섬 생성
+      # Generate SHA256 checksums to verify binary integrity
       - name: Generate checksums
         run: |
           cd dist
@@ -177,7 +177,7 @@ jobs:
       - check_security
       - build
       - release
-    # verify, check_security, build, release 중 하나라도 실패하면 cleanup 실행
+    # Run cleanup if any of verify, check_security, build, or release fails
     if: |
       always() && (
         needs.verify.result == 'failure' ||
