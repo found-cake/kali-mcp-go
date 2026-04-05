@@ -86,8 +86,11 @@ curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-c
 curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_darwin_amd64 \
   -o mcp-client && chmod +x mcp-client
 
-# Windows x64: mcp-client_windows_amd64.exe
-# Windows arm64: mcp-client_windows_arm64.exe
+# Windows x64
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_windows_amd64.exe -o mcp-client.exe
+
+# Windows arm64
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_windows_arm64.exe -o mcp-client.exe
 ```
 
 Verify integrity with `checksums.txt` from the same release:
