@@ -1,97 +1,253 @@
 # kali-mcp-go
 
-Go reimplementation of [MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server), built to eliminate the bottlenecks we hit while running multiple AI agents against CTF challenges simultaneously.
+Go reimplementation of [MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server), built to eliminate the bottlenecks encountered when running multiple AI agents simultaneously.
 
-## Why rewrite?
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/found-cake/kali-mcp-go)](https://github.com/found-cake/kali-mcp-go/releases/latest)
 
-The original Python MCP-Kali-Server is a great project — it pioneered the idea of connecting AI agents to Kali Linux via MCP, and it's even shipped as an official Kali package. But when you spin up several agents in parallel (each with its own MCP client talking to the same Kali server), things break down fast:
+---
 
-- **Flask's single-worker model serializes everything.** One agent kicks off an `nmap -sCV` that takes two minutes; every other agent blocks until it finishes. In a CTF setting where you want recon, enumeration, and exploitation running concurrently, this is a dealbreaker.
-- **No streaming.** The Python server buffers the entire command output and returns it as one JSON blob when the process exits. A long-running scan gives the AI nothing to work with until it's completely done — no intermediate results, no ability to pivot early.
-- **No authentication on the API.** Anyone who can reach port 5000 can execute arbitrary commands. Fine for a quick local test, not fine when the server is accessible over a network.
+## Background
 
-kali-mcp-go keeps the same two-tier architecture (Kali API server ↔ MCP stdio client) and API-compatible tool set, but rebuilds both components in Go to remove these constraints.
+[MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server) by [@Wh0am123](https://github.com/Wh0am123) was the project that first proved connecting AI agents to Kali Linux tools over MCP works — it's even shipped as an official Kali package. This project owes a lot to that work.
 
-## What's different
+The rewrite was motivated by running into real bottlenecks when spinning up multiple AI agents in parallel against CTF challenges:
 
-### Concurrent request handling
+| | MCP-Kali-Server (Python) | kali-mcp-go (Go) |
+|---|---|---|
+| Concurrency | Flask single-worker — agents block each other | Fiber v3 / fasthttp — fully concurrent |
+| Output delivery | Buffered: full output returned when process exits | SSE streaming: output delivered line by line |
+| Authentication | None | Bearer token (SHA-256 constant-time comparison) |
+| Metasploit temp files | Hardcoded `/tmp/mks_msf_resource.rc` | `os.CreateTemp` — race-free, unique filenames |
+| Prompt injection defense | — | Safety instructions baked into MCP server |
 
-The API server runs on [Fiber v3](https://github.com/gofiber/fiber) (built on fasthttp). Each incoming request gets its own goroutine, so multiple agents can run tools in parallel without blocking each other.
+---
 
-### Real-time streaming
-
-The `/api/command/stream` endpoint delivers output via Server-Sent Events as it happens:
+## Architecture
 
 ```
-data: {"stream":"stdout","line":"Nmap scan report for 10.10.11.100"}
-data: {"stream":"stdout","line":"PORT   STATE SERVICE VERSION"}
-data: {"stream":"stdout","line":"22/tcp open  ssh     OpenSSH 8.9"}
-data: {"stream":"stderr","line":"Service detection performed."}
-data: {"done":true,"return_code":0,"timed_out":false}
+  [AI Client]
+  (Claude / Claude Code / Codex / OpenCode / ...)
+        │  MCP stdio
+        ▼
+  [mcp-client]  ← runs on your local machine
+        │  HTTP + Bearer token
+        ▼
+  [kali-server]  ← runs where security tools are installed
+        │  exec
+        ▼
+  [nmap · gobuster · sqlmap · msfconsole · ...]
 ```
 
-The AI sees results line by line and can decide to start a follow-up scan before the current one finishes.
+---
 
-### Bearer token authentication
+## Prerequisites
 
-All `/api/*` endpoints require a token set via the `KALI_MCP_API_TOKEN` environment variable. Tokens are compared using constant-time SHA-256 comparison to prevent timing attacks.
+| Component | Requirement |
+|---|---|
+| `kali-server` host | Any environment with the required security tools installed (Kali Linux, other Linux distros, macOS, etc.) |
+| `mcp-client` host | Linux, Windows, or macOS |
+| Build from source | Go 1.26+ |
 
-### Per-request timeout control
+Required tools: `nmap`, `gobuster`, `dirb`, `nikto`, `tshark`, `sqlmap`, `msfconsole`, `hydra`, `john`, `wpscan`, `enum4linux`
 
-The default timeout is 300 seconds. Clients can override it per request via the `timeout` field in the JSON body. The MCP client automatically adds a 5-second grace period on top of whatever the server-side timeout is, so the server always finishes first.
+---
 
-### Safer Metasploit execution
+## Installation
 
-- Temp files use `os.CreateTemp` (unique filenames, no race conditions) instead of a hardcoded `/tmp/mks_msf_resource.rc`
-- Module names and option keys/values are validated to reject line-break injection
+### Option A — Pre-built binaries (recommended)
 
-### Prompt injection defense
+Download the latest binaries from the [Releases page](https://github.com/found-cake/kali-mcp-go/releases/latest).
 
-The MCP client includes safety instructions that tell the AI model to treat all tool output as untrusted data and never execute commands derived from scan results without explicit user approval.
+**kali-server:**
 
-### Test coverage
+```bash
+# x86_64
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/kali-server_linux_amd64 \
+  -o kali-server && chmod +x kali-server
 
-992 lines of tests across all packages — server handlers, executor, HTTP client, tool argument builders, and DTO serialization.
+# arm64
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/kali-server_linux_arm64 \
+  -o kali-server && chmod +x kali-server
+```
 
-## Supported tools
+**mcp-client:**
 
-Same 11 tools as the original, with identical API contracts:
+```bash
+# Linux x64
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_linux_amd64 \
+  -o mcp-client && chmod +x mcp-client
 
-| Tool | Endpoint | MCP tool name |
-|------|----------|---------------|
-| Arbitrary command | `/api/command` | `execute_command` |
-| Nmap | `/api/tools/nmap` | `nmap_scan` |
-| Gobuster | `/api/tools/gobuster` | `gobuster_scan` |
-| Dirb | `/api/tools/dirb` | `dirb_scan` |
-| Nikto | `/api/tools/nikto` | `nikto_scan` |
-| Tshark | `/api/tools/tshark` | `tshark_capture` |
-| SQLMap | `/api/tools/sqlmap` | `sqlmap_scan` |
-| Metasploit | `/api/tools/metasploit` | `metasploit_run` |
-| Hydra | `/api/tools/hydra` | `hydra_attack` |
-| John the Ripper | `/api/tools/john` | `john_crack` |
-| WPScan | `/api/tools/wpscan` | `wpscan_analyze` |
-| Enum4linux | `/api/tools/enum4linux` | `enum4linux_scan` |
-| Health check | `/health` | `server_health` |
+# macOS Apple Silicon
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_darwin_arm64 \
+  -o mcp-client && chmod +x mcp-client
 
-## Project structure
+# macOS Intel
+curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_darwin_amd64 \
+  -o mcp-client && chmod +x mcp-client
+
+# Windows x64: mcp-client_windows_amd64.exe
+# Windows arm64: mcp-client_windows_arm64.exe
+```
+
+Verify integrity with `checksums.txt` from the same release:
+
+```bash
+sha256sum -c checksums.txt
+```
+
+### Option B — Build from source
+
+```bash
+git clone https://github.com/found-cake/kali-mcp-go.git
+cd kali-mcp-go
+
+# kali-server (Linux target)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go build -trimpath -ldflags="-s -w" -o kali-server ./cmd/kali-server
+
+# mcp-client (native OS)
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o mcp-client ./cmd/mcp-client
+```
+
+---
+
+## Usage
+
+### 1. Start kali-server
+
+Set a strong API token and start the server on the machine where your security tools are installed. The default port is **5000**.
+
+```bash
+export KALI_MCP_API_TOKEN="your-secret-token"
+
+./kali-server                           # binds to 127.0.0.1:5000
+./kali-server --ip 0.0.0.0 --port 5000  # expose on all interfaces
+./kali-server --debug                   # verbose logging
+```
+
+> **Tip:** Use an SSH tunnel instead of exposing `kali-server` directly on the network — it's simpler and more secure:
+> ```bash
+> # On your local machine: forward localhost:5000 → remote:5000
+> ssh -L 5000:127.0.0.1:5000 user@kali-host -N
+> ```
+> Then point `mcp-client` at `http://127.0.0.1:5000` as usual.
+
+### 2. Connect your AI client
+
+Set the same token in your local environment, then add `mcp-client` to your AI client's MCP configuration.
+
+#### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "kali-mcp": {
+      "command": "/path/to/mcp-client",
+      "args": ["--server", "http://127.0.0.1:5000"],
+      "env": {
+        "KALI_MCP_API_TOKEN": "your-secret-token"
+      }
+    }
+  }
+}
+```
+
+#### Claude Code
+
+```bash
+claude mcp add kali-mcp \
+  -e KALI_MCP_API_TOKEN=your-secret-token \
+  -- /path/to/mcp-client --server http://127.0.0.1:5000
+```
+
+#### OpenAI Codex / OpenCode
+
+```json
+{
+  "mcpServers": {
+    "kali-mcp": {
+      "command": "/path/to/mcp-client",
+      "args": ["--server", "http://127.0.0.1:5000"],
+      "env": {
+        "KALI_MCP_API_TOKEN": "your-secret-token"
+      }
+    }
+  }
+}
+```
+
+### mcp-client flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--server` | `http://127.0.0.1:5000` | kali-server URL |
+| `--timeout` | `300` | Base request timeout in seconds |
+| `--debug` | `false` | Verbose stderr logging |
+
+### kali-server flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--ip` | `127.0.0.1` | Bind address |
+| `--port` | `5000` | Listen port |
+| `--debug` | `false` | Verbose request logging |
+
+### Environment variables
+
+| Variable | Component | Description |
+|---|---|---|
+| `KALI_MCP_API_TOKEN` | both | **Required.** Bearer token for API authentication |
+| `KALI_MCP_DIR_WORDLIST` | kali-server | Override default dir wordlist (default: `/usr/share/wordlists/dirb/common.txt`) |
+| `KALI_MCP_JOHN_WORDLIST` | kali-server | Override default John wordlist (default: `/usr/share/wordlists/rockyou.txt`) |
+
+---
+
+## Available Tools
+
+| MCP tool | Description |
+|---|---|
+| `server_health` | Check server status and tool availability |
+| `execute_command` | Execute an arbitrary shell command (SSE streaming) |
+| `nmap_scan` | Nmap port and service scan |
+| `gobuster_scan` | Directory / DNS / vhost brute-force |
+| `dirb_scan` | Web content scanner |
+| `nikto_scan` | Web server vulnerability scanner |
+| `tshark_capture` | Packet capture and analysis |
+| `sqlmap_scan` | SQL injection scanner |
+| `metasploit_run` | Execute a Metasploit module via msfconsole |
+| `hydra_attack` | Password brute-force |
+| `john_crack` | Password hash cracker |
+| `wpscan_analyze` | WordPress vulnerability scanner |
+| `enum4linux_scan` | Windows / Samba enumeration |
+
+---
+
+## Project Structure
 
 ```
 kali-mcp-go/
 ├── cmd/
-│   ├── kali-server/     # API server (runs on Kali)
-│   └── mcp-client/      # MCP stdio client (runs on host)
+│   ├── kali-server/      # HTTP API server
+│   └── mcp-client/       # MCP stdio bridge
 ├── internal/
-│   ├── executor/        # Command execution + streaming
-│   ├── kaliclient/      # HTTP client for kali-server
-│   └── tools/           # Tool argument builders + validation
+│   ├── executor/         # Command execution + SSE streaming
+│   ├── kaliclient/       # HTTP client for kali-server
+│   └── tools/            # Tool argument builders + validation
 └── pkg/
-    └── dto/             # Shared request/response types
+    └── dto/              # Shared request/response types
 ```
 
-## Status
+---
 
-> **Work in progress.** The core is functional and tested, but installation docs, CI/CD, and release binaries are not yet available. Check back soon.
+## Security Notice
+
+> ⚠️ Only target systems you own or have explicit written permission to test.
+>
+> `execute_command` runs arbitrary shell commands as the server process user — restrict network access appropriately and prefer an SSH tunnel over direct exposure.
+
+---
 
 ## Acknowledgments
 
-This project exists because [MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server) by [@Wh0am123](https://github.com/Wh0am123) proved the concept works. Full credit to the original for pioneering AI-assisted pentesting over MCP.
+This project exists because [MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server) by [@Wh0am123](https://github.com/Wh0am123) proved the concept and shaped the two-tier architecture. Full credit to the original for pioneering AI-assisted pentesting over MCP.
