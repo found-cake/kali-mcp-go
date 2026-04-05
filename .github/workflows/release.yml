@@ -127,17 +127,39 @@ jobs:
           cd dist
           sha256sum * > checksums.txt
 
+      - name: Generate download notes
+        run: |
+          BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          cat > release_notes.md << EOF
+          ## kali-server (Only Linux)
+          - [Ubuntu x64](${BASE_URL}/kali-server_linux_amd64)
+          - [Ubuntu arm64](${BASE_URL}/kali-server_linux_arm64)
+
+          ## mcp-client
+          - [Ubuntu x64](${BASE_URL}/mcp-client_linux_amd64)
+          - [Ubuntu arm64](${BASE_URL}/mcp-client_linux_arm64)
+          - [Windows x64](${BASE_URL}/mcp-client_windows_amd64.exe)
+          - [Windows arm64](${BASE_URL}/mcp-client_windows_arm64.exe)
+          - [macOS Apple Silicon (arm64)](${BASE_URL}/mcp-client_darwin_arm64)
+          - [macOS Intel (x64)](${BASE_URL}/mcp-client_darwin_amd64)
+
+          ## Checksums
+          - [checksums.txt](${BASE_URL}/checksums.txt)
+          EOF
+
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes --title "${GITHUB_REF_NAME}"
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --notes-file release_notes.md \
+            --title "${GITHUB_REF_NAME}"
 
   cleanup_failed_release:
     needs:
       - build
       - release
-    # Run cleanup if any of verify, check_security, build, or release fails
+    # Run cleanup if build or release fails
     if: |
       always() && (
         needs.build.result == 'failure' ||
