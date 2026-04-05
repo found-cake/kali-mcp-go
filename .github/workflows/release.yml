@@ -101,7 +101,7 @@ jobs:
           go build -trimpath -ldflags="-s -w" -o dist/${{ matrix.artifact_name }} ${{ matrix.main }}
 
       - name: Upload release artifact
-        uses: actions/upload-artifact@v8
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.id }}
           path: dist/${{ matrix.artifact_name }}
@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           path: dist
           pattern: '*'
