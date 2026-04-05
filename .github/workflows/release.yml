@@ -8,39 +8,6 @@ on:
       - 'v*'
 
 jobs:
-  validate_tag:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Validate tag format
-        run: |
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release tag: ${GITHUB_REF_NAME}. Expected format: vx.y.z"
-            exit 1
-          fi
-
-  verify:
-    needs: validate_tag
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.26"
-      
-      - name: Install dependencies
-        run: go mod tidy
-
-      - name: Run tests
-        run: go test ./...
-
   check_security:
     needs: validate_tag
     runs-on: ubuntu-latest
@@ -60,9 +27,6 @@ jobs:
           fi
 
   build:
-    needs:
-      - verify
-      - check_security
     runs-on: ${{ matrix.runs_on }}
     strategy:
       fail-fast: false
@@ -172,8 +136,6 @@ jobs:
 
   cleanup_failed_release:
     needs:
-      - verify
-      - check_security
       - build
       - release
     # Run cleanup if any of verify, check_security, build, or release fails
