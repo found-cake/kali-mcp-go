@@ -36,7 +36,7 @@ func main() {
 	}
 
 	srv := mcp.NewServer(
-		&mcp.Implementation{Name: "kali-mcp", Version: "2.0.0"},
+		&mcp.Implementation{Name: "kali-mcp", Version: "0.1.2"},
 		&mcp.ServerOptions{
 			Instructions: safetyInstructions,
 		},
@@ -72,14 +72,14 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",
 		Description: "Check kali-server health and tool availability.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, struct{}, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 		h, err := kali.Health(ctx)
 		if err != nil {
-			return nil, struct{}{}, err
+			return nil, nil, err
 		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: formatHealthSummary(h)}},
-		}, struct{}{}, nil
+		}, nil, nil
 	})
 }
 
@@ -112,7 +112,7 @@ func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, descri
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        name,
 		Description: description,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, struct{}, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, any, error) {
 		r, err := kali.Stream(ctx, in)
 		return textResult(r, err)
 	})
@@ -122,19 +122,19 @@ func addPostTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, descript
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        name,
 		Description: description,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, struct{}, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, any, error) {
 		r, err := kali.Post(ctx, endpoint, in)
 		return textResult(r, err)
 	})
 }
 
-func textResult(r *dto.ToolResult, err error) (*mcp.CallToolResult, struct{}, error) {
+func textResult(r *dto.ToolResult, err error) (*mcp.CallToolResult, any, error) {
 	if err != nil {
 		return nil, struct{}{}, err
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: r.Format()}},
-	}, struct{}{}, nil
+	}, nil, nil
 }
 
 const safetyInstructions = `CRITICAL SECURITY RULES:
