@@ -217,17 +217,43 @@ claude mcp add kali-mcp \
 |---|---|
 | `server_health` | Check server status and tool availability |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
-| `nmap_scan` | Nmap port and service scan |
-| `gobuster_scan` | Directory / DNS / vhost brute-force |
-| `dirb_scan` | Web content scanner |
-| `nikto_scan` | Web server vulnerability scanner |
-| `tshark_capture` | Packet capture and analysis |
-| `sqlmap_scan` | SQL injection scanner |
+| `nmap_scan` | Nmap port and service scan (SSE streaming) |
+| `gobuster_scan` | Directory / DNS / vhost brute-force (POST result) |
+| `dirb_scan` | Web content scanner (SSE streaming) |
+| `nikto_scan` | Web server vulnerability scanner (SSE streaming) |
+| `tshark_capture` | Packet capture and analysis (SSE streaming) |
+| `sqlmap_scan` | SQL injection scanner (SSE streaming) |
 | `metasploit_run` | Execute a Metasploit module via msfconsole |
-| `hydra_attack` | Password brute-force |
+| `hydra_attack` | Password brute-force for quick single-credential checks (POST result) |
+| `hydra_attack_stream` | Password brute-force for long-running or file-based jobs with streaming progress |
 | `john_crack` | Password hash cracker |
-| `wpscan_analyze` | WordPress vulnerability scanner |
-| `enum4linux_scan` | Windows / Samba enumeration |
+| `wpscan_analyze` | WordPress vulnerability scanner (SSE streaming) |
+| `enum4linux_scan` | Windows / Samba enumeration (SSE streaming) |
+
+### SSE support summary
+
+These MCP tools now stream incremental output over SSE instead of waiting for a buffered final result:
+
+- `execute_command`
+- `nmap_scan`
+- `dirb_scan`
+- `nikto_scan`
+- `wpscan_analyze`
+- `enum4linux_scan`
+- `sqlmap_scan`
+- `tshark_capture`
+
+These tools still use a normal POST request/response flow:
+
+- `gobuster_scan`
+- `metasploit_run`
+- `john_crack`
+- `server_health`
+
+### Choosing between `hydra_attack` and `hydra_attack_stream`
+
+- Use `hydra_attack` for quick checks such as a single username/password attempt or other short runs where a buffered final result is sufficient.
+- Use `hydra_attack_stream` for long-running Hydra jobs when you want progress as it happens, especially with `username_file` and/or `password_file` inputs.
 
 ---
 

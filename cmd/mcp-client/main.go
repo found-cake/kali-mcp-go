@@ -50,6 +50,11 @@ func main() {
 }
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
+	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster")
+	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
+	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack. Use for quick single-credential checks; prefer hydra_attack_stream for long-running jobs, such as those using username_file/password_file.", "/api/tools/hydra")
+	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
+
 	addStreamTool[dto.CommandRequest](
 		srv,
 		kali,
@@ -57,17 +62,12 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 		"Execute an arbitrary shell command on the Kali Linux machine.",
 		"/api/command/stream",
 	)
-
 	addStreamTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "/api/tools/nmap/stream")
-	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster")
 	addStreamTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "/api/tools/dirb/stream")
 	addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "/api/tools/nikto/stream")
 	addStreamTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "/api/tools/sqlmap/stream")
 	addStreamTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "/api/tools/tshark/stream")
-	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
-	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack. Use for quick single-credential checks; prefer hydra_attack_stream for long-running jobs, such as those using username_file/password_file.", "/api/tools/hydra")
 	addStreamTool[dto.HydraRequest](srv, kali, "hydra_attack_stream", "Run Hydra password brute-force attack with real-time streaming output. Use for large jobs or when username_file/password_file is specified.", "/api/tools/hydra/stream")
-	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
 	addStreamTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "/api/tools/wpscan/stream")
 	addStreamTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "/api/tools/enum4linux/stream")
 
