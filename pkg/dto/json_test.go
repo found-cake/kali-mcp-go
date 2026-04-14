@@ -45,3 +45,16 @@ func TestStreamEventJSONOmitsReturnCodeBeforeDone(t *testing.T) {
 		t.Fatalf("expected return_code to be omitted in %s", got)
 	}
 }
+
+func TestStreamEventJSONIncludesHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	data, err := json.Marshal(StreamEvent{Heartbeat: true})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(data)
+	if !strings.Contains(got, `"heartbeat":true`) {
+		t.Fatalf("expected heartbeat=true field in %s", got)
+	}
+}
