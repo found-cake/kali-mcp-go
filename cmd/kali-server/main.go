@@ -285,6 +285,38 @@ func commandTimeout(seconds int) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result) error {
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("X-Accel-Buffering", "no")
+
+	return c.SendStreamWriter(func(w *bufio.Writer) {
+		var streamedStderr strings.Builder
+		for line := range lines {
+			if line.Stream == "stderr" {
+				streamedStderr.WriteString(line.Text)
+				streamedStderr.WriteByte('\n')
+			}
+			payload, _ := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
+			fmt.Fprintf(w, "data: %s\n\n", payload)
+			if err := w.Flush(); err != nil {
+				for range lines {
+				}
+				return
+			}
+		}
+		result := <-done
+		returnCode := result.ReturnCode
+		doneEvent := dto.StreamEvent{Done: true, ReturnCode: &returnCode, TimedOut: result.TimedOut}
+		if terminalErr := terminalStreamError(result, streamedStderr.String()); terminalErr != "" {
+			doneEvent.Error = terminalErr
+		}
+		payload, _ := json.Marshal(doneEvent)
+		fmt.Fprintf(w, "data: %s\n\n", payload)
+		_ = w.Flush()
+	})
+}
+
 func validateHydraRequest(req dto.HydraRequest) error {
 	if req.Target == "" || req.Service == "" {
 		return fmt.Errorf("target and service are required")
@@ -330,37 +362,8 @@ func handleCommandStream(c fiber.Ctx) error {
 		return badRequest(c, err.Error())
 	}
 	timeout := commandTimeout(req.Timeout)
-
-	c.Set("Content-Type", "text/event-stream")
-	c.Set("Cache-Control", "no-cache")
-	c.Set("X-Accel-Buffering", "no")
-
 	lines, done := executor.StreamShell(c.Context(), timeout, req.Command)
-
-	return c.SendStreamWriter(func(w *bufio.Writer) {
-		var streamedStderr strings.Builder
-		for line := range lines {
-			if line.Stream == "stderr" {
-				streamedStderr.WriteString(line.Text)
-				streamedStderr.WriteByte('\n')
-			}
-			payload, _ := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
-			fmt.Fprintf(w, "data: %s\n\n", payload)
-			if err := w.Flush(); err != nil {
-				return
-			}
-		}
-		if result := <-done; result != nil {
-			returnCode := result.ReturnCode
-			doneEvent := dto.StreamEvent{Done: true, ReturnCode: &returnCode, TimedOut: result.TimedOut}
-			if terminalErr := terminalStreamError(result, streamedStderr.String()); terminalErr != "" {
-				doneEvent.Error = terminalErr
-			}
-			payload, _ := json.Marshal(doneEvent)
-			fmt.Fprintf(w, "data: %s\n\n", payload)
-			w.Flush()
-		}
-	})
+	return sendToolStream(c, lines, done)
 }
 
 func handleNmap(c fiber.Ctx) error {

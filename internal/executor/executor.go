@@ -42,16 +42,24 @@ func RunExec(ctx context.Context, timeout time.Duration, name string, args ...st
 	return execute(ctx, timeout, commandSpec{name: name, args: args}, nil)
 }
 
+func StreamExec(ctx context.Context, timeout time.Duration, name string, args ...string) (<-chan Line, <-chan *Result) {
+	return stream(ctx, timeout, commandSpec{name: name, args: args})
+}
+
 func RunShell(ctx context.Context, timeout time.Duration, command string) *Result {
 	return execute(ctx, timeout, commandSpec{name: "bash", args: []string{"-c", command}}, nil)
 }
 
 func StreamShell(ctx context.Context, timeout time.Duration, command string) (<-chan Line, <-chan *Result) {
+	return stream(ctx, timeout, commandSpec{name: "bash", args: []string{"-c", command}})
+}
+
+func stream(ctx context.Context, timeout time.Duration, cmdSpec commandSpec) (<-chan Line, <-chan *Result) {
 	lines := make(chan Line, 256)
 	done := make(chan *Result, 1)
 
 	go func() {
-		result := execute(ctx, timeout, commandSpec{name: "bash", args: []string{"-c", command}}, func(execCtx context.Context, line Line) bool {
+		result := execute(ctx, timeout, cmdSpec, func(execCtx context.Context, line Line) bool {
 			select {
 			case lines <- line:
 				return true

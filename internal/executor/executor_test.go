@@ -59,6 +59,31 @@ func TestStreamDeliversDoneAfterLineDrain(t *testing.T) {
 	for range lines {
 		lineCount++
 	}
+	if lineCount != 1 {
+		t.Fatalf("expected exactly one streamed line, got %d", lineCount)
+	}
+
+	res, ok := <-done
+	if !ok {
+		t.Fatal("expected done result before channel close")
+	}
+	if res == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if res.ReturnCode != 0 {
+		t.Fatalf("expected return code 0, got %d", res.ReturnCode)
+	}
+}
+
+func TestStreamExecDeliversDoneAfterLineDrain(t *testing.T) {
+	t.Parallel()
+
+	lines, done := StreamExec(context.Background(), 5*time.Second, "printf", "ok\n")
+
+	lineCount := 0
+	for range lines {
+		lineCount++
+	}
 	if lineCount == 0 {
 		t.Fatal("expected at least one streamed line")
 	}

@@ -55,6 +55,7 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 		kali,
 		"execute_command",
 		"Execute an arbitrary shell command on the Kali Linux machine.",
+		"api/command/stream",
 	)
 
 	addPostTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "api/tools/nmap")
@@ -108,12 +109,12 @@ func formatHealthSummary(h *dto.HealthResult) string {
 	return sb.String()
 }
 
-func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, description string) {
+func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, description, endpoint string) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        name,
 		Description: description,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, any, error) {
-		r, err := kali.Stream(ctx, in)
+		r, err := kali.Stream(ctx, endpoint, in)
 		return textResult(r, err)
 	})
 }

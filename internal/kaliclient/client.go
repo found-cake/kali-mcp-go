@@ -74,7 +74,7 @@ func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.Tool
 	req, err := http.NewRequestWithContext(
 		reqCtx,
 		http.MethodPost,
-		c.base+"/"+strings.TrimLeft(endpoint, "/"),
+		c.base+"/"+strings.TrimPrefix(endpoint, "/"),
 		bytes.NewReader(b))
 	if err != nil {
 		return nil, err
@@ -99,7 +99,8 @@ func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.Tool
 	}
 	return &result, nil
 }
-func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) {
+
+func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -111,7 +112,7 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 	req, err := http.NewRequestWithContext(
 		reqCtx,
 		http.MethodPost,
-		c.base+"/api/command/stream",
+		c.base+"/"+strings.TrimPrefix(endpoint, "/"),
 		bytes.NewReader(b))
 	if err != nil {
 		return nil, err
@@ -197,6 +198,7 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 		PartialResults: timedOut && (len(stdoutLines) > 0 || len(stderrLines) > 0),
 	}, nil
 }
+
 func (c *Client) Health(ctx context.Context) (*dto.HealthResult, error) {
 	reqCtx, cancel := c.requestContext(ctx, struct{}{})
 	defer cancel()
