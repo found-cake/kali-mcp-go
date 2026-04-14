@@ -190,7 +190,7 @@ claude mcp add kali-mcp \
 | Flag | Default | Description |
 |---|---|---|
 | `--server` | `http://127.0.0.1:5000` | kali-server URL |
-| `--timeout` | `300` | Base request timeout in seconds |
+| `--timeout` | `300` | Base request timeout in seconds; individual streaming tools can raise this per request with their `timeout` field |
 | `--debug` | `false` | Verbose stderr logging |
 
 ### kali-server flags
@@ -242,6 +242,10 @@ These MCP tools now stream incremental output over SSE instead of waiting for a 
 - `enum4linux_scan`
 - `sqlmap_scan`
 - `tshark_capture`
+
+Streaming requests support an optional `timeout` field (seconds) to override the default 300-second request limit for that specific run. For `tshark_capture`, this request `timeout` is distinct from the capture `duration` field.
+
+Quiet streams may also emit lightweight heartbeat SSE events to keep the connection active until the final `done` event arrives.
 
 These tools still use a normal POST request/response flow:
 
