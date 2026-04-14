@@ -157,8 +157,7 @@ func registerRoutes(app *fiber.App, apiToken string) {
 
 	api.Post("/tools/nmap", handleNmap)
 	api.Post("/tools/gobuster", handleGobuster)
-	api.Post("/tools/dirb", handleDirb)
-	api.Post("/tools/nikto", handleNikto)
+	api.Post("/tools/dirb/stream", handleDirbStream)
 	api.Post("/tools/nikto/stream", handleNiktoStream)
 	api.Post("/tools/tshark", handleTshark)
 	api.Post("/tools/sqlmap", handleSQLMap)
@@ -364,6 +363,13 @@ func validateNiktoRequest(req dto.NiktoRequest) error {
 	return nil
 }
 
+func validateDirbRequest(req dto.DirbRequest) error {
+	if req.URL == "" {
+		return fmt.Errorf("url is required")
+	}
+	return nil
+}
+
 func handleCommand(c fiber.Ctx) error {
 	req, err := parseRequest(c, func(r dto.CommandRequest) error {
 		if r.Command == "" {
@@ -415,17 +421,8 @@ func handleGobuster(c fiber.Ctx) error {
 	}, tools.GobusterArgs)
 }
 
-func handleDirb(c fiber.Ctx) error {
-	return runTool(c, func(req dto.DirbRequest) error {
-		if req.URL == "" {
-			return fmt.Errorf("url is required")
-		}
-		return nil
-	}, tools.DirbArgs)
-}
-
-func handleNikto(c fiber.Ctx) error {
-	return runTool(c, validateNiktoRequest, tools.NiktoArgs)
+func handleDirbStream(c fiber.Ctx) error {
+	return runToolStream(c, validateDirbRequest, tools.DirbArgs)
 }
 
 func handleNiktoStream(c fiber.Ctx) error {
