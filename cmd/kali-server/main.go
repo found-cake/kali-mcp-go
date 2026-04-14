@@ -161,8 +161,8 @@ func registerRoutes(app *fiber.App, apiToken string) {
 	api.Post("/tools/nikto/stream", handleNiktoStream)
 	api.Post("/tools/wpscan/stream", handleWPScanStream)
 	api.Post("/tools/enum4linux/stream", handleEnum4linuxStream)
+	api.Post("/tools/sqlmap/stream", handleSQLMapStream)
 	api.Post("/tools/tshark", handleTshark)
-	api.Post("/tools/sqlmap", handleSQLMap)
 	api.Post("/tools/metasploit", handleMetasploit)
 	api.Post("/tools/hydra", handleHydra)
 	api.Post("/tools/john", handleJohn)
@@ -384,6 +384,13 @@ func validateEnum4linuxRequest(req dto.Enum4linuxRequest) error {
 	return nil
 }
 
+func validateSQLMapRequest(req dto.SQLMapRequest) error {
+	if req.URL == "" {
+		return fmt.Errorf("url is required")
+	}
+	return nil
+}
+
 func handleCommand(c fiber.Ctx) error {
 	req, err := parseRequest(c, func(r dto.CommandRequest) error {
 		if r.Command == "" {
@@ -451,17 +458,12 @@ func handleEnum4linuxStream(c fiber.Ctx) error {
 	return runToolStream(c, validateEnum4linuxRequest, tools.Enum4linuxArgs)
 }
 
-func handleTshark(c fiber.Ctx) error {
-	return runTool(c, validateTsharkRequest, tools.TsharkArgs)
+func handleSQLMapStream(c fiber.Ctx) error {
+	return runToolStream(c, validateSQLMapRequest, tools.SQLMapArgs)
 }
 
-func handleSQLMap(c fiber.Ctx) error {
-	return runTool(c, func(req dto.SQLMapRequest) error {
-		if req.URL == "" {
-			return fmt.Errorf("url is required")
-		}
-		return nil
-	}, tools.SQLMapArgs)
+func handleTshark(c fiber.Ctx) error {
+	return runTool(c, validateTsharkRequest, tools.TsharkArgs)
 }
 
 func handleMetasploit(c fiber.Ctx) error {
