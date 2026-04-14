@@ -159,12 +159,12 @@ func registerRoutes(app *fiber.App, apiToken string) {
 	api.Post("/tools/gobuster", handleGobuster)
 	api.Post("/tools/dirb/stream", handleDirbStream)
 	api.Post("/tools/nikto/stream", handleNiktoStream)
+	api.Post("/tools/wpscan/stream", handleWPScanStream)
 	api.Post("/tools/tshark", handleTshark)
 	api.Post("/tools/sqlmap", handleSQLMap)
 	api.Post("/tools/metasploit", handleMetasploit)
 	api.Post("/tools/hydra", handleHydra)
 	api.Post("/tools/john", handleJohn)
-	api.Post("/tools/wpscan", handleWPScan)
 	api.Post("/tools/enum4linux", handleEnum4linux)
 
 	app.Get("/health", handleHealth)
@@ -370,6 +370,13 @@ func validateDirbRequest(req dto.DirbRequest) error {
 	return nil
 }
 
+func validateWPScanRequest(req dto.WPScanRequest) error {
+	if req.URL == "" {
+		return fmt.Errorf("url is required")
+	}
+	return nil
+}
+
 func handleCommand(c fiber.Ctx) error {
 	req, err := parseRequest(c, func(r dto.CommandRequest) error {
 		if r.Command == "" {
@@ -429,6 +436,10 @@ func handleNiktoStream(c fiber.Ctx) error {
 	return runToolStream(c, validateNiktoRequest, tools.NiktoArgs)
 }
 
+func handleWPScanStream(c fiber.Ctx) error {
+	return runToolStream(c, validateWPScanRequest, tools.WPScanArgs)
+}
+
 func handleTshark(c fiber.Ctx) error {
 	return runTool(c, validateTsharkRequest, tools.TsharkArgs)
 }
@@ -484,15 +495,6 @@ func handleJohn(c fiber.Ctx) error {
 		}
 		return nil
 	}, tools.JohnArgs)
-}
-
-func handleWPScan(c fiber.Ctx) error {
-	return runTool(c, func(req dto.WPScanRequest) error {
-		if req.URL == "" {
-			return fmt.Errorf("url is required")
-		}
-		return nil
-	}, tools.WPScanArgs)
 }
 
 func handleEnum4linux(c fiber.Ctx) error {

@@ -122,6 +122,33 @@ func TestHandleDirbStreamRejectsMissingURL(t *testing.T) {
 	}
 }
 
+func TestHandleWPScanStreamRejectsMissingURL(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/wpscan/stream", handleWPScanStream)
+
+	req, err := http.NewRequest(http.MethodPost, "/wpscan/stream", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "url is required") {
+		t.Fatalf("expected url validation message, got %s", string(body))
+	}
+}
+
 func TestHandleNmapRejectsMalformedJSON(t *testing.T) {
 	t.Parallel()
 
