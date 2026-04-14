@@ -165,6 +165,7 @@ func registerRoutes(app *fiber.App, apiToken string) {
 	api.Post("/tools/tshark/stream", handleTsharkStream)
 	api.Post("/tools/metasploit", handleMetasploit)
 	api.Post("/tools/hydra", handleHydra)
+	api.Post("/tools/hydra/stream", handleHydraStream)
 	api.Post("/tools/john", handleJohn)
 
 	app.Get("/health", handleHealth)
@@ -501,6 +502,10 @@ func handleMetasploit(c fiber.Ctx) error {
 
 func handleHydra(c fiber.Ctx) error {
 	return runTool(c, validateHydraRequest, tools.HydraArgs)
+}
+
+func handleHydraStream(c fiber.Ctx) error {
+	return runToolStream(c, validateHydraRequest, tools.HydraArgs)
 }
 
 func handleJohn(c fiber.Ctx) error {

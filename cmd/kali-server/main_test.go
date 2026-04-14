@@ -394,6 +394,146 @@ func TestHandleHydraRejectsConflictingUsernameInputs(t *testing.T) {
 	}
 }
 
+func TestHandleHydraRejectsConflictingPasswordInputs(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/hydra", handleHydra)
+
+	body := `{"target":"127.0.0.1","service":"ssh","username":"root","password":"toor","password_file":"/tmp/passwords.txt"}`
+	req, err := http.NewRequest(http.MethodPost, "/hydra", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(respBody), "password and password_file cannot be used together") {
+		t.Fatalf("expected password conflict validation message, got %s", string(respBody))
+	}
+}
+
+func TestHandleHydraStreamRejectsMissingTarget(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/hydra/stream", handleHydraStream)
+
+	body := `{"service":"ssh","username":"root","password":"toor"}`
+	req, err := http.NewRequest(http.MethodPost, "/hydra/stream", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(respBody), "target and service are required") {
+		t.Fatalf("expected required-fields validation message, got %s", string(respBody))
+	}
+}
+
+func TestHandleHydraStreamRejectsMissingService(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/hydra/stream", handleHydraStream)
+
+	body := `{"target":"127.0.0.1","username":"root","password":"toor"}`
+	req, err := http.NewRequest(http.MethodPost, "/hydra/stream", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(respBody), "target and service are required") {
+		t.Fatalf("expected required-fields validation message, got %s", string(respBody))
+	}
+}
+
+func TestHandleHydraStreamRejectsConflictingUsernameInputs(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/hydra/stream", handleHydraStream)
+
+	body := `{"target":"127.0.0.1","service":"ssh","username":"root","username_file":"/tmp/users.txt","password":"toor"}`
+	req, err := http.NewRequest(http.MethodPost, "/hydra/stream", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(respBody), "username and username_file cannot be used together") {
+		t.Fatalf("expected username conflict validation message, got %s", string(respBody))
+	}
+}
+
+func TestHandleHydraStreamRejectsConflictingPasswordInputs(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/hydra/stream", handleHydraStream)
+
+	body := `{"target":"127.0.0.1","service":"ssh","username":"root","password":"toor","password_file":"/tmp/passwords.txt"}`
+	req, err := http.NewRequest(http.MethodPost, "/hydra/stream", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(respBody), "password and password_file cannot be used together") {
+		t.Fatalf("expected password conflict validation message, got %s", string(respBody))
+	}
+}
+
 func TestHandleNmapStreamRejectsMalformedAdditionalArgs(t *testing.T) {
 	t.Parallel()
 
