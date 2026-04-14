@@ -318,7 +318,13 @@ func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *execut
 				streamedStderr.WriteString(line.Text)
 				streamedStderr.WriteByte('\n')
 			}
-			payload, _ := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
+			payload, err := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
+			if err != nil {
+				for range lines {
+				}
+				writeStreamDoneFallback(w, "internal error: failed to encode stream event")
+				return
+			}
 			fmt.Fprintf(w, "data: %s\n\n", payload)
 			if err := w.Flush(); err != nil {
 				for range lines {
@@ -332,10 +338,19 @@ func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *execut
 		if terminalErr := terminalStreamError(result, streamedStderr.String()); terminalErr != "" {
 			doneEvent.Error = terminalErr
 		}
-		payload, _ := json.Marshal(doneEvent)
+		payload, err := json.Marshal(doneEvent)
+		if err != nil {
+			writeStreamDoneFallback(w, "internal error: failed to encode done event")
+			return
+		}
 		fmt.Fprintf(w, "data: %s\n\n", payload)
 		_ = w.Flush()
 	})
+}
+
+func writeStreamDoneFallback(w *bufio.Writer, message string) {
+	_, _ = w.WriteString("data: {\"done\":true,\"return_code\":-1,\"error\":" + strconv.Quote(message) + "}\n\n")
+	_ = w.Flush()
 }
 
 func validateHydraRequest(req dto.HydraRequest) error {

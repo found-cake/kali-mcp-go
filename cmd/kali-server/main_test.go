@@ -14,6 +14,31 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+func mustParseSSEEvents(t *testing.T, body string) []dto.StreamEvent {
+	t.Helper()
+
+	chunks := strings.Split(strings.TrimSpace(body), "\n\n")
+	events := make([]dto.StreamEvent, 0, len(chunks))
+	for _, chunk := range chunks {
+		chunk = strings.TrimSpace(chunk)
+		if chunk == "" {
+			continue
+		}
+		if !strings.HasPrefix(chunk, "data: ") {
+			t.Fatalf("unexpected SSE chunk %q", chunk)
+		}
+		var event dto.StreamEvent
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(chunk, "data: ")), &event); err != nil {
+			t.Fatalf("decode SSE event %q: %v", chunk, err)
+		}
+		events = append(events, event)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected at least one SSE event")
+	}
+	return events
+}
+
 func TestHandleNmapStreamRejectsMissingTarget(t *testing.T) {
 	t.Parallel()
 
@@ -65,6 +90,114 @@ func TestHandleCommandStreamRejectsMissingCommand(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "command is required") {
 		t.Fatalf("expected command validation message, got %s", string(body))
+	}
+}
+
+func TestHandleCommandStreamSuccessStreamsLinesBeforeDone(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/command/stream", handleCommandStream)
+
+	req, err := http.NewRequest(http.MethodPost, "/command/stream", strings.NewReader(`{"command":"printf 'hello\\nworld\\n'"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+		t.Fatalf("expected SSE content type, got %q", got)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	events := mustParseSSEEvents(t, string(body))
+	if len(events) != 3 {
+		t.Fatalf("expected 3 SSE events, got %d (%s)", len(events), string(body))
+	}
+	if events[0].Stream != "stdout" || events[0].Line != "hello" {
+		t.Fatalf("expected first stdout event for hello, got %+v", events[0])
+	}
+	if events[1].Stream != "stdout" || events[1].Line != "world" {
+		t.Fatalf("expected second stdout event for world, got %+v", events[1])
+	}
+	if !events[2].Done {
+		t.Fatalf("expected final done event, got %+v", events[2])
+	}
+	if events[2].ReturnCode == nil || *events[2].ReturnCode != 0 {
+		t.Fatalf("expected done return_code=0, got %+v", events[2])
+	}
+	if events[2].TimedOut {
+		t.Fatalf("expected timed_out=false, got %+v", events[2])
+	}
+	if events[2].Error != "" {
+		t.Fatalf("expected empty done error, got %+v", events[2])
+	}
+}
+
+func TestSendToolStreamStreamsStdoutAndStderrBeforeDone(t *testing.T) {
+	t.Parallel()
+
+	lines := make(chan executor.Line, 2)
+	done := make(chan *executor.Result, 1)
+	lines <- executor.Line{Stream: "stdout", Text: "hello"}
+	lines <- executor.Line{Stream: "stderr", Text: "warn"}
+	close(lines)
+	done <- &executor.Result{ReturnCode: 0, Stderr: "warn\n"}
+	close(done)
+
+	app := fiber.New()
+	app.Get("/stream", func(c fiber.Ctx) error {
+		return sendToolStream(c, lines, done)
+	})
+
+	req, err := http.NewRequest(http.MethodGet, "/stream", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	events := mustParseSSEEvents(t, string(body))
+	if len(events) != 3 {
+		t.Fatalf("expected 3 SSE events, got %d (%s)", len(events), string(body))
+	}
+	if events[0].Done || events[1].Done {
+		t.Fatalf("expected non-done events before final event, got %+v", events)
+	}
+	if events[0].Stream != "stdout" || events[0].Line != "hello" {
+		t.Fatalf("expected first stdout event, got %+v", events[0])
+	}
+	if events[1].Stream != "stderr" || events[1].Line != "warn" {
+		t.Fatalf("expected second stderr event, got %+v", events[1])
+	}
+	if !events[2].Done {
+		t.Fatalf("expected final done event, got %+v", events[2])
+	}
+	if events[2].ReturnCode == nil || *events[2].ReturnCode != 0 {
+		t.Fatalf("expected done return_code=0, got %+v", events[2])
+	}
+	if events[2].TimedOut {
+		t.Fatalf("expected timed_out=false, got %+v", events[2])
+	}
+	if events[2].Error != "" {
+		t.Fatalf("expected empty done error after streamed stderr, got %+v", events[2])
 	}
 }
 
