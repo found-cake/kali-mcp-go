@@ -159,6 +159,7 @@ func registerRoutes(app *fiber.App, apiToken string) {
 	api.Post("/tools/gobuster", handleGobuster)
 	api.Post("/tools/dirb", handleDirb)
 	api.Post("/tools/nikto", handleNikto)
+	api.Post("/tools/nikto/stream", handleNiktoStream)
 	api.Post("/tools/tshark", handleTshark)
 	api.Post("/tools/sqlmap", handleSQLMap)
 	api.Post("/tools/metasploit", handleMetasploit)
@@ -202,6 +203,10 @@ func badRequest(c fiber.Ctx, msg string) error {
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": msg})
 }
 
+func internalServerError(c fiber.Ctx, msg string) error {
+	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": msg})
+}
+
 func bindJSON(c fiber.Ctx, dst any) error {
 	return c.Bind().Body(dst)
 }
@@ -232,9 +237,25 @@ func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]stri
 		return badRequest(c, err.Error())
 	}
 	if len(args) == 0 {
-		return badRequest(c, "internal error: no command generated")
+		return internalServerError(c, "internal error: no command generated")
 	}
 	return c.JSON(toAPIResult(executor.RunExec(c.Context(), 0, args[0], args[1:]...)))
+}
+
+func runToolStream[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
+	req, err := parseRequest(c, validate)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	args, err := argsFor(req)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	if len(args) == 0 {
+		return internalServerError(c, "internal error: no command generated")
+	}
+	lines, done := executor.StreamExec(c.Context(), 0, args[0], args[1:]...)
+	return sendToolStream(c, lines, done)
 }
 
 func validatePositiveInt(name, value string) error {
@@ -336,6 +357,13 @@ func validateHydraRequest(req dto.HydraRequest) error {
 	return nil
 }
 
+func validateNiktoRequest(req dto.NiktoRequest) error {
+	if req.Target == "" {
+		return fmt.Errorf("target is required")
+	}
+	return nil
+}
+
 func handleCommand(c fiber.Ctx) error {
 	req, err := parseRequest(c, func(r dto.CommandRequest) error {
 		if r.Command == "" {
@@ -397,12 +425,11 @@ func handleDirb(c fiber.Ctx) error {
 }
 
 func handleNikto(c fiber.Ctx) error {
-	return runTool(c, func(req dto.NiktoRequest) error {
-		if req.Target == "" {
-			return fmt.Errorf("target is required")
-		}
-		return nil
-	}, tools.NiktoArgs)
+	return runTool(c, validateNiktoRequest, tools.NiktoArgs)
+}
+
+func handleNiktoStream(c fiber.Ctx) error {
+	return runToolStream(c, validateNiktoRequest, tools.NiktoArgs)
 }
 
 func handleTshark(c fiber.Ctx) error {

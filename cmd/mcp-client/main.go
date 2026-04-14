@@ -55,20 +55,20 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 		kali,
 		"execute_command",
 		"Execute an arbitrary shell command on the Kali Linux machine.",
-		"api/command/stream",
+		"/api/command/stream",
 	)
 
-	addPostTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "api/tools/nmap")
-	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "api/tools/gobuster")
-	addPostTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "api/tools/dirb")
-	addPostTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "api/tools/nikto")
-	addPostTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "api/tools/tshark")
-	addPostTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "api/tools/sqlmap")
-	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "api/tools/metasploit")
-	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack.", "api/tools/hydra")
-	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "api/tools/john")
-	addPostTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "api/tools/wpscan")
-	addPostTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "api/tools/enum4linux")
+	addPostTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "/api/tools/nmap")
+	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster")
+	addPostTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "/api/tools/dirb")
+	addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "/api/tools/nikto/stream")
+	addPostTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "/api/tools/tshark")
+	addPostTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "/api/tools/sqlmap")
+	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
+	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack.", "/api/tools/hydra")
+	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
+	addPostTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "/api/tools/wpscan")
+	addPostTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "/api/tools/enum4linux")
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",
