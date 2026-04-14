@@ -1,18 +1,49 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
+
+type fakeStreamTicker struct {
+	ch <-chan time.Time
+}
+
+func (t fakeStreamTicker) Chan() <-chan time.Time { return t.ch }
+func (t fakeStreamTicker) Stop()                  {}
+
+type failingStreamWriter struct {
+	writeCalls int
+	flushed    bool
+}
+
+func (w *failingStreamWriter) WriteString(string) (int, error) {
+	w.writeCalls++
+	return 0, fmt.Errorf("forced write failure")
+}
+
+func (w *failingStreamWriter) Flush() error {
+	w.flushed = true
+	return nil
+}
+
+type streamTimeoutRequest struct {
+	Timeout int `json:"timeout,omitempty"`
+}
+
+func (r streamTimeoutRequest) GetRequestTimeout() int { return r.Timeout }
 
 func mustParseSSEEvents(t *testing.T, body string) []dto.StreamEvent {
 	t.Helper()
@@ -156,7 +187,7 @@ func TestSendToolStreamStreamsStdoutAndStderrBeforeDone(t *testing.T) {
 
 	app := fiber.New()
 	app.Get("/stream", func(c fiber.Ctx) error {
-		return sendToolStream(c, lines, done)
+		return sendToolStreamWithCancel(c, lines, done, nil)
 	})
 
 	req, err := http.NewRequest(http.MethodGet, "/stream", nil)
@@ -198,6 +229,173 @@ func TestSendToolStreamStreamsStdoutAndStderrBeforeDone(t *testing.T) {
 	}
 	if events[2].Error != "" {
 		t.Fatalf("expected empty done error after streamed stderr, got %+v", events[2])
+	}
+}
+
+func TestSendToolStreamEmitsHeartbeatBeforeDone(t *testing.T) {
+	t.Parallel()
+
+	lines := make(chan executor.Line)
+	done := make(chan *executor.Result, 1)
+	heartbeatCh := make(chan time.Time)
+	started := make(chan struct{})
+
+	app := fiber.New()
+	app.Get("/stream", func(c fiber.Ctx) error {
+		close(started)
+		return sendToolStreamWithTicker(c, lines, done, nil, func() streamTicker {
+			return fakeStreamTicker{ch: heartbeatCh}
+		})
+	})
+
+	go func() {
+		<-started
+		heartbeatCh <- time.Now()
+		close(lines)
+		done <- &executor.Result{ReturnCode: 0}
+		close(done)
+	}()
+
+	req, err := http.NewRequest(http.MethodGet, "/stream", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	events := mustParseSSEEvents(t, string(body))
+	if len(events) != 2 {
+		t.Fatalf("expected 2 SSE events, got %d (%s)", len(events), string(body))
+	}
+	if !events[0].Heartbeat {
+		t.Fatalf("expected first event to be heartbeat, got %+v", events[0])
+	}
+	if !events[1].Done {
+		t.Fatalf("expected final done event, got %+v", events[1])
+	}
+	if events[1].ReturnCode == nil || *events[1].ReturnCode != 0 {
+		t.Fatalf("expected done return_code=0, got %+v", events[1])
+	}
+}
+
+func TestRunToolStreamUsesRequestTimeout(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/sleep/stream", func(c fiber.Ctx) error {
+		return runToolStream(c, func(streamTimeoutRequest) error { return nil }, func(streamTimeoutRequest) ([]string, error) {
+			return []string{"sleep", "1"}, nil
+		})
+	})
+
+	req, err := http.NewRequest(http.MethodPost, "/sleep/stream", strings.NewReader(`{"timeout":1}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req, fiber.TestConfig{Timeout: 4 * time.Second})
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	events := mustParseSSEEvents(t, string(body))
+	last := events[len(events)-1]
+	if !last.Done {
+		t.Fatalf("expected final done event, got %+v", last)
+	}
+	if !last.TimedOut {
+		t.Fatalf("expected timed_out=true, got %+v", last)
+	}
+	if last.ReturnCode == nil || *last.ReturnCode != -1 {
+		t.Fatalf("expected return_code=-1 for timeout, got %+v", last)
+	}
+}
+
+func TestRunSendToolStreamCancelsAndDrainsOnWriteError(t *testing.T) {
+	t.Parallel()
+
+	lines := make(chan executor.Line, 2)
+	done := make(chan *executor.Result, 1)
+	heartbeatCh := make(chan time.Time)
+	writer := &failingStreamWriter{}
+	canceled := make(chan struct{})
+	drained := make(chan struct{})
+	var cancelOnce sync.Once
+
+	lines <- executor.Line{Stream: "stdout", Text: "hello"}
+
+	go func() {
+		runSendToolStream(writer, lines, done, func() {
+			cancelOnce.Do(func() { close(canceled) })
+		}, func() streamTicker {
+			return fakeStreamTicker{ch: heartbeatCh}
+		})
+		close(drained)
+	}()
+
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("expected cancel to be called after write failure")
+	}
+
+	close(lines)
+	done <- &executor.Result{ReturnCode: 0}
+	close(done)
+
+	select {
+	case <-drained:
+	case <-time.After(time.Second):
+		t.Fatal("expected stream runner to return after draining lines")
+	}
+
+	if writer.writeCalls == 0 {
+		t.Fatal("expected at least one write attempt")
+	}
+}
+
+func TestRunSendToolStreamWritesFallbackWhenDoneClosesWithoutValue(t *testing.T) {
+	t.Parallel()
+
+	lines := make(chan executor.Line)
+	done := make(chan *executor.Result)
+	heartbeatCh := make(chan time.Time)
+	buf := &strings.Builder{}
+	writer := bufio.NewWriter(buf)
+
+	close(lines)
+	close(done)
+
+	runSendToolStream(writer, lines, done, nil, func() streamTicker {
+		return fakeStreamTicker{ch: heartbeatCh}
+	})
+
+	events := mustParseSSEEvents(t, buf.String())
+	if len(events) != 1 {
+		t.Fatalf("expected 1 fallback SSE event, got %d (%s)", len(events), buf.String())
+	}
+	if !events[0].Done {
+		t.Fatalf("expected fallback done event, got %+v", events[0])
+	}
+	if events[0].ReturnCode == nil || *events[0].ReturnCode != -1 {
+		t.Fatalf("expected fallback return_code=-1, got %+v", events[0])
+	}
+	if !strings.Contains(events[0].Error, "without result") {
+		t.Fatalf("expected fallback error message, got %+v", events[0])
 	}
 }
 
@@ -937,7 +1135,7 @@ func TestRunToolStreamRejectsEmptyCommandSlice(t *testing.T) {
 
 	app := fiber.New()
 	app.Post("/empty/stream", func(c fiber.Ctx) error {
-		return runToolStream(c, func(_ struct{}) error { return nil }, func(_ struct{}) ([]string, error) {
+		return runToolStream(c, func(streamTimeoutRequest) error { return nil }, func(streamTimeoutRequest) ([]string, error) {
 			return []string{}, nil
 		})
 	})

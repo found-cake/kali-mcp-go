@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
@@ -29,7 +30,31 @@ var exposedToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark"
 
 const shutdownTimeout = 10 * time.Second
 
+const streamHeartbeatInterval = 15 * time.Second
+
 type logPrinter func(format string, args ...any)
+
+type streamTicker interface {
+	Chan() <-chan time.Time
+	Stop()
+}
+
+type streamWriter interface {
+	WriteString(s string) (int, error)
+	Flush() error
+}
+
+type realStreamTicker struct {
+	*time.Ticker
+}
+
+func (t *realStreamTicker) Chan() <-chan time.Time {
+	return t.C
+}
+
+func newStreamTicker(interval time.Duration) streamTicker {
+	return &realStreamTicker{Ticker: time.NewTicker(interval)}
+}
 
 func toolStatus(lookup func(string) bool) map[string]bool {
 	status := make(map[string]bool, len(exposedToolBinaries))
@@ -242,7 +267,7 @@ func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]stri
 	return c.JSON(toAPIResult(executor.RunExec(c.Context(), 0, args[0], args[1:]...)))
 }
 
-func runToolStream[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
+func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
 	req, err := parseRequest(c, validate)
 	if err != nil {
 		return badRequest(c, err.Error())
@@ -254,8 +279,10 @@ func runToolStream[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) (
 	if len(args) == 0 {
 		return internalServerError(c, "internal error: no command generated")
 	}
-	lines, done := executor.StreamExec(c.Context(), 0, args[0], args[1:]...)
-	return sendToolStream(c, lines, done)
+	execCtx, cancel := context.WithCancel(c.Context())
+	timeout := commandTimeout(req.GetRequestTimeout())
+	lines, done := executor.StreamExec(execCtx, timeout, args[0], args[1:]...)
+	return sendToolStreamWithCancel(c, lines, done, cancel)
 }
 
 func validatePositiveInt(name, value string) error {
@@ -306,49 +333,134 @@ func commandTimeout(seconds int) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result) error {
+func sendToolStreamWithCancel(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc) error {
+	return sendToolStreamWithTicker(c, lines, done, cancel, func() streamTicker {
+		return newStreamTicker(streamHeartbeatInterval)
+	})
+}
+
+func sendToolStreamWithTicker(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker) error {
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("X-Accel-Buffering", "no")
 
 	return c.SendStreamWriter(func(w *bufio.Writer) {
-		var streamedStderr strings.Builder
-		for line := range lines {
+		runSendToolStream(w, lines, done, cancel, tickerFactory)
+	})
+}
+
+func runSendToolStream(w streamWriter, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker) {
+	if cancel != nil {
+		defer cancel()
+	}
+
+	ticker := tickerFactory()
+	defer ticker.Stop()
+
+	var streamedStderr strings.Builder
+	wroteDone := false
+	linesCh := lines
+	doneCh := done
+
+	for linesCh != nil || doneCh != nil {
+		var resultCh <-chan *executor.Result
+		if linesCh == nil {
+			resultCh = doneCh
+		}
+
+		select {
+		case line, ok := <-linesCh:
+			if !ok {
+				linesCh = nil
+				continue
+			}
 			if line.Stream == "stderr" {
 				streamedStderr.WriteString(line.Text)
 				streamedStderr.WriteByte('\n')
 			}
 			payload, err := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
 			if err != nil {
-				for range lines {
+				if cancel != nil {
+					cancel()
 				}
+				go drainStreamLines(linesCh)
 				writeStreamDoneFallback(w, "internal error: failed to encode stream event")
 				return
 			}
-			fmt.Fprintf(w, "data: %s\n\n", payload)
-			if err := w.Flush(); err != nil {
-				for range lines {
+			if err := writeStreamPayload(w, payload); err != nil {
+				if cancel != nil {
+					cancel()
 				}
+				go drainStreamLines(linesCh)
+				return
+			}
+		case result, ok := <-resultCh:
+			if !ok {
+				doneCh = nil
+				continue
+			}
+			writeStreamDoneEvent(w, result, streamedStderr.String())
+			wroteDone = true
+			return
+		case <-ticker.Chan():
+			payload, err := json.Marshal(dto.StreamEvent{Heartbeat: true})
+			if err != nil {
+				if cancel != nil {
+					cancel()
+				}
+				go drainStreamLines(linesCh)
+				writeStreamDoneFallback(w, "internal error: failed to encode heartbeat event")
+				return
+			}
+			if err := writeStreamPayload(w, payload); err != nil {
+				if cancel != nil {
+					cancel()
+				}
+				go drainStreamLines(linesCh)
 				return
 			}
 		}
-		result := <-done
-		returnCode := result.ReturnCode
-		doneEvent := dto.StreamEvent{Done: true, ReturnCode: &returnCode, TimedOut: result.TimedOut}
-		if terminalErr := terminalStreamError(result, streamedStderr.String()); terminalErr != "" {
-			doneEvent.Error = terminalErr
-		}
-		payload, err := json.Marshal(doneEvent)
-		if err != nil {
-			writeStreamDoneFallback(w, "internal error: failed to encode done event")
-			return
-		}
-		fmt.Fprintf(w, "data: %s\n\n", payload)
-		_ = w.Flush()
-	})
+	}
+
+	if !wroteDone {
+		writeStreamDoneFallback(w, "internal error: stream ended without result")
+	}
 }
 
-func writeStreamDoneFallback(w *bufio.Writer, message string) {
+func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStderr string) {
+	if result == nil {
+		writeStreamDoneFallback(w, "internal error: missing stream result")
+		return
+	}
+	returnCode := result.ReturnCode
+	doneEvent := dto.StreamEvent{Done: true, ReturnCode: &returnCode, TimedOut: result.TimedOut}
+	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
+		doneEvent.Error = terminalErr
+	}
+	payload, err := json.Marshal(doneEvent)
+	if err != nil {
+		writeStreamDoneFallback(w, "internal error: failed to encode done event")
+		return
+	}
+	_ = writeStreamPayload(w, payload)
+}
+
+func writeStreamPayload(w streamWriter, payload []byte) error {
+	if _, err := w.WriteString("data: " + string(payload) + "\n\n"); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
+func drainStreamLines(lines <-chan executor.Line) {
+	if lines == nil {
+		return
+	}
+	for range lines {
+	}
+}
+
+func writeStreamDoneFallback(w streamWriter, message string) {
 	_, _ = w.WriteString("data: {\"done\":true,\"return_code\":-1,\"error\":" + strconv.Quote(message) + "}\n\n")
 	_ = w.Flush()
 }
@@ -440,8 +552,9 @@ func handleCommandStream(c fiber.Ctx) error {
 		return badRequest(c, err.Error())
 	}
 	timeout := commandTimeout(req.Timeout)
-	lines, done := executor.StreamShell(c.Context(), timeout, req.Command)
-	return sendToolStream(c, lines, done)
+	execCtx, cancel := context.WithCancel(c.Context())
+	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
+	return sendToolStreamWithCancel(c, lines, done, cancel)
 }
 
 func handleNmapStream(c fiber.Ctx) error {
