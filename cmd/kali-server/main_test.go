@@ -234,9 +234,9 @@ func TestHandleTsharkRejectsMalformedJSON(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	app.Post("/tshark", handleTshark)
+	app.Post("/tshark/stream", handleTsharkStream)
 
-	req, err := http.NewRequest(http.MethodPost, "/tshark", strings.NewReader(`{"read_file":`))
+	req, err := http.NewRequest(http.MethodPost, "/tshark/stream", strings.NewReader(`{"read_file":`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -261,9 +261,9 @@ func TestHandleTsharkRequiresReadFileOrInterface(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	app.Post("/tshark", handleTshark)
+	app.Post("/tshark/stream", handleTsharkStream)
 
-	req, err := http.NewRequest(http.MethodPost, "/tshark", strings.NewReader(`{"packet_count":"1"}`))
+	req, err := http.NewRequest(http.MethodPost, "/tshark/stream", strings.NewReader(`{"packet_count":"1"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -288,9 +288,9 @@ func TestHandleTsharkRejectsConflictingInputs(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	app.Post("/tshark", handleTshark)
+	app.Post("/tshark/stream", handleTsharkStream)
 
-	req, err := http.NewRequest(http.MethodPost, "/tshark", strings.NewReader(`{"read_file":"/tmp/a.pcap","interface":"eth0"}`))
+	req, err := http.NewRequest(http.MethodPost, "/tshark/stream", strings.NewReader(`{"read_file":"/tmp/a.pcap","interface":"eth0"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -315,9 +315,9 @@ func TestHandleTsharkRejectsInvalidPacketCount(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	app.Post("/tshark", handleTshark)
+	app.Post("/tshark/stream", handleTsharkStream)
 
-	req, err := http.NewRequest(http.MethodPost, "/tshark", strings.NewReader(`{"read_file":"/tmp/a.pcap","packet_count":"0"}`))
+	req, err := http.NewRequest(http.MethodPost, "/tshark/stream", strings.NewReader(`{"read_file":"/tmp/a.pcap","packet_count":"0"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}

@@ -162,7 +162,7 @@ func registerRoutes(app *fiber.App, apiToken string) {
 	api.Post("/tools/wpscan/stream", handleWPScanStream)
 	api.Post("/tools/enum4linux/stream", handleEnum4linuxStream)
 	api.Post("/tools/sqlmap/stream", handleSQLMapStream)
-	api.Post("/tools/tshark", handleTshark)
+	api.Post("/tools/tshark/stream", handleTsharkStream)
 	api.Post("/tools/metasploit", handleMetasploit)
 	api.Post("/tools/hydra", handleHydra)
 	api.Post("/tools/john", handleJohn)
@@ -462,8 +462,8 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	return runToolStream(c, validateSQLMapRequest, tools.SQLMapArgs)
 }
 
-func handleTshark(c fiber.Ctx) error {
-	return runTool(c, validateTsharkRequest, tools.TsharkArgs)
+func handleTsharkStream(c fiber.Ctx) error {
+	return runToolStream(c, validateTsharkRequest, tools.TsharkArgs)
 }
 
 func handleMetasploit(c fiber.Ctx) error {

@@ -63,7 +63,7 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	addStreamTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "/api/tools/dirb/stream")
 	addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "/api/tools/nikto/stream")
 	addStreamTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "/api/tools/sqlmap/stream")
-	addPostTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "/api/tools/tshark")
+	addStreamTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "/api/tools/tshark/stream")
 	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
 	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack.", "/api/tools/hydra")
 	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
