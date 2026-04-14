@@ -68,7 +68,7 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack.", "/api/tools/hydra")
 	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
 	addStreamTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "/api/tools/wpscan/stream")
-	addPostTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "/api/tools/enum4linux")
+	addStreamTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "/api/tools/enum4linux/stream")
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",

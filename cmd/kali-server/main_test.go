@@ -149,6 +149,33 @@ func TestHandleWPScanStreamRejectsMissingURL(t *testing.T) {
 	}
 }
 
+func TestHandleEnum4linuxStreamRejectsMissingTarget(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/enum4linux/stream", handleEnum4linuxStream)
+
+	req, err := http.NewRequest(http.MethodPost, "/enum4linux/stream", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "target is required") {
+		t.Fatalf("expected target validation message, got %s", string(body))
+	}
+}
+
 func TestHandleNmapRejectsMalformedJSON(t *testing.T) {
 	t.Parallel()
 
