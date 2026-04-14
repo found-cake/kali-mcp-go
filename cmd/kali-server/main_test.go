@@ -550,3 +550,34 @@ func TestRunToolRejectsEmptyCommandSlice(t *testing.T) {
 		t.Fatalf("expected empty command error, got %s", string(respBody))
 	}
 }
+
+func TestRunToolStreamRejectsEmptyCommandSlice(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Post("/empty/stream", func(c fiber.Ctx) error {
+		return runToolStream(c, func(_ struct{}) error { return nil }, func(_ struct{}) ([]string, error) {
+			return []string{}, nil
+		})
+	})
+
+	req, err := http.NewRequest(http.MethodPost, "/empty/stream", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", fiber.StatusInternalServerError, resp.StatusCode)
+	}
+	if !strings.Contains(string(respBody), "internal error: no command generated") {
+		t.Fatalf("expected empty command error, got %s", string(respBody))
+	}
+}
