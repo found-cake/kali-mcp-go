@@ -36,6 +36,18 @@ func TestTimeoutForBodyExtendsForLongCommandRequests(t *testing.T) {
 	}
 }
 
+func TestTimeoutForBodyExtendsForLongStreamToolRequests(t *testing.T) {
+	t.Parallel()
+
+	client := New("http://example.com", 30*time.Second, "")
+
+	got := client.timeoutForBody(dto.NmapRequest{Timeout: 90})
+	want := 95 * time.Second
+	if got != want {
+		t.Fatalf("expected timeout %s, got %s", want, got)
+	}
+}
+
 func TestStreamReturnsServerStatusError(t *testing.T) {
 	t.Parallel()
 
@@ -116,6 +128,27 @@ func TestStreamParsesValidEvents(t *testing.T) {
 	}
 	if res.PartialResults {
 		t.Fatalf("expected partial_results=false")
+	}
+}
+
+func TestStreamIgnoresHeartbeatEvents(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"heartbeat\":true}\n\n")
+		fmt.Fprint(w, "data: {\"stream\":\"stdout\",\"line\":\"hello\"}\n\n")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":0}\n\n")
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second, "")
+	res, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if res.Stdout != "hello\n" {
+		t.Fatalf("expected stdout hello\\n, got %q", res.Stdout)
 	}
 }
 

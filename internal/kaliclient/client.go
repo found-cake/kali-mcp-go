@@ -44,15 +44,9 @@ func (c *Client) authorize(req *http.Request) {
 func (c *Client) timeoutForBody(body any) time.Duration {
 	timeout := c.timeout
 	switch req := body.(type) {
-	case dto.CommandRequest:
-		if requested := time.Duration(req.Timeout) * time.Second; requested > timeout {
+	case dto.TimeoutRequest:
+		if requested := time.Duration(req.GetRequestTimeout()) * time.Second; requested > timeout {
 			timeout = requested
-		}
-	case *dto.CommandRequest:
-		if req != nil {
-			if requested := time.Duration(req.Timeout) * time.Second; requested > timeout {
-				timeout = requested
-			}
 		}
 	}
 	return timeout + requestTimeoutGrace
@@ -154,6 +148,9 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		}
 		if ev.Error != "" && !ev.Done {
 			return nil, fmt.Errorf("server: %s", ev.Error)
+		}
+		if ev.Heartbeat {
+			continue
 		}
 		if ev.Done {
 			if ev.ReturnCode == nil {

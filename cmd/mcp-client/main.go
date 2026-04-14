@@ -15,6 +15,16 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var version = "dev"
+
+func implementationVersion() string {
+	trimmed := strings.TrimSpace(version)
+	if trimmed == "" {
+		return "dev"
+	}
+	return trimmed
+}
+
 func main() {
 	var (
 		serverURL = flag.String("server", "http://127.0.0.1:5000", "kali-server URL")
@@ -36,7 +46,7 @@ func main() {
 	}
 
 	srv := mcp.NewServer(
-		&mcp.Implementation{Name: "kali-mcp", Version: "0.1.2"},
+		&mcp.Implementation{Name: "kali-mcp", Version: implementationVersion()},
 		&mcp.ServerOptions{
 			Instructions: safetyInstructions,
 		},
