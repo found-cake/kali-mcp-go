@@ -155,8 +155,8 @@ func registerRoutes(app *fiber.App, apiToken string) {
 	api.Post("/command", handleCommand)
 	api.Post("/command/stream", handleCommandStream)
 
-	api.Post("/tools/nmap", handleNmap)
 	api.Post("/tools/gobuster", handleGobuster)
+	api.Post("/tools/nmap/stream", handleNmapStream)
 	api.Post("/tools/dirb/stream", handleDirbStream)
 	api.Post("/tools/nikto/stream", handleNiktoStream)
 	api.Post("/tools/wpscan/stream", handleWPScanStream)
@@ -363,6 +363,13 @@ func validateNiktoRequest(req dto.NiktoRequest) error {
 	return nil
 }
 
+func validateNmapRequest(req dto.NmapRequest) error {
+	if req.Target == "" {
+		return fmt.Errorf("target is required")
+	}
+	return nil
+}
+
 func validateDirbRequest(req dto.DirbRequest) error {
 	if req.URL == "" {
 		return fmt.Errorf("url is required")
@@ -421,13 +428,8 @@ func handleCommandStream(c fiber.Ctx) error {
 	return sendToolStream(c, lines, done)
 }
 
-func handleNmap(c fiber.Ctx) error {
-	return runTool(c, func(req dto.NmapRequest) error {
-		if req.Target == "" {
-			return fmt.Errorf("target is required")
-		}
-		return nil
-	}, tools.NmapArgs)
+func handleNmapStream(c fiber.Ctx) error {
+	return runToolStream(c, validateNmapRequest, tools.NmapArgs)
 }
 
 func handleGobuster(c fiber.Ctx) error {

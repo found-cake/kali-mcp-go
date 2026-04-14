@@ -14,13 +14,13 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func TestHandleNmapRejectsMissingTarget(t *testing.T) {
+func TestHandleNmapStreamRejectsMissingTarget(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	app.Post("/nmap", handleNmap)
+	app.Post("/nmap/stream", handleNmapStream)
 
-	req, err := http.NewRequest(http.MethodPost, "/nmap", strings.NewReader("{}"))
+	req, err := http.NewRequest(http.MethodPost, "/nmap/stream", strings.NewReader("{}"))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -203,13 +203,13 @@ func TestHandleSQLMapStreamRejectsMissingURL(t *testing.T) {
 	}
 }
 
-func TestHandleNmapRejectsMalformedJSON(t *testing.T) {
+func TestHandleNmapStreamRejectsMalformedJSON(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	app.Post("/nmap", handleNmap)
+	app.Post("/nmap/stream", handleNmapStream)
 
-	req, err := http.NewRequest(http.MethodPost, "/nmap", strings.NewReader(`{"target":`))
+	req, err := http.NewRequest(http.MethodPost, "/nmap/stream", strings.NewReader(`{"target":`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -394,14 +394,14 @@ func TestHandleHydraRejectsConflictingUsernameInputs(t *testing.T) {
 	}
 }
 
-func TestHandleNmapRejectsMalformedAdditionalArgs(t *testing.T) {
+func TestHandleNmapStreamRejectsMalformedAdditionalArgs(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	app.Post("/nmap", handleNmap)
+	app.Post("/nmap/stream", handleNmapStream)
 
 	body := `{"target":"127.0.0.1","additional_args":"--script \"bad"}`
-	req, err := http.NewRequest(http.MethodPost, "/nmap", strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, "/nmap/stream", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestRegisterRoutesRejectsMissingBearerToken(t *testing.T) {
 	app := fiber.New()
 	registerRoutes(app, "secret-token")
 
-	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -527,7 +527,7 @@ func TestRegisterRoutesAcceptsValidBearerToken(t *testing.T) {
 	app := fiber.New()
 	registerRoutes(app, "secret-token")
 
-	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{}`))
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -551,7 +551,7 @@ func TestRegisterRoutesRejectsInvalidBearerToken(t *testing.T) {
 	app := fiber.New()
 	registerRoutes(app, "secret-token")
 
-	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -577,7 +577,7 @@ func TestNewAppWithDebugLogsRequests(t *testing.T) {
 		lines = append(lines, fmt.Sprintf(format, args...))
 	})
 
-	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -595,7 +595,7 @@ func TestNewAppWithDebugLogsRequests(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("expected one debug log line, got %d (%v)", len(lines), lines)
 	}
-	if !strings.Contains(lines[0], "POST /api/tools/nmap -> 401 (") {
+	if !strings.Contains(lines[0], "POST /api/tools/nmap/stream -> 401 (") {
 		t.Fatalf("expected method/path/status log line, got %q", lines[0])
 	}
 }
@@ -608,7 +608,7 @@ func TestNewAppWithoutDebugDoesNotLogRequests(t *testing.T) {
 		logged = true
 	})
 
-	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap", strings.NewReader(`{"target":"127.0.0.1"}`))
+	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}

@@ -58,7 +58,7 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 		"/api/command/stream",
 	)
 
-	addPostTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "/api/tools/nmap")
+	addStreamTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "/api/tools/nmap/stream")
 	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster")
 	addStreamTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "/api/tools/dirb/stream")
 	addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "/api/tools/nikto/stream")
