@@ -47,23 +47,29 @@ func terminalStreamError(result *executor.Result, streamedStderr string) string 
 	return strings.TrimLeft(terminalErr, "\n")
 }
 
-func sendToolStreamWithCancel(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc) error {
+func sendToolStreamWithCancel(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, cleanups ...func()) error {
 	return sendToolStreamWithTicker(c, lines, done, cancel, func() streamTicker {
 		return newStreamTicker(streamHeartbeatInterval)
-	})
+	}, cleanups...)
 }
 
-func sendToolStreamWithTicker(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker) error {
+func sendToolStreamWithTicker(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker, cleanups ...func()) error {
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("X-Accel-Buffering", "no")
 
 	return c.SendStreamWriter(func(w *bufio.Writer) {
-		runSendToolStream(w, lines, done, cancel, tickerFactory)
+		runSendToolStream(w, lines, done, cancel, tickerFactory, cleanups...)
 	})
 }
 
-func runSendToolStream(w streamWriter, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker) {
+func runSendToolStream(w streamWriter, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker, cleanups ...func()) {
+	// Register in reverse so deferred execution preserves the caller's cleanup order.
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		if cleanups[i] != nil {
+			defer cleanups[i]()
+		}
+	}
 	if cancel != nil {
 		defer cancel()
 	}

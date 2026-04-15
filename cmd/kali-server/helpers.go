@@ -56,6 +56,10 @@ func internalServerError(c fiber.Ctx, msg string) error {
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": msg})
 }
 
+func serviceUnavailable(c fiber.Ctx, msg string) error {
+	return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": msg})
+}
+
 func bindJSON(c fiber.Ctx, dst any) error {
 	return c.Bind().Body(dst)
 }

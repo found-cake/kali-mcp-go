@@ -999,7 +999,7 @@ func TestRegisterRoutesRejectsMissingBearerToken(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	registerRoutes(app, "secret-token")
+	registerRoutes(app, "secret-token", newExecutionLimiter(defaultMaxConcurrentExecutions))
 
 	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
 	if err != nil {
@@ -1022,7 +1022,7 @@ func TestRegisterRoutesAcceptsValidBearerToken(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	registerRoutes(app, "secret-token")
+	registerRoutes(app, "secret-token", newExecutionLimiter(defaultMaxConcurrentExecutions))
 
 	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{}`))
 	if err != nil {
@@ -1046,7 +1046,7 @@ func TestRegisterRoutesRejectsInvalidBearerToken(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
-	registerRoutes(app, "secret-token")
+	registerRoutes(app, "secret-token", newExecutionLimiter(defaultMaxConcurrentExecutions))
 
 	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
 	if err != nil {
@@ -1123,6 +1123,188 @@ func TestNewAppWithoutDebugDoesNotLogRequests(t *testing.T) {
 	if logged {
 		t.Fatal("expected debug logging to stay disabled")
 	}
+}
+
+func TestNewAppSetsReadTimeout(t *testing.T) {
+	t.Parallel()
+
+	app := newApp("secret-token", false, nil)
+	if got := app.Config().ReadTimeout; got != readTimeout {
+		t.Fatalf("expected read timeout %s, got %s", readTimeout, got)
+	}
+	if got := app.Config().WriteTimeout; got != 0 {
+		t.Fatalf("expected write timeout 0 for streaming, got %s", got)
+	}
+}
+
+func TestWithExecutionLimitRejectsWhenServerIsBusy(t *testing.T) {
+	t.Parallel()
+
+	limiter := newExecutionLimiter(1)
+	app := fiber.New()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var startedOnce sync.Once
+
+	app.Get("/limited", withExecutionLimit(limiter, func(c fiber.Ctx) error {
+		startedOnce.Do(func() { close(started) })
+		<-release
+		return c.SendStatus(fiber.StatusOK)
+	}))
+
+	firstRespCh := make(chan *http.Response, 1)
+	firstErrCh := make(chan error, 1)
+	go func() {
+		req, err := http.NewRequest(http.MethodGet, "/limited", nil)
+		if err != nil {
+			firstErrCh <- err
+			return
+		}
+		resp, err := app.Test(req, fiber.TestConfig{Timeout: time.Second})
+		if err != nil {
+			firstErrCh <- err
+			return
+		}
+		firstRespCh <- resp
+	}()
+
+	select {
+	case <-started:
+	case err := <-firstErrCh:
+		t.Fatalf("first request failed before limiter test: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("first request did not acquire the limiter in time")
+	}
+
+	secondReq, err := http.NewRequest(http.MethodGet, "/limited", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	secondResp, err := app.Test(secondReq, fiber.TestConfig{Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("second request should fail fast with 503: %v", err)
+	}
+	defer secondResp.Body.Close()
+
+	secondBody, _ := io.ReadAll(secondResp.Body)
+	if secondResp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", fiber.StatusServiceUnavailable, secondResp.StatusCode)
+	}
+	if !strings.Contains(string(secondBody), "too many concurrent executions") {
+		t.Fatalf("expected busy message, got %s", string(secondBody))
+	}
+
+	close(release)
+
+	select {
+	case err := <-firstErrCh:
+		t.Fatalf("first request failed: %v", err)
+	case firstResp := <-firstRespCh:
+		defer firstResp.Body.Close()
+		if firstResp.StatusCode != fiber.StatusOK {
+			t.Fatalf("expected first request to complete with 200, got %d", firstResp.StatusCode)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first request did not finish after release")
+	}
+}
+
+func TestWithExecutionLimitRetainsLeaseForStreamingResponses(t *testing.T) {
+	t.Parallel()
+
+	limiter := newExecutionLimiter(1)
+	app := fiber.New()
+	started := make(chan struct{})
+	streamRelease := make(chan struct{})
+	var startedOnce sync.Once
+
+	app.Get("/limited-stream", withExecutionLimit(limiter, func(c fiber.Ctx) error {
+		startedOnce.Do(func() { close(started) })
+		lines := make(chan executor.Line)
+		done := make(chan *executor.Result, 1)
+		release := retainExecutionLease(c)
+		go func() {
+			<-streamRelease
+			close(lines)
+			done <- &executor.Result{ReturnCode: 0}
+			close(done)
+		}()
+		return sendToolStreamWithCancel(c, lines, done, nil, release)
+	}))
+
+	firstRespCh := make(chan *http.Response, 1)
+	firstErrCh := make(chan error, 1)
+	go func() {
+		req, err := http.NewRequest(http.MethodGet, "/limited-stream", nil)
+		if err != nil {
+			firstErrCh <- err
+			return
+		}
+		resp, err := app.Test(req, fiber.TestConfig{Timeout: 2 * time.Second})
+		if err != nil {
+			firstErrCh <- err
+			return
+		}
+		firstRespCh <- resp
+	}()
+
+	select {
+	case <-started:
+	case err := <-firstErrCh:
+		t.Fatalf("first stream request failed before limiter test: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("first stream request did not start in time")
+	}
+
+	secondReq, err := http.NewRequest(http.MethodGet, "/limited-stream", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	secondResp, err := app.Test(secondReq, fiber.TestConfig{Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("second stream request should fail fast with 503: %v", err)
+	}
+	defer secondResp.Body.Close()
+
+	secondBody, _ := io.ReadAll(secondResp.Body)
+	if secondResp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", fiber.StatusServiceUnavailable, secondResp.StatusCode)
+	}
+	if !strings.Contains(string(secondBody), "too many concurrent executions") {
+		t.Fatalf("expected busy message, got %s", string(secondBody))
+	}
+
+	close(streamRelease)
+
+	select {
+	case err := <-firstErrCh:
+		t.Fatalf("first stream request failed: %v", err)
+	case firstResp := <-firstRespCh:
+		defer firstResp.Body.Close()
+		if firstResp.StatusCode != fiber.StatusOK {
+			t.Fatalf("expected first stream request to complete with 200, got %d", firstResp.StatusCode)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("first stream request did not finish after release")
+	}
+}
+
+func TestExecutionLimiterReleasePanicsOnOverRelease(t *testing.T) {
+	t.Parallel()
+
+	limiter := newExecutionLimiter(1)
+
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected over-release to panic")
+		}
+		if !strings.Contains(fmt.Sprint(recovered), "execution limiter release invariant violated") {
+			t.Fatalf("expected invariant panic, got %v", recovered)
+		}
+	}()
+
+	limiter.release()
 }
 
 func TestRunToolRejectsEmptyCommandSlice(t *testing.T) {
