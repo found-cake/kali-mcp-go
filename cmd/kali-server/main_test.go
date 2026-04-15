@@ -399,6 +399,32 @@ func TestRunSendToolStreamWritesFallbackWhenDoneClosesWithoutValue(t *testing.T)
 	}
 }
 
+func TestWriteStreamDoneFallbackEscapesJSONSafely(t *testing.T) {
+	t.Parallel()
+
+	buf := &strings.Builder{}
+	writer := bufio.NewWriter(buf)
+
+	writeStreamDoneFallback(writer, "bad\x00value")
+
+	events := mustParseSSEEvents(t, buf.String())
+	if len(events) != 1 {
+		t.Fatalf("expected 1 fallback SSE event, got %d (%s)", len(events), buf.String())
+	}
+	if !events[0].Done {
+		t.Fatalf("expected fallback done event, got %+v", events[0])
+	}
+	if events[0].ReturnCode == nil || *events[0].ReturnCode != -1 {
+		t.Fatalf("expected fallback return_code=-1, got %+v", events[0])
+	}
+	if events[0].Error != "bad\x00value" {
+		t.Fatalf("expected round-tripped fallback error, got %+v", events[0])
+	}
+	if !strings.Contains(buf.String(), `\u0000`) {
+		t.Fatalf("expected JSON-escaped control character in payload, got %q", buf.String())
+	}
+}
+
 func TestHandleNiktoStreamRejectsMissingTarget(t *testing.T) {
 	t.Parallel()
 

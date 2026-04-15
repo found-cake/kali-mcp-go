@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"strconv"
 	"strings"
 	"time"
 
@@ -176,6 +175,13 @@ func drainStreamLines(lines <-chan executor.Line) {
 }
 
 func writeStreamDoneFallback(w streamWriter, message string) {
-	_, _ = w.WriteString("data: {\"done\":true,\"return_code\":-1,\"error\":" + strconv.Quote(message) + "}\n\n")
+	returnCode := -1
+	payload, err := json.Marshal(dto.StreamEvent{Done: true, ReturnCode: &returnCode, Error: message})
+	if err != nil {
+		_, _ = w.WriteString("data: {\"done\":true,\"return_code\":-1,\"error\":\"internal error: failed to encode fallback event\"}\n\n")
+		_ = w.Flush()
+		return
+	}
+	_, _ = w.WriteString("data: " + string(payload) + "\n\n")
 	_ = w.Flush()
 }
