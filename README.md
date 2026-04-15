@@ -169,14 +169,17 @@ claude mcp add kali-mcp \
   -- /path/to/mcp-client --server http://127.0.0.1:5000
 ```
 
-#### OpenAI Codex / OpenCode
+#### OpenAI Codex
 
 ```json
 {
   "mcpServers": {
     "kali-mcp": {
       "command": "/path/to/mcp-client",
-      "args": ["--server", "http://127.0.0.1:5000"],
+      "args": [
+        "--server", "http://127.0.0.1:5000",
+        "--timeout", "3600"
+      ],
       "env": {
         "KALI_MCP_API_TOKEN": "your-secret-token"
       }
@@ -184,6 +187,67 @@ claude mcp add kali-mcp \
   }
 }
 ```
+
+#### OpenCode
+
+For OpenCode, prefer a config that raises both:
+
+- the **host-side MCP timeout** via `experimental.mcp_timeout`
+- the **mcp-client base request timeout** via `--timeout`
+
+This is the recommended setup for long-running tools such as `dirb_scan`, `nikto_scan`, `sqlmap_scan`, and long `execute_command` sessions.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "experimental": {
+    "mcp_timeout": "never"
+  },
+  "mcp": {
+    "mcp-kali-server": {
+      "type": "local",
+      "command": [
+        "/path/to/mcp-client",
+        "--server", "http://127.0.0.1:5000",
+        "--timeout", "3600"
+      ],
+      "environment": {
+        "KALI_MCP_API_TOKEN": "your-secret-token"
+      }
+    }
+  }
+}
+```
+
+If your OpenCode version does not support `"never"`, use a large millisecond value instead:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "experimental": {
+    "mcp_timeout": 3600000
+  },
+  "mcp": {
+    "mcp-kali-server": {
+      "type": "local",
+      "command": [
+        "/path/to/mcp-client",
+        "--server", "http://127.0.0.1:5000",
+        "--timeout", "3600"
+      ],
+      "environment": {
+        "KALI_MCP_API_TOKEN": "your-secret-token"
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- `experimental.mcp_timeout` controls the OpenCode-side MCP tool-call timeout.
+- `--timeout` controls the `mcp-client` base request timeout in seconds.
+- For long-running scans, set **both**. Raising only one layer may still leave the other layer timing out early.
 
 ### mcp-client flags
 
@@ -244,6 +308,10 @@ These MCP tools now stream incremental output over SSE instead of waiting for a 
 - `tshark_capture`
 
 Streaming requests support an optional `timeout` field (seconds) to override the default 300-second request limit for that specific run. For `tshark_capture`, this request `timeout` is distinct from the capture `duration` field.
+
+When using OpenCode, the per-tool request `timeout` is not enough by itself for long scans. You should also raise OpenCode's MCP timeout (`experimental.mcp_timeout`) and the local `mcp-client --timeout` value as shown above.
+
+For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout` value for long-running tools, but the OpenCode-specific `experimental.mcp_timeout` setting does not apply there.
 
 Quiet streams may also emit lightweight heartbeat SSE events to keep the connection active until the final `done` event arrives.
 
