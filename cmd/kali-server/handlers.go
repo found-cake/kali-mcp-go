@@ -41,7 +41,8 @@ func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, ar
 	execCtx, cancel := context.WithCancel(c.Context())
 	timeout := commandTimeout(req.GetRequestTimeout())
 	lines, done := executor.StreamExec(execCtx, timeout, args[0], args[1:]...)
-	return sendToolStreamWithCancel(c, lines, done, cancel)
+	release := retainExecutionLease(c)
+	return sendToolStreamWithCancel(c, lines, done, cancel, release)
 }
 
 func handleCommand(c fiber.Ctx) error {
@@ -72,7 +73,8 @@ func handleCommandStream(c fiber.Ctx) error {
 	timeout := commandTimeout(req.Timeout)
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
-	return sendToolStreamWithCancel(c, lines, done, cancel)
+	release := retainExecutionLease(c)
+	return sendToolStreamWithCancel(c, lines, done, cancel, release)
 }
 
 func handleNmapStream(c fiber.Ctx) error {

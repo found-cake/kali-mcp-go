@@ -24,24 +24,30 @@ const shutdownTimeout = 10 * time.Second
 
 const streamHeartbeatInterval = 15 * time.Second
 
+const readTimeout = 10 * time.Second
+
 type logPrinter func(format string, args ...any)
 
 func main() {
 	var (
-		ip    = flag.String("ip", "127.0.0.1", "bind address")
-		port  = flag.Int("port", 5000, "port")
-		debug = flag.Bool("debug", false, "verbose logging")
+		ip            = flag.String("ip", "127.0.0.1", "bind address")
+		port          = flag.Int("port", 5000, "port")
+		debug         = flag.Bool("debug", false, "verbose logging")
+		maxConcurrent = flag.Int("max-concurrent", defaultMaxConcurrentExecutions, "maximum number of concurrent execution requests")
 	)
 	flag.Parse()
 	apiToken := strings.TrimSpace(os.Getenv(dto.APITokenEnv))
 	if apiToken == "" {
 		log.Fatalf("%s must be set", dto.APITokenEnv)
 	}
+	if *maxConcurrent <= 0 {
+		log.Fatalf("--max-concurrent must be a positive integer")
+	}
 
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("[kali-server] ")
 
-	app := newApp(apiToken, *debug, log.Printf)
+	app := newApp(apiToken, *debug, *maxConcurrent, log.Printf)
 
 	addr := fmt.Sprintf("%s:%d", *ip, *port)
 	log.Printf("listening on %s", addr)
@@ -76,9 +82,10 @@ func main() {
 	}
 }
 
-func newApp(apiToken string, debug bool, print logPrinter) *fiber.App {
+func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logPrinter) *fiber.App {
+	limiter := newExecutionLimiter(maxConcurrentExecutions)
 	app := fiber.New(fiber.Config{
-		ReadTimeout:  0,
+		ReadTimeout:  readTimeout,
 		WriteTimeout: 0,
 		IdleTimeout:  5 * time.Minute,
 	})
@@ -86,28 +93,28 @@ func newApp(apiToken string, debug bool, print logPrinter) *fiber.App {
 		app.Use(debugRequestLogMiddleware(print))
 	}
 
-	registerRoutes(app, apiToken)
+	registerRoutes(app, apiToken, limiter)
 	return app
 }
 
-func registerRoutes(app *fiber.App, apiToken string) {
+func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) {
 	api := app.Group("/api", bearerAuthMiddleware(apiToken))
 
-	api.Post("/command", handleCommand)
-	api.Post("/command/stream", handleCommandStream)
+	api.Post("/command", withExecutionLimit(limiter, handleCommand))
+	api.Post("/command/stream", withExecutionLimit(limiter, handleCommandStream))
 
-	api.Post("/tools/gobuster", handleGobuster)
-	api.Post("/tools/nmap/stream", handleNmapStream)
-	api.Post("/tools/dirb/stream", handleDirbStream)
-	api.Post("/tools/nikto/stream", handleNiktoStream)
-	api.Post("/tools/wpscan/stream", handleWPScanStream)
-	api.Post("/tools/enum4linux/stream", handleEnum4linuxStream)
-	api.Post("/tools/sqlmap/stream", handleSQLMapStream)
-	api.Post("/tools/tshark/stream", handleTsharkStream)
-	api.Post("/tools/metasploit", handleMetasploit)
-	api.Post("/tools/hydra", handleHydra)
-	api.Post("/tools/hydra/stream", handleHydraStream)
-	api.Post("/tools/john", handleJohn)
+	api.Post("/tools/gobuster", withExecutionLimit(limiter, handleGobuster))
+	api.Post("/tools/nmap/stream", withExecutionLimit(limiter, handleNmapStream))
+	api.Post("/tools/dirb/stream", withExecutionLimit(limiter, handleDirbStream))
+	api.Post("/tools/nikto/stream", withExecutionLimit(limiter, handleNiktoStream))
+	api.Post("/tools/wpscan/stream", withExecutionLimit(limiter, handleWPScanStream))
+	api.Post("/tools/enum4linux/stream", withExecutionLimit(limiter, handleEnum4linuxStream))
+	api.Post("/tools/sqlmap/stream", withExecutionLimit(limiter, handleSQLMapStream))
+	api.Post("/tools/tshark/stream", withExecutionLimit(limiter, handleTsharkStream))
+	api.Post("/tools/metasploit", withExecutionLimit(limiter, handleMetasploit))
+	api.Post("/tools/hydra", withExecutionLimit(limiter, handleHydra))
+	api.Post("/tools/hydra/stream", withExecutionLimit(limiter, handleHydraStream))
+	api.Post("/tools/john", withExecutionLimit(limiter, handleJohn))
 
 	app.Get("/health", handleHealth)
 }
