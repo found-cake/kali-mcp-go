@@ -62,12 +62,13 @@ func withExecutionLimit(limiter *executionLimiter, next fiber.Handler) fiber.Han
 
 		lease := &executionLease{release: limiter.release}
 		c.Locals(executionLeaseKey, lease)
+		defer func() {
+			if !lease.retained {
+				lease.release()
+			}
+		}()
 
-		err := next(c)
-		if !lease.retained {
-			lease.release()
-		}
-		return err
+		return next(c)
 	}
 }
 
