@@ -108,6 +108,57 @@ func TestSplitArgsRejectsUnterminatedQuote(t *testing.T) {
 	}
 }
 
+func TestSplitArgsRejectsUnterminatedEscape(t *testing.T) {
+	t.Parallel()
+
+	_, err := splitArgs(`--path /tmp/foo\`)
+	if err == nil || !strings.Contains(err.Error(), "unterminated escape") {
+		t.Fatalf("expected unterminated escape error, got %v", err)
+	}
+}
+
+func TestSplitArgsPreservesEmptyQuotedTokens(t *testing.T) {
+	t.Parallel()
+
+	args, err := splitArgs(`--name "" --group ''`)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	want := []string{"--name", "", "--group", ""}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
+	}
+}
+
+func TestSplitArgsCombinesAdjacentQuotedSegments(t *testing.T) {
+	t.Parallel()
+
+	args, err := splitArgs(`--name "foo"'bar'`)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	want := []string{"--name", "foobar"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
+	}
+}
+
+func TestSplitArgsHandlesEscapedQuotesInsideDoubleQuotes(t *testing.T) {
+	t.Parallel()
+
+	args, err := splitArgs(`--note "say \"hello\""`)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	want := []string{"--note", `say "hello"`}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
+	}
+}
+
 func TestNmapArgsRejectsMalformedAdditionalArgs(t *testing.T) {
 	t.Parallel()
 
