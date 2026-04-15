@@ -44,15 +44,9 @@ func (c *Client) authorize(req *http.Request) {
 func (c *Client) timeoutForBody(body any) time.Duration {
 	timeout := c.timeout
 	switch req := body.(type) {
-	case dto.CommandRequest:
-		if requested := time.Duration(req.Timeout) * time.Second; requested > timeout {
+	case dto.TimeoutRequest:
+		if requested := time.Duration(req.GetRequestTimeout()) * time.Second; requested > timeout {
 			timeout = requested
-		}
-	case *dto.CommandRequest:
-		if req != nil {
-			if requested := time.Duration(req.Timeout) * time.Second; requested > timeout {
-				timeout = requested
-			}
 		}
 	}
 	return timeout + requestTimeoutGrace
@@ -62,25 +56,42 @@ func (c *Client) requestContext(ctx context.Context, body any) (context.Context,
 	return context.WithTimeout(ctx, c.timeoutForBody(body))
 }
 
-func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
-	b, err := json.Marshal(body)
+func (c *Client) newJSONRequest(ctx context.Context, method, endpoint string, body any, authorize bool) (*http.Request, error) {
+	var reader io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		reader = bytes.NewReader(b)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		method,
+		c.base+"/"+strings.TrimPrefix(endpoint, "/"),
+		reader,
+	)
 	if err != nil {
 		return nil, err
 	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if authorize {
+		c.authorize(req)
+	}
+	return req, nil
+}
 
+func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
 	reqCtx, cancel := c.requestContext(ctx, body)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(
-		reqCtx,
-		http.MethodPost,
-		c.base+"/"+strings.TrimLeft(endpoint, "/"),
-		bytes.NewReader(b))
+	req, err := c.newJSONRequest(reqCtx, http.MethodPost, endpoint, body, true)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	c.authorize(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -99,26 +110,16 @@ func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.Tool
 	}
 	return &result, nil
 }
-func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) {
-	b, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
 
+func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
 	reqCtx, cancel := c.requestContext(ctx, body)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(
-		reqCtx,
-		http.MethodPost,
-		c.base+"/api/command/stream",
-		bytes.NewReader(b))
+	req, err := c.newJSONRequest(reqCtx, http.MethodPost, endpoint, body, true)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
-	c.authorize(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -153,6 +154,9 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 		}
 		if ev.Error != "" && !ev.Done {
 			return nil, fmt.Errorf("server: %s", ev.Error)
+		}
+		if ev.Heartbeat {
+			continue
 		}
 		if ev.Done {
 			if ev.ReturnCode == nil {
@@ -197,11 +201,12 @@ func (c *Client) Stream(ctx context.Context, body any) (*dto.ToolResult, error) 
 		PartialResults: timedOut && (len(stdoutLines) > 0 || len(stderrLines) > 0),
 	}, nil
 }
+
 func (c *Client) Health(ctx context.Context) (*dto.HealthResult, error) {
 	reqCtx, cancel := c.requestContext(ctx, struct{}{})
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/health", nil)
+	req, err := c.newJSONRequest(reqCtx, http.MethodGet, "/health", nil, false)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,16 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var version = "dev"
+
+func implementationVersion() string {
+	trimmed := strings.TrimSpace(version)
+	if trimmed == "" {
+		return "dev"
+	}
+	return trimmed
+}
+
 func main() {
 	var (
 		serverURL = flag.String("server", "http://127.0.0.1:5000", "kali-server URL")
@@ -36,7 +46,7 @@ func main() {
 	}
 
 	srv := mcp.NewServer(
-		&mcp.Implementation{Name: "kali-mcp", Version: "0.1.2"},
+		&mcp.Implementation{Name: "kali-mcp", Version: implementationVersion()},
 		&mcp.ServerOptions{
 			Instructions: safetyInstructions,
 		},
@@ -50,24 +60,26 @@ func main() {
 }
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
+	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster")
+	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
+	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack. Use for quick single-credential checks; prefer hydra_attack_stream for long-running jobs, such as those using username_file/password_file.", "/api/tools/hydra")
+	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
+
 	addStreamTool[dto.CommandRequest](
 		srv,
 		kali,
 		"execute_command",
 		"Execute an arbitrary shell command on the Kali Linux machine.",
+		"/api/command/stream",
 	)
-
-	addPostTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "api/tools/nmap")
-	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "api/tools/gobuster")
-	addPostTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "api/tools/dirb")
-	addPostTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "api/tools/nikto")
-	addPostTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "api/tools/tshark")
-	addPostTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "api/tools/sqlmap")
-	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "api/tools/metasploit")
-	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack.", "api/tools/hydra")
-	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "api/tools/john")
-	addPostTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "api/tools/wpscan")
-	addPostTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "api/tools/enum4linux")
+	addStreamTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "/api/tools/nmap/stream")
+	addStreamTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "/api/tools/dirb/stream")
+	addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "/api/tools/nikto/stream")
+	addStreamTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "/api/tools/sqlmap/stream")
+	addStreamTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "/api/tools/tshark/stream")
+	addStreamTool[dto.HydraRequest](srv, kali, "hydra_attack_stream", "Run Hydra password brute-force attack with real-time streaming output. Use for large jobs or when username_file/password_file is specified.", "/api/tools/hydra/stream")
+	addStreamTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "/api/tools/wpscan/stream")
+	addStreamTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "/api/tools/enum4linux/stream")
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",
@@ -108,12 +120,12 @@ func formatHealthSummary(h *dto.HealthResult) string {
 	return sb.String()
 }
 
-func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, description string) {
+func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, description, endpoint string) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        name,
 		Description: description,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, any, error) {
-		r, err := kali.Stream(ctx, in)
+		r, err := kali.Stream(ctx, endpoint, in)
 		return textResult(r, err)
 	})
 }

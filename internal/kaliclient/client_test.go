@@ -36,6 +36,18 @@ func TestTimeoutForBodyExtendsForLongCommandRequests(t *testing.T) {
 	}
 }
 
+func TestTimeoutForBodyExtendsForLongStreamToolRequests(t *testing.T) {
+	t.Parallel()
+
+	client := New("http://example.com", 30*time.Second, "")
+
+	got := client.timeoutForBody(dto.NmapRequest{Timeout: 90})
+	want := 95 * time.Second
+	if got != want {
+		t.Fatalf("expected timeout %s, got %s", want, got)
+	}
+}
+
 func TestStreamReturnsServerStatusError(t *testing.T) {
 	t.Parallel()
 
@@ -46,7 +58,7 @@ func TestStreamReturnsServerStatusError(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL, 5*time.Second, "")
-	_, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	_, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
 	if err == nil || !strings.Contains(err.Error(), "server error 500") {
 		t.Fatalf("expected server status error, got %v", err)
 	}
@@ -62,7 +74,7 @@ func TestStreamReturnsDecodeErrorOnMalformedEvent(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL, 5*time.Second, "")
-	_, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	_, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
 	if err == nil || !strings.Contains(err.Error(), "stream decode event") {
 		t.Fatalf("expected decode error, got %v", err)
 	}
@@ -78,7 +90,7 @@ func TestStreamRequiresDoneEvent(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL, 5*time.Second, "")
-	_, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	_, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
 	if err == nil || !strings.Contains(err.Error(), "without done event") {
 		t.Fatalf("expected missing done event error, got %v", err)
 	}
@@ -95,7 +107,7 @@ func TestStreamParsesValidEvents(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL, 5*time.Second, "")
-	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	res, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -119,6 +131,50 @@ func TestStreamParsesValidEvents(t *testing.T) {
 	}
 }
 
+func TestStreamIgnoresHeartbeatEvents(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"heartbeat\":true}\n\n")
+		fmt.Fprint(w, "data: {\"stream\":\"stdout\",\"line\":\"hello\"}\n\n")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":0}\n\n")
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second, "")
+	res, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if res.Stdout != "hello\n" {
+		t.Fatalf("expected stdout hello\\n, got %q", res.Stdout)
+	}
+}
+
+func TestStreamUsesProvidedPath(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tools/nmap/stream" {
+			t.Fatalf("expected request path /api/tools/nmap/stream, got %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"stream\":\"stdout\",\"line\":\"hello\"}\n\n")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":0,\"timed_out\":false}\n\n")
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second, "")
+	res, err := client.Stream(context.Background(), "/api/tools/nmap/stream", map[string]string{"target": "127.0.0.1"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if res.Stdout != "hello\n" {
+		t.Fatalf("expected stdout hello\\n, got %q", res.Stdout)
+	}
+}
+
 func TestStreamMarksPartialTimedOutResults(t *testing.T) {
 	t.Parallel()
 
@@ -130,7 +186,7 @@ func TestStreamMarksPartialTimedOutResults(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL, 5*time.Second, "")
-	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	res, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -153,7 +209,7 @@ func TestStreamAppendsTerminalDoneErrorToStderr(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL, 5*time.Second, "")
-	res, err := client.Stream(context.Background(), map[string]string{"command": "id"})
+	res, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -178,6 +234,24 @@ func TestPostAddsBearerAuthorizationHeader(t *testing.T) {
 	defer ts.Close()
 
 	client := New(ts.URL, 5*time.Second, "secret-token")
+	if _, err := client.Post(context.Background(), "/api/tools/nmap", map[string]string{"target": "127.0.0.1"}); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestPostUsesProvidedPath(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tools/nmap" {
+			t.Fatalf("expected request path /api/tools/nmap, got %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"stdout":"ok","stderr":"","return_code":0,"success":true,"timed_out":false}`)
+	}))
+	defer ts.Close()
+
+	client := New(ts.URL, 5*time.Second, "")
 	if _, err := client.Post(context.Background(), "/api/tools/nmap", map[string]string{"target": "127.0.0.1"}); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

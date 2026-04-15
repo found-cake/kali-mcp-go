@@ -7,6 +7,26 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
+func TestImplementationVersionDefaultsToDev(t *testing.T) {
+	original := version
+	version = ""
+	t.Cleanup(func() { version = original })
+
+	if got := implementationVersion(); got != "dev" {
+		t.Fatalf("expected default version dev, got %q", got)
+	}
+}
+
+func TestImplementationVersionUsesInjectedValue(t *testing.T) {
+	original := version
+	version = "1.2.3"
+	t.Cleanup(func() { version = original })
+
+	if got := implementationVersion(); got != "1.2.3" {
+		t.Fatalf("expected injected version 1.2.3, got %q", got)
+	}
+}
+
 func TestFormatHealthSummaryIncludesEssentialReadiness(t *testing.T) {
 	t.Parallel()
 
