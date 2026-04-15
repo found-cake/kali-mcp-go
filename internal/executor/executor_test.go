@@ -2,11 +2,22 @@ package executor
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func countOpenFDs(t *testing.T) int {
+	t.Helper()
+
+	entries, err := os.ReadDir("/dev/fd")
+	if err != nil {
+		t.Skipf("counting open file descriptors is unavailable: %v", err)
+	}
+	return len(entries)
+}
 
 func TestRunReportsScannerError(t *testing.T) {
 	t.Parallel()
@@ -160,5 +171,24 @@ func TestStreamExecDoneChannelIsBuffered(t *testing.T) {
 	_, done := StreamExec(context.Background(), 5*time.Second, "printf", "ok\n")
 	if cap(done) != 1 {
 		t.Fatalf("expected buffered done channel with capacity 1, got %d", cap(done))
+	}
+}
+
+func TestRunExecDoesNotLeakPipesWhenStartFails(t *testing.T) {
+	baseline := countOpenFDs(t)
+
+	for range 64 {
+		res := RunExec(context.Background(), time.Second, "/definitely/missing-binary")
+		if res == nil {
+			t.Fatal("expected result, got nil")
+		}
+		if res.ReturnCode != -1 {
+			t.Fatalf("expected start failure return code -1, got %d", res.ReturnCode)
+		}
+	}
+
+	after := countOpenFDs(t)
+	if delta := after - baseline; delta > 8 {
+		t.Fatalf("expected start failures not to leak file descriptors, baseline=%d after=%d delta=%d", baseline, after, delta)
 	}
 }

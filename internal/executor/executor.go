@@ -90,10 +90,13 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
+		_ = stdoutPipe.Close()
 		return &Result{Stderr: fmt.Sprintf("stderr pipe: %v", err), ReturnCode: -1}
 	}
 
 	if err := cmd.Start(); err != nil {
+		_ = stdoutPipe.Close()
+		_ = stderrPipe.Close()
 		return &Result{Stderr: fmt.Sprintf("start: %v", err), ReturnCode: -1}
 	}
 
