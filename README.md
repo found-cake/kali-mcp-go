@@ -201,30 +201,6 @@ This is the recommended setup for long-running tools such as `dirb_scan`, `nikto
 {
   "$schema": "https://opencode.ai/config.json",
   "experimental": {
-    "mcp_timeout": "never"
-  },
-  "mcp": {
-    "mcp-kali-server": {
-      "type": "local",
-      "command": [
-        "/path/to/mcp-client",
-        "--server", "http://127.0.0.1:5000",
-        "--timeout", "3600"
-      ],
-      "environment": {
-        "KALI_MCP_API_TOKEN": "your-secret-token"
-      }
-    }
-  }
-}
-```
-
-If your OpenCode version does not support `"never"`, use a large millisecond value instead:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "experimental": {
     "mcp_timeout": 3600000
   },
   "mcp": {
