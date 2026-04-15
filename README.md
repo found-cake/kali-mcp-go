@@ -207,7 +207,7 @@ This is the recommended setup for long-running tools such as `dirb_scan`, `nikto
     "mcp_timeout": 3600000
   },
   "mcp": {
-    "mcp-kali-server": {
+    "kali-mcp": {
       "type": "local",
       "command": [
         "/path/to/mcp-client",
