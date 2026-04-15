@@ -30,20 +30,24 @@ type logPrinter func(format string, args ...any)
 
 func main() {
 	var (
-		ip    = flag.String("ip", "127.0.0.1", "bind address")
-		port  = flag.Int("port", 5000, "port")
-		debug = flag.Bool("debug", false, "verbose logging")
+		ip            = flag.String("ip", "127.0.0.1", "bind address")
+		port          = flag.Int("port", 5000, "port")
+		debug         = flag.Bool("debug", false, "verbose logging")
+		maxConcurrent = flag.Int("max-concurrent", defaultMaxConcurrentExecutions, "maximum number of concurrent execution requests")
 	)
 	flag.Parse()
 	apiToken := strings.TrimSpace(os.Getenv(dto.APITokenEnv))
 	if apiToken == "" {
 		log.Fatalf("%s must be set", dto.APITokenEnv)
 	}
+	if *maxConcurrent <= 0 {
+		log.Fatalf("--max-concurrent must be a positive integer")
+	}
 
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("[kali-server] ")
 
-	app := newApp(apiToken, *debug, log.Printf)
+	app := newApp(apiToken, *debug, *maxConcurrent, log.Printf)
 
 	addr := fmt.Sprintf("%s:%d", *ip, *port)
 	log.Printf("listening on %s", addr)
@@ -78,8 +82,8 @@ func main() {
 	}
 }
 
-func newApp(apiToken string, debug bool, print logPrinter) *fiber.App {
-	limiter := newExecutionLimiter(defaultMaxConcurrentExecutions)
+func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logPrinter) *fiber.App {
+	limiter := newExecutionLimiter(maxConcurrentExecutions)
 	app := fiber.New(fiber.Config{
 		ReadTimeout:  readTimeout,
 		WriteTimeout: 0,

@@ -132,7 +132,10 @@ export KALI_MCP_API_TOKEN="your-secret-token"
 ./kali-server                           # binds to 127.0.0.1:5000
 ./kali-server --ip 0.0.0.0 --port 5000  # expose on all interfaces
 ./kali-server --debug                   # verbose logging
+./kali-server --max-concurrent 30       # allow up to 30 concurrent execution requests
 ```
+
+`kali-server` limits concurrent execution requests to protect server resources. When the limit is exceeded, the server returns `503 Service Unavailable`.
 
 > **Tip:** Use an SSH tunnel instead of exposing `kali-server` directly on the network — it's simpler and more secure:
 > ```bash
@@ -240,6 +243,7 @@ Notes:
 | `--ip` | `127.0.0.1` | Bind address |
 | `--port` | `5000` | Listen port |
 | `--debug` | `false` | Verbose request logging |
+| `--max-concurrent` | `10` | Maximum number of concurrent execution requests before the server returns `503 Service Unavailable` |
 
 ### Environment variables
 
@@ -248,6 +252,8 @@ Notes:
 | `KALI_MCP_API_TOKEN` | both | **Required.** Bearer token for API authentication |
 | `KALI_MCP_DIR_WORDLIST` | kali-server | Override default dir wordlist (default: `/usr/share/wordlists/dirb/common.txt`) |
 | `KALI_MCP_JOHN_WORDLIST` | kali-server | Override default John wordlist (default: `/usr/share/wordlists/rockyou.txt`) |
+
+> `ReadTimeout` is enforced for incoming request bodies, while streaming responses remain unrestricted by `WriteTimeout`.
 
 ---
 

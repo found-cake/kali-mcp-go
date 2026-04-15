@@ -1070,7 +1070,7 @@ func TestNewAppWithDebugLogsRequests(t *testing.T) {
 	t.Parallel()
 
 	var lines []string
-	app := newApp("secret-token", true, func(format string, args ...any) {
+	app := newApp("secret-token", true, defaultMaxConcurrentExecutions, func(format string, args ...any) {
 		lines = append(lines, fmt.Sprintf(format, args...))
 	})
 
@@ -1101,7 +1101,7 @@ func TestNewAppWithoutDebugDoesNotLogRequests(t *testing.T) {
 	t.Parallel()
 
 	logged := false
-	app := newApp("secret-token", false, func(string, ...any) {
+	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, func(string, ...any) {
 		logged = true
 	})
 
@@ -1128,12 +1128,30 @@ func TestNewAppWithoutDebugDoesNotLogRequests(t *testing.T) {
 func TestNewAppSetsReadTimeout(t *testing.T) {
 	t.Parallel()
 
-	app := newApp("secret-token", false, nil)
+	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, nil)
 	if got := app.Config().ReadTimeout; got != readTimeout {
 		t.Fatalf("expected read timeout %s, got %s", readTimeout, got)
 	}
 	if got := app.Config().WriteTimeout; got != 0 {
 		t.Fatalf("expected write timeout 0 for streaming, got %s", got)
+	}
+}
+
+func TestNewExecutionLimiterUsesExplicitValue(t *testing.T) {
+	t.Parallel()
+
+	limiter := newExecutionLimiter(30)
+	if got := cap(limiter.sem); got != 30 {
+		t.Fatalf("expected limiter capacity 30, got %d", got)
+	}
+}
+
+func TestNewExecutionLimiterFallsBackToDefaultForInvalidValue(t *testing.T) {
+	t.Parallel()
+
+	limiter := newExecutionLimiter(0)
+	if got := cap(limiter.sem); got != defaultMaxConcurrentExecutions {
+		t.Fatalf("expected default limiter capacity %d, got %d", defaultMaxConcurrentExecutions, got)
 	}
 }
 
