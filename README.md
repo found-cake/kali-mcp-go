@@ -2,7 +2,7 @@
 
 Go reimplementation of [MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server), built to eliminate the bottlenecks encountered when running multiple AI agents simultaneously.
 
-[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go)](https://go.dev/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/found-cake/kali-mcp-go)](https://goreportcard.com/report/github.com/found-cake/kali-mcp-go)
 [![Release](https://img.shields.io/github/v/release/found-cake/kali-mcp-go)](https://github.com/found-cake/kali-mcp-go/releases/latest)
 
@@ -48,7 +48,7 @@ The rewrite was motivated by running into real bottlenecks when spinning up mult
 |---|---|
 | `kali-server` host | Any environment with the required security tools installed (Kali Linux, other Linux distros, macOS, etc.) |
 | `mcp-client` host | Linux, Windows, or macOS |
-| Build from source | Go 1.26+ |
+| Build from source | Go 1.27+ |
 
 Required tools: `nmap`, `gobuster`, `dirb`, `nikto`, `tshark`, `sqlmap`, `msfconsole`, `hydra`, `john`, `wpscan`, `enum4linux`
 
