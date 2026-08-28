@@ -26,8 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       should_build: ${{ steps.build_policy.outputs.should_build }}
-      channel: ${{ steps.build_policy.outputs.channel }}
-      kali_base_image: ${{ steps.build_policy.outputs.kali_base_image }}
+      channels: ${{ steps.build_policy.outputs.channels }}
 
     steps:
       - name: Apply build policy
@@ -38,12 +37,10 @@ jobs:
           MANUAL_CHANNEL: ${{ inputs.channel }}
         run: |
           should_build=true
-          channel=stable
-          kali_base_image=kalilinux/kali-last-release
+          channels='[{"name":"stable","base_image":"kalilinux/kali-last-release"}]'
 
           if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
-            channel=rolling
-            kali_base_image=kalilinux/kali-rolling
+            channels='[{"name":"rolling","base_image":"kalilinux/kali-rolling"}]'
             epoch_week=$(($(date -u +%s) / 604800))
             if ((epoch_week % 2 != 0)); then
               should_build=false
@@ -53,26 +50,26 @@ jobs:
               echo "Invalid release tag: ${GITHUB_REF_NAME}. Expected format: vx.y.z" >&2
               exit 1
             fi
+            channels='[{"name":"stable","base_image":"kalilinux/kali-last-release"},{"name":"rolling","base_image":"kalilinux/kali-rolling"}]'
           elif [[ "${GITHUB_REF}" != "refs/heads/${DEFAULT_BRANCH}" ]]; then
             echo "Manual image builds must run from ${DEFAULT_BRANCH}." >&2
             exit 1
           elif [[ "${MANUAL_CHANNEL}" == "rolling" ]]; then
-            channel=rolling
-            kali_base_image=kalilinux/kali-rolling
+            channels='[{"name":"rolling","base_image":"kalilinux/kali-rolling"}]'
           fi
 
           echo "should_build=${should_build}" >> "${GITHUB_OUTPUT}"
-          echo "channel=${channel}" >> "${GITHUB_OUTPUT}"
-          echo "kali_base_image=${kali_base_image}" >> "${GITHUB_OUTPUT}"
+          echo "channels=${channels}" >> "${GITHUB_OUTPUT}"
 
   build_image:
     needs: prepare
     if: needs.prepare.outputs.should_build == 'true'
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.target.runner }}
     strategy:
       fail-fast: false
       matrix:
-        include:
+        channel: ${{ fromJSON(needs.prepare.outputs.channels) }}
+        target:
           - platform: linux/amd64
             runner: ubuntu-24.04
             artifact: amd64
@@ -98,8 +95,8 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: ${{ matrix.platform }}
-          build-args: KALI_BASE_IMAGE=${{ needs.prepare.outputs.kali_base_image }}
+          platforms: ${{ matrix.target.platform }}
+          build-args: KALI_BASE_IMAGE=${{ matrix.channel.base_image }}
           outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export image digest
@@ -112,7 +109,7 @@ jobs:
       - name: Upload image digest
         uses: actions/upload-artifact@v7
         with:
-          name: image-digest-${{ matrix.artifact }}
+          name: image-digest-${{ matrix.channel.name }}-${{ matrix.target.artifact }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -123,13 +120,17 @@ jobs:
       - build_image
     if: needs.prepare.outputs.should_build == 'true'
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: ${{ fromJSON(needs.prepare.outputs.channels) }}
 
     steps:
       - name: Download image digests
         uses: actions/download-artifact@v8
         with:
           path: ${{ runner.temp }}/digests
-          pattern: image-digest-*
+          pattern: image-digest-${{ matrix.channel.name }}-*
           merge-multiple: true
 
       - name: Log in to GitHub Container Registry
@@ -144,7 +145,7 @@ jobs:
 
       - name: Create multi-platform image
         env:
-          CHANNEL: ${{ needs.prepare.outputs.channel }}
+          CHANNEL: ${{ matrix.channel.name }}
           IMAGE: ghcr.io/${{ github.repository }}
         run: |
           cd "${RUNNER_TEMP}/digests"
@@ -167,7 +168,7 @@ jobs:
 
       - name: Inspect multi-platform image
         env:
-          CHANNEL: ${{ needs.prepare.outputs.channel }}
+          CHANNEL: ${{ matrix.channel.name }}
           IMAGE: ghcr.io/${{ github.repository }}
         run: |
           tag=latest

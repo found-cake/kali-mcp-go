@@ -272,7 +272,7 @@ docker build -t kali-mcp-go:local . && docker run --rm -i kali-mcp-go:local
 
 To use a fixed token instead of the generated one, pass it explicitly with `-e KALI_MCP_API_TOKEN=your-secret-token`. This is optional in Docker mode but remains required when running `kali-server` and `mcp-client` as separate processes.
 
-The `latest` and versioned images are built from Kali's last release when a project release tag is published. The `rolling` image is rebuilt from Kali Rolling every two weeks. `--pull=always` checks the registry whenever the MCP server starts, but Docker downloads image layers only when the published digest has changed. Use a version tag such as `:v1.2.3` and omit `--pull=always` if you prefer a fixed image.
+The `latest` and versioned images are built from Kali's last release when a project release tag is published. The `rolling` image is rebuilt from Kali Rolling every two weeks and whenever a project release tag is published. `--pull=always` checks the registry whenever the MCP server starts, but Docker downloads image layers only when the published digest has changed. Use a version tag such as `:v1.2.3` and omit `--pull=always` if you prefer a fixed image.
 
 The container uses Docker's default network. For Linux host networking, localhost targets, or packet capture, add `--network host --cap-add NET_ADMIN --cap-add NET_RAW` when your Docker environment supports it. Mount host files explicitly when a tool needs them, for example `-v "$PWD:/workspace:ro"`, and use the resulting `/workspace/...` path in the tool request.
 
