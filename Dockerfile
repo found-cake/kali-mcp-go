@@ -16,6 +16,7 @@ RUN CGO_ENABLED=0 \
 
 FROM ${KALI_BASE_IMAGE}
 
+# Nmap cannot exec when its NET_ADMIN file capability exceeds Docker's default bounding set.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         bash \
@@ -27,6 +28,7 @@ RUN apt-get update \
         gzip \
         hydra \
         john \
+        libcap2-bin \
         metasploit-framework \
         nikto \
         nmap \
@@ -35,6 +37,8 @@ RUN apt-get update \
         unzip \
         wpscan \
         wordlists \
+    && setcap -r /usr/lib/nmap/nmap \
+    && nmap --version >/dev/null \
     && if [ -f /usr/share/wordlists/rockyou.txt.gz ]; then \
         gzip -d /usr/share/wordlists/rockyou.txt.gz; \
     fi \
