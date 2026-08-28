@@ -1,0 +1,177 @@
+name: Docker Image
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Image channel to rebuild
+        required: true
+        default: rolling
+        type: choice
+        options:
+          - stable
+          - rolling
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      should_build: ${{ steps.build_policy.outputs.should_build }}
+      channel: ${{ steps.build_policy.outputs.channel }}
+      kali_base_image: ${{ steps.build_policy.outputs.kali_base_image }}
+
+    steps:
+      - name: Apply build policy
+        id: build_policy
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          MANUAL_CHANNEL: ${{ inputs.channel }}
+        run: |
+          should_build=true
+          channel=stable
+          kali_base_image=kalilinux/kali-last-release
+
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            channel=rolling
+            kali_base_image=kalilinux/kali-rolling
+            epoch_week=$(($(date -u +%s) / 604800))
+            if ((epoch_week % 2 != 0)); then
+              should_build=false
+            fi
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Invalid release tag: ${GITHUB_REF_NAME}. Expected format: vx.y.z" >&2
+              exit 1
+            fi
+          elif [[ "${GITHUB_REF}" != "refs/heads/${DEFAULT_BRANCH}" ]]; then
+            echo "Manual image builds must run from ${DEFAULT_BRANCH}." >&2
+            exit 1
+          elif [[ "${MANUAL_CHANNEL}" == "rolling" ]]; then
+            channel=rolling
+            kali_base_image=kalilinux/kali-rolling
+          fi
+
+          echo "should_build=${should_build}" >> "${GITHUB_OUTPUT}"
+          echo "channel=${channel}" >> "${GITHUB_OUTPUT}"
+          echo "kali_base_image=${kali_base_image}" >> "${GITHUB_OUTPUT}"
+
+  build_image:
+    needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            artifact: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact: arm64
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push Docker image by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          build-args: KALI_BASE_IMAGE=${{ needs.prepare.outputs.kali_base_image }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export image digest
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${RUNNER_TEMP}/digests/${digest#sha256:}"
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-digest-${{ matrix.artifact }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish_image:
+    needs:
+      - prepare
+      - build_image
+    if: needs.prepare.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download image digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: image-digest-*
+          merge-multiple: true
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create multi-platform image
+        env:
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          cd "${RUNNER_TEMP}/digests"
+
+          if [[ "${CHANNEL}" == "rolling" ]]; then
+            tags=(--tag "${IMAGE}:rolling")
+          else
+            tags=(--tag "${IMAGE}:latest")
+            if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+              tags+=(--tag "${IMAGE}:${GITHUB_REF_NAME}")
+            fi
+          fi
+
+          sources=()
+          for digest in *; do
+            sources+=("${IMAGE}@sha256:${digest}")
+          done
+
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+
+      - name: Inspect multi-platform image
+        env:
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          tag=latest
+          if [[ "${CHANNEL}" == "rolling" ]]; then
+            tag=rolling
+          fi
+          docker buildx imagetools inspect "${IMAGE}:${tag}"

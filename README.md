@@ -118,6 +118,86 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o mcp-client ./cmd/mcp-client
 ```
 
+### Option C — Docker (single-command MCP setup)
+
+The published image contains `mcp-client`, `kali-server`, and the required Kali security tools. The container starts `kali-server` internally and exposes the MCP client's stdio transport, so no separate server process or port mapping is required.
+
+No API token configuration is required in Docker mode. When `KALI_MCP_API_TOKEN` is not provided, the container generates an ephemeral token and shares it only between its internal `kali-server` and `mcp-client` processes.
+
+#### Claude Code
+
+```bash
+claude mcp add kali-mcp -- docker run --pull=always --rm -i ghcr.io/found-cake/kali-mcp-go:latest
+```
+
+#### OpenAI Codex
+
+Register the container as a local STDIO MCP server:
+
+```bash
+codex mcp add kali-mcp -- docker run --pull=always --rm -i ghcr.io/found-cake/kali-mcp-go:latest
+```
+
+Run `codex mcp list` to verify the registration, or `/mcp` inside Codex to inspect the connected server. Codex CLI, the IDE extension, and the ChatGPT desktop app share the same MCP configuration.
+
+For longer scans, configure the server directly in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.kali-mcp]
+command = "docker"
+args = ["run", "--pull=always", "--rm", "-i", "ghcr.io/found-cake/kali-mcp-go:latest", "--timeout", "3600"]
+startup_timeout_sec = 300
+tool_timeout_sec = 3600
+```
+
+#### OpenCode
+
+Add the following local STDIO server to `opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "kali-mcp": {
+      "type": "local",
+      "command": [
+        "docker", "run", "--pull=always", "--rm", "-i",
+        "ghcr.io/found-cake/kali-mcp-go:latest",
+        "--timeout", "3600"
+      ],
+      "enabled": true,
+      "timeout": 3600000
+    }
+  }
+}
+```
+
+OpenCode's `timeout` is milliseconds, while the container's `--timeout` value is seconds. The longer OpenCode timeout also gives Docker enough time to pull the image on its first run.
+
+The examples above use the stable `latest` channel. Replace `:latest` with `:rolling` in any command or configuration to use the biweekly Kali Rolling image.
+
+#### Other MCP hosts
+
+Use this as the local STDIO MCP server command:
+
+```bash
+docker run --pull=always --rm -i ghcr.io/found-cake/kali-mcp-go:latest
+```
+
+To build and run the image locally instead of pulling from GHCR:
+
+```bash
+docker build -t kali-mcp-go:local . && docker run --rm -i kali-mcp-go:local
+```
+
+To use a fixed token instead of the generated one, pass it explicitly with `-e KALI_MCP_API_TOKEN=your-secret-token`. This is optional in Docker mode but remains required when running `kali-server` and `mcp-client` as separate processes.
+
+The `latest` and versioned images are built from Kali's last release when a project release tag is published. The `rolling` image is rebuilt from Kali Rolling every two weeks. `--pull=always` checks the registry whenever the MCP server starts, but Docker downloads image layers only when the published digest has changed. Use a version tag such as `:v1.2.3` and omit `--pull=always` if you prefer a fixed image.
+
+The container uses Docker's default network. For Linux host networking, localhost targets, or packet capture, add `--network host --cap-add NET_ADMIN --cap-add NET_RAW` when your Docker environment supports it. Mount host files explicitly when a tool needs them, for example `-v "$PWD:/workspace:ro"`, and use the resulting `/workspace/...` path in the tool request.
+
+> **Security:** The image intentionally includes `execute_command` and runs Kali tools inside the container. The generated token protects the container's internal API but does not restrict what the container can reach. Restrict its network access where practical, and only test systems you own or have explicit written permission to assess.
+
 ---
 
 ## Usage
@@ -174,38 +254,34 @@ claude mcp add kali-mcp \
 
 #### OpenAI Codex
 
-```json
-{
-  "mcpServers": {
-    "kali-mcp": {
-      "command": "/path/to/mcp-client",
-      "args": [
-        "--server", "http://127.0.0.1:5000",
-        "--timeout", "3600"
-      ],
-      "env": {
-        "KALI_MCP_API_TOKEN": "your-secret-token"
-      }
-    }
-  }
-}
+```bash
+codex mcp add kali-mcp \
+  --env KALI_MCP_API_TOKEN=your-secret-token \
+  -- /path/to/mcp-client --server http://127.0.0.1:5000 --timeout 3600
+```
+
+Equivalent `~/.codex/config.toml` configuration:
+
+```toml
+[mcp_servers.kali-mcp]
+command = "/path/to/mcp-client"
+args = ["--server", "http://127.0.0.1:5000", "--timeout", "3600"]
+env = { KALI_MCP_API_TOKEN = "your-secret-token" }
+tool_timeout_sec = 3600
 ```
 
 #### OpenCode
 
-For OpenCode, prefer a config that raises both:
+For long-running scans, raise both:
 
-- the **host-side MCP timeout** via `experimental.mcp_timeout`
+- the **host-side MCP execution timeout**
 - the **mcp-client base request timeout** via `--timeout`
 
 This is the recommended setup for long-running tools such as `dirb_scan`, `nikto_scan`, `sqlmap_scan`, and long `execute_command` sessions.
 
-```json
+```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "experimental": {
-    "mcp_timeout": 3600000
-  },
   "mcp": {
     "kali-mcp": {
       "type": "local",
@@ -216,7 +292,9 @@ This is the recommended setup for long-running tools such as `dirb_scan`, `nikto
       ],
       "environment": {
         "KALI_MCP_API_TOKEN": "your-secret-token"
-      }
+      },
+      "enabled": true,
+      "timeout": 3600000
     }
   }
 }
@@ -224,7 +302,7 @@ This is the recommended setup for long-running tools such as `dirb_scan`, `nikto
 
 Notes:
 
-- `experimental.mcp_timeout` controls the OpenCode-side MCP tool-call timeout.
+- `mcp.kali-mcp.timeout` controls the OpenCode-side MCP request timeout in milliseconds.
 - `--timeout` controls the `mcp-client` base request timeout in seconds.
 - For long-running scans, set **both**. Raising only one layer may still leave the other layer timing out early.
 
@@ -249,7 +327,7 @@ Notes:
 
 | Variable | Component | Description |
 |---|---|---|
-| `KALI_MCP_API_TOKEN` | both | **Required.** Bearer token for API authentication |
+| `KALI_MCP_API_TOKEN` | both | Bearer token for API authentication; required for separate processes, optional in Docker mode because the entrypoint generates one when omitted |
 | `KALI_MCP_DIR_WORDLIST` | kali-server | Override default dir wordlist (default: `/usr/share/wordlists/dirb/common.txt`) |
 | `KALI_MCP_JOHN_WORDLIST` | kali-server | Override default John wordlist (default: `/usr/share/wordlists/rockyou.txt`) |
 
@@ -291,9 +369,9 @@ These MCP tools now stream incremental output over SSE instead of waiting for a 
 
 Streaming requests support an optional `timeout` field (seconds) to override the default 300-second request limit for that specific run. For `tshark_capture`, this request `timeout` is distinct from the capture `duration` field.
 
-When using OpenCode, the per-tool request `timeout` is not enough by itself for long scans. You should also raise OpenCode's MCP timeout (`experimental.mcp_timeout`) and the local `mcp-client --timeout` value as shown above.
+When using OpenCode, the per-tool request `timeout` is not enough by itself for long scans. You should also raise OpenCode's MCP execution timeout and the local `mcp-client --timeout` value as shown above.
 
-For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout` value for long-running tools, but the OpenCode-specific `experimental.mcp_timeout` setting does not apply there.
+For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout` value for long-running tools, but OpenCode's `mcp.<name>.timeout` setting does not apply there.
 
 Quiet streams may also emit lightweight heartbeat SSE events to keep the connection active until the final `done` event arrives.
 
