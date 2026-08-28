@@ -124,13 +124,93 @@ The published image contains `mcp-client`, `kali-server`, and the required Kali 
 
 No API token configuration is required in Docker mode. When `KALI_MCP_API_TOKEN` is not provided, the container generates an ephemeral token and shares it only between its internal `kali-server` and `mcp-client` processes.
 
-#### Claude Code
+#### Faster startup with a persistent container
+
+If starting a fresh container whenever the MCP host opens is too slow, keep `kali-server` running and have the host start only `mcp-client` with `docker exec`. The image is pulled and initialized once, and no host port is exposed.
+
+Start the server container:
+
+```bash
+docker run -d \
+  --name kali-mcp \
+  --restart unless-stopped \
+  --entrypoint kali-server \
+  -e KALI_MCP_API_TOKEN="$(openssl rand -hex 32)" \
+  ghcr.io/found-cake/kali-mcp-go:latest \
+  --ip 127.0.0.1 --port 5000
+```
+
+The token is generated once and stored in the container configuration so `docker exec` processes receive the same value. It does not need to be copied into the MCP host configuration.
+
+##### Claude Code
+
+```bash
+claude mcp add kali-mcp -- \
+  docker exec -i kali-mcp mcp-client \
+  --server http://127.0.0.1:5000 --timeout 3600
+```
+
+##### OpenAI Codex
+
+```bash
+codex mcp add kali-mcp -- \
+  docker exec -i kali-mcp mcp-client \
+  --server http://127.0.0.1:5000 --timeout 3600
+```
+
+Run `codex mcp list` to verify the registration, or `/mcp` inside Codex to inspect the connected server.
+
+For longer scans, the equivalent `~/.codex/config.toml` configuration is:
+
+```toml
+[mcp_servers.kali-mcp]
+command = "docker"
+args = ["exec", "-i", "kali-mcp", "mcp-client", "--server", "http://127.0.0.1:5000", "--timeout", "3600"]
+startup_timeout_sec = 30
+tool_timeout_sec = 3600
+```
+
+##### OpenCode v1
+
+Add the following local STDIO server to `opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "kali-mcp": {
+      "type": "local",
+      "command": [
+        "docker", "exec", "-i", "kali-mcp", "mcp-client",
+        "--server", "http://127.0.0.1:5000",
+        "--timeout", "3600"
+      ],
+      "enabled": true,
+      "timeout": 3600000
+    }
+  }
+}
+```
+
+Check the persistent server independently at any time:
+
+```bash
+docker exec kali-mcp curl -fsS http://127.0.0.1:5000/health
+```
+
+This mode intentionally does not check for a new image whenever the MCP host starts. To upgrade, pull the desired tag and recreate the `kali-mcp` container. Add networking capabilities and mounts to the initial `docker run` command when needed.
+
+#### One-shot container
+
+The following setup is simpler and automatically removes the container when the MCP host exits, but Docker checks the image and initializes a new container each time.
+
+##### Claude Code
 
 ```bash
 claude mcp add kali-mcp -- docker run --pull=always --rm -i ghcr.io/found-cake/kali-mcp-go:latest
 ```
 
-#### OpenAI Codex
+##### OpenAI Codex
 
 Register the container as a local STDIO MCP server:
 
@@ -150,7 +230,7 @@ startup_timeout_sec = 300
 tool_timeout_sec = 3600
 ```
 
-#### OpenCode
+##### OpenCode v1
 
 Add the following local STDIO server to `opencode.jsonc`:
 
@@ -176,7 +256,7 @@ OpenCode's `timeout` is milliseconds, while the container's `--timeout` value is
 
 The examples above use the stable `latest` channel. Replace `:latest` with `:rolling` in any command or configuration to use the biweekly Kali Rolling image.
 
-#### Other MCP hosts
+##### Other MCP hosts
 
 Use this as the local STDIO MCP server command:
 
