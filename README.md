@@ -530,9 +530,9 @@ Dedicated scan requests accept a `profile` plus optional `max_requests`, `rate_l
 
 The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate, concurrency, and request-limit flags; the outer timeout also shrinks to the request/rate budget. When `health_url` is present, the server probes it before and after the run. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Nuclei DoS, fuzz, and interactsh selectors remain blocked unless `allow_unsafe` is explicitly enabled.
 
-### Credential ownership
+### Credential management
 
-Authentication tokens and cookies remain owned by the calling agent or orchestrator. Pass credentials only in request-scoped fields supported by the selected tool. `kali-server` does not create, list, retain, or reuse credential sessions across calls, and sensitive command arguments remain redacted from execution metadata.
+`kali-server` does not store or manage authentication tokens and cookies. Manage them directly using safeguards appropriate to your environment, and pass them only in request-scoped fields supported by the selected tool. The server does not create, list, retain, or reuse credential sessions across calls, and sensitive command arguments remain redacted from execution metadata.
 
 ### Natural-language tool routing
 
