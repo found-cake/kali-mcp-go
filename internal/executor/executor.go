@@ -31,6 +31,7 @@ type Result struct {
 	ArgvRedacted []string
 	Timeout      time.Duration
 	Target       *dto.TargetProvenance
+	Policy       dto.ScanOptions
 }
 
 func (r *Result) Success() bool {

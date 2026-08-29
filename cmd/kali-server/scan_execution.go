@@ -1,0 +1,125 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"time"
+
+	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/tools"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
+	"github.com/gofiber/fiber/v3"
+)
+
+var healthHTTPClient = &http.Client{
+	Timeout: 3 * time.Second,
+	Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 2 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   2 * time.Second,
+		ResponseHeaderTimeout: 2 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+	},
+}
+
+func scanPreparationError(c fiber.Ctx, err error) error {
+	if errors.Is(err, errGlobalCapacityExceeded) || errors.Is(err, errTargetCapacityExceeded) {
+		return serviceUnavailable(c, err.Error())
+	}
+	return badRequest(c, err.Error())
+}
+
+type scanExecutionPlan struct {
+	args      []string
+	options   dto.ScanOptions
+	target    *dto.TargetProvenance
+	timeout   time.Duration
+	release   func()
+	healthURL string
+	request   any
+	context   context.Context
+}
+
+func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanExecutionPlan, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("internal error: no command generated")
+	}
+	options := dto.ScanOptions{}
+	if scanRequest, ok := any(request).(dto.ScanRequest); ok {
+		options = scanRequest.GetScanOptions()
+	}
+	effective, err := tools.EffectiveScanOptions(args[0], options)
+	if err != nil {
+		return nil, err
+	}
+	controlledArgs, err := tools.ApplyScanControls(args, effective)
+	if err != nil {
+		return nil, err
+	}
+	provenance, err := resolveTargetProvenance(request, apiTokenFromContext(c), time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	if effective.HealthURL != "" {
+		if err := probeTargetHealth(c.Context(), effective.HealthURL); err != nil {
+			return nil, fmt.Errorf("pre-scan health check: %w", err)
+		}
+	}
+	target := tools.RequestTarget(request)
+	if provenance != nil {
+		target = provenance.Selected
+	}
+	release := func() {}
+	if scheduler := schedulerFromContext(c); scheduler != nil {
+		release, err = scheduler.acquire(target, scanWeight(controlledArgs[0]))
+		if err != nil {
+			return nil, err
+		}
+	}
+	requestedTimeout := 0
+	if timeoutRequest, ok := any(request).(dto.TimeoutRequest); ok {
+		requestedTimeout = timeoutRequest.GetRequestTimeout()
+	}
+	timeout := commandTimeout(requestedTimeout)
+	if effective.MaxRequests > 0 && effective.RateLimit > 0 {
+		budgetSeconds := (effective.MaxRequests + effective.RateLimit - 1) / effective.RateLimit
+		budgetTimeout := time.Duration(budgetSeconds) * time.Second
+		if budgetTimeout < timeout {
+			timeout = budgetTimeout
+		}
+	}
+	return &scanExecutionPlan{
+		args: controlledArgs, options: effective, target: provenance, timeout: timeout,
+		release: release, healthURL: effective.HealthURL, request: request, context: c.Context(),
+	}, nil
+}
+
+func (p *scanExecutionPlan) annotate(result *executor.Result) {
+	result.Target = p.target
+	result.Warnings = append(result.Warnings, targetWarnings(p.request, p.target)...)
+	result.Policy = p.options
+	if p.healthURL != "" {
+		if err := probeTargetHealth(p.context, p.healthURL); err != nil {
+			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())
+		}
+	}
+}
+
+func probeTargetHealth(ctx context.Context, target string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return fmt.Errorf("create health request: %w", err)
+	}
+	response, err := healthHTTPClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("request health URL: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusInternalServerError {
+		return fmt.Errorf("health URL returned %d", response.StatusCode)
+	}
+	return nil
+}

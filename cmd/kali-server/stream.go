@@ -161,11 +161,17 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 		HTTPRequests: result.HTTPRequests,
 		DurationMS:   result.Duration.Milliseconds(),
 		Execution: dto.ExecutionMetadata{
-			Tool:         result.Tool,
-			ToolVersion:  result.ToolVersion,
-			ArgvRedacted: result.ArgvRedacted,
-			StartedAt:    result.StartedAt,
-			TimeoutMS:    result.Timeout.Milliseconds(),
+			Tool:            result.Tool,
+			ToolVersion:     result.ToolVersion,
+			ArgvRedacted:    result.ArgvRedacted,
+			StartedAt:       result.StartedAt,
+			TimeoutMS:       result.Timeout.Milliseconds(),
+			Profile:         result.Policy.Profile,
+			MaxRequests:     result.Policy.MaxRequests,
+			RateLimit:       result.Policy.RateLimit,
+			Concurrency:     result.Policy.Concurrency,
+			HealthURL:       result.Policy.HealthURL,
+			Max5xxResponses: result.Policy.Max5xxResponses,
 		},
 		Target:   result.Target,
 		Warnings: result.Warnings,
@@ -175,6 +181,12 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 		doneEvent.Failure = &dto.FailureInfo{
 			Code:      result.FailureCode,
 			Message:   terminalErr,
+			Retryable: result.TimedOut || result.Cancelled,
+		}
+	} else if result.FailureCode != "" {
+		doneEvent.Failure = &dto.FailureInfo{
+			Code:      result.FailureCode,
+			Message:   result.FailureCode,
 			Retryable: result.TimedOut || result.Cancelled,
 		}
 	}

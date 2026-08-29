@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -14,23 +13,23 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	provenance, err := resolveTargetProvenance(req, apiTokenFromContext(c), time.Now().UTC())
+	sqlmapPlan, err := tools.PrepareSQLMap(req)
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	plan, err := tools.PrepareSQLMap(req)
+	args := sqlmapPlan.Args()
+	scanPlan, err := prepareScanExecution(c, req, args)
 	if err != nil {
-		return badRequest(c, err.Error())
+		sqlmapPlan.Cleanup()
+		return scanPreparationError(c, err)
 	}
-	args := plan.Args()
 	execCtx, cancel := context.WithCancel(c.Context())
-	lines, done := executor.StreamExec(execCtx, commandTimeout(req.Timeout), args[0], args[1:]...)
+	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
 	done = annotateResult(done, func(result *executor.Result) {
-		count := plan.HTTPRequestCount()
+		count := sqlmapPlan.HTTPRequestCount()
 		result.HTTPRequests = &count
-		result.Target = provenance
-		result.Warnings = targetWarnings(req, provenance)
+		scanPlan.annotate(result)
 	})
 	release := retainExecutionLease(c)
-	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.Cleanup)
+	return sendToolStreamWithCancel(c, lines, done, cancel, release, scanPlan.release, sqlmapPlan.Cleanup)
 }

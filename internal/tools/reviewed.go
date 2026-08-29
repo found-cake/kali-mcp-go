@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
@@ -12,7 +13,7 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"ffuf", "-u", request.URL, "-w", wordlist, "-noninteractive", "-ac"}
+	args := []string{"ffuf", "-u", request.URL, "-w", wordlist, "-noninteractive", "-ac", "-s", "-json"}
 	if request.FilterSize != "" {
 		args = append(args, "-fs", request.FilterSize)
 	}
@@ -38,7 +39,10 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 }
 
 func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
-	args := []string{"nuclei", "-u", request.Target}
+	if err := validateNucleiSafety(request); err != nil {
+		return nil, err
+	}
+	args := []string{"nuclei", "-u", request.Target, "-jsonl"}
 	if !request.AllowUnsafe {
 		args = append(args, "-etags", "dos,fuzz", "-no-interactsh")
 	}
@@ -52,6 +56,35 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 		args = append(args, "-t", template)
 	}
 	return appendSplitArgs(args, request.AdditionalArgs, "additional_args")
+}
+
+func validateNucleiSafety(request dto.NucleiRequest) error {
+	if request.AllowUnsafe {
+		return nil
+	}
+	for _, selector := range append([]string{request.Tags}, request.Templates...) {
+		lower := strings.ToLower(selector)
+		if strings.Contains(lower, "dos") || strings.Contains(lower, "fuzz") || strings.Contains(lower, "interactsh") {
+			return fmt.Errorf("unsafe Nuclei selector requires allow_unsafe")
+		}
+	}
+	args, err := shellSplit(request.AdditionalArgs)
+	if err != nil {
+		return err
+	}
+	for index, arg := range args {
+		lower := strings.ToLower(arg)
+		if strings.Contains(lower, "interactsh") || lower == "-iserver" || lower == "-itoken" {
+			return fmt.Errorf("unsafe Nuclei argument %q requires allow_unsafe", arg)
+		}
+		if (lower == "-tags" || lower == "-include-tags" || lower == "-t") && index+1 < len(args) {
+			value := strings.ToLower(args[index+1])
+			if strings.Contains(value, "dos") || strings.Contains(value, "fuzz") {
+				return fmt.Errorf("unsafe Nuclei selector requires allow_unsafe")
+			}
+		}
+	}
+	return nil
 }
 
 func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {

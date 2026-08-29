@@ -30,11 +30,17 @@ type FailureInfo struct {
 }
 
 type ExecutionMetadata struct {
-	Tool         string    `json:"tool"`
-	ToolVersion  string    `json:"tool_version"`
-	ArgvRedacted []string  `json:"argv_redacted"`
-	StartedAt    time.Time `json:"started_at"`
-	TimeoutMS    int64     `json:"timeout_ms"`
+	Tool            string        `json:"tool"`
+	ToolVersion     string        `json:"tool_version"`
+	ArgvRedacted    []string      `json:"argv_redacted"`
+	StartedAt       time.Time     `json:"started_at"`
+	TimeoutMS       int64         `json:"timeout_ms"`
+	Profile         SafetyProfile `json:"profile"`
+	MaxRequests     int           `json:"max_requests"`
+	RateLimit       int           `json:"rate_limit"`
+	Concurrency     int           `json:"concurrency"`
+	HealthURL       string        `json:"health_url"`
+	Max5xxResponses int           `json:"max_5xx_responses"`
 }
 
 type ToolResult struct {

@@ -87,6 +87,8 @@ func main() {
 
 func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logPrinter) *fiber.App {
 	limiter := newExecutionLimiter(maxConcurrentExecutions)
+	weightedCapacity := max(maxConcurrentExecutions, 3)
+	scheduler := newTargetScheduler(weightedCapacity, 3)
 	app := fiber.New(fiber.Config{
 		ReadTimeout:  readTimeout,
 		WriteTimeout: 0,
@@ -95,6 +97,7 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	if debug {
 		app.Use(debugRequestLogMiddleware(print))
 	}
+	app.Use(targetSchedulerMiddleware(scheduler))
 
 	registerRoutes(app, apiToken, limiter)
 	return app

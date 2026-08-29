@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -167,23 +166,23 @@ func handleRetireStream(c fiber.Ctx) error {
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	provenance, err := resolveTargetProvenance(req, apiTokenFromContext(c), time.Now().UTC())
+	scanPlan, err := prepareScanExecution(c, req, []string{"retire"})
 	if err != nil {
+		return scanPreparationError(c, err)
+	}
+	retirePlan, err := tools.PrepareRetire(c.Context(), req)
+	if err != nil {
+		scanPlan.release()
 		return badRequest(c, err.Error())
 	}
-	plan, err := tools.PrepareRetire(c.Context(), req)
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	args := plan.Args()
+	scanPlan.args = retirePlan.Args()
 	execCtx, cancel := context.WithCancel(c.Context())
-	lines, done := executor.StreamExec(execCtx, commandTimeout(req.Timeout), args[0], args[1:]...)
+	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
 	done = annotateResult(done, func(result *executor.Result) {
-		result.Target = provenance
-		result.Warnings = targetWarnings(req, provenance)
+		scanPlan.annotate(result)
 	})
 	release := retainExecutionLease(c)
-	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.Cleanup)
+	return sendToolStreamWithCancel(c, lines, done, cancel, release, scanPlan.release, retirePlan.Cleanup)
 }
 
 func handleOSVStream(c fiber.Ctx) error {
