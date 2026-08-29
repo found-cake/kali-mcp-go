@@ -74,19 +74,11 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 
 func (p *SQLMapPlan) addSource(request dto.SQLMapRequest) error {
 	if request.URL != "" {
-		p.args = append(p.args, "-u", rewriteLoopbackTarget(request.URL))
+		p.args = append(p.args, "-u", request.URL)
 		return nil
 	}
 	if request.RawRequest != "" {
-		return p.writeRequest(rewriteRawRequestLoopback(request.RawRequest))
-	}
-	content, err := os.ReadFile(request.RequestFile)
-	if err != nil {
-		return fmt.Errorf("read request_file: %w", err)
-	}
-	rewritten := rewriteRawRequestLoopback(string(content))
-	if rewritten != string(content) {
-		return p.writeRequest(rewritten)
+		return p.writeRequest(request.RawRequest)
 	}
 	p.requestFile = request.RequestFile
 	p.args = append(p.args, "-r", request.RequestFile)

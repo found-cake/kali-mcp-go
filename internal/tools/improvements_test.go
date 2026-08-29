@@ -9,30 +9,18 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func TestNmapArgsTranslatesContainerLoopback(t *testing.T) {
-	t.Setenv(loopbackHostEnv, "192.0.2.1")
-
+func TestNmapArgsPreservesLoopbackTarget(t *testing.T) {
 	args, err := NmapArgs(dto.NmapRequest{Target: "127.0.0.1", ScanType: "-sT", AdditionalArgs: "-Pn"})
 	if err != nil {
 		t.Fatalf("build nmap args: %v", err)
 	}
-	want := []string{"nmap", "-sT", "-Pn", "192.0.2.1"}
+	want := []string{"nmap", "-sT", "-Pn", "127.0.0.1"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}
 }
 
-func TestRewriteLoopbackURLPreservesPort(t *testing.T) {
-	t.Setenv(loopbackHostEnv, "192.0.2.1")
-
-	if got := rewriteLoopbackTarget("http://127.0.0.1:3000/path"); got != "http://192.0.2.1:3000/path" {
-		t.Fatalf("expected translated URL with port, got %q", got)
-	}
-}
-
 func TestSQLMapPlanSupportsRawJSONRequestAndCountsTraffic(t *testing.T) {
-	t.Setenv(loopbackHostEnv, "192.0.2.1")
-
 	plan, err := PrepareSQLMap(dto.SQLMapRequest{
 		RawRequest:     "POST /api/login HTTP/1.1\r\nHost: 127.0.0.1:3000\r\nContent-Type: application/json\r\n\r\n{\"name\":\"admin*\"}",
 		Headers:        map[string]string{"Authorization": "Bearer secret"},
@@ -48,8 +36,8 @@ func TestSQLMapPlanSupportsRawJSONRequestAndCountsTraffic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read generated request: %v", err)
 	}
-	if !strings.Contains(string(requestBytes), "Host: 192.0.2.1:3000") {
-		t.Fatalf("expected translated raw Host header, got %q", requestBytes)
+	if !strings.Contains(string(requestBytes), "Host: 127.0.0.1:3000") {
+		t.Fatalf("expected original raw Host header, got %q", requestBytes)
 	}
 	args := strings.Join(plan.Args(), " ")
 	for _, required := range []string{"--ignore-stdin", "-r " + plan.requestFile, "--header Authorization: Bearer secret", "--ignore-code 401,500", "-p name", "-t " + plan.trafficFile} {

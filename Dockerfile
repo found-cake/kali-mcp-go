@@ -115,6 +115,4 @@ RUN set -eux; \
     retire --version; \
     whatweb --version
 
-ENV KALI_MCP_LOOPBACK_HOST=host.docker.internal
-
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

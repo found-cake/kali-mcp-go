@@ -49,7 +49,7 @@ func HydraArgs(r dto.HydraRequest) ([]string, error) {
 	} else {
 		args = append(args, "-P", r.PasswordFile)
 	}
-	args = append(args, rewriteLoopbackTarget(r.Target), r.Service)
+	args = append(args, r.Target, r.Service)
 	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
 }
 

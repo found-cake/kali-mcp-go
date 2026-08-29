@@ -28,7 +28,7 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(args, rewriteLoopbackTarget(r.Target)), nil
+	return append(args, r.Target), nil
 }
 
 func TsharkArgs(r dto.TsharkRequest) ([]string, error) {
@@ -78,5 +78,5 @@ func Enum4linuxArgs(r dto.Enum4linuxRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(args, rewriteLoopbackTarget(r.Target)), nil
+	return append(args, r.Target), nil
 }

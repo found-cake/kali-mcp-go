@@ -15,7 +15,7 @@ func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return appendSplitArgs([]string{"gobuster", mode, "-u", rewriteLoopbackTarget(r.URL), "-w", wordlist}, r.AdditionalArgs, "additional_args")
+	return appendSplitArgs([]string{"gobuster", mode, "-u", r.URL, "-w", wordlist}, r.AdditionalArgs, "additional_args")
 }
 
 func DirbArgs(r dto.DirbRequest) ([]string, error) {
@@ -23,11 +23,11 @@ func DirbArgs(r dto.DirbRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return appendSplitArgs([]string{"dirb", rewriteLoopbackTarget(r.URL), wordlist}, r.AdditionalArgs, "additional_args")
+	return appendSplitArgs([]string{"dirb", r.URL, wordlist}, r.AdditionalArgs, "additional_args")
 }
 
 func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
-	args := []string{"nikto", "-h", rewriteLoopbackTarget(r.Target), "-nocheck", "-nointeractive"}
+	args := []string{"nikto", "-h", r.Target, "-nocheck", "-nointeractive"}
 	if r.PauseSeconds > 0 {
 		args = append(args, "-Pause", strconv.FormatFloat(r.PauseSeconds, 'f', -1, 64))
 	}
@@ -41,5 +41,5 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 }
 
 func WPScanArgs(r dto.WPScanRequest) ([]string, error) {
-	return appendSplitArgs([]string{"wpscan", "--url", rewriteLoopbackTarget(r.URL)}, r.AdditionalArgs, "additional_args")
+	return appendSplitArgs([]string{"wpscan", "--url", r.URL}, r.AdditionalArgs, "additional_args")
 }

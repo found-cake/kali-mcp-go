@@ -42,7 +42,7 @@ func PrepareRetire(ctx context.Context, request dto.RetireRequest) (*RetirePlan,
 		return nil, fmt.Errorf("create retire workspace: %w", err)
 	}
 	plan := &RetirePlan{tempDir: tempDir}
-	if err := downloadPageScripts(ctx, rewriteLoopbackTarget(request.URL), tempDir); err != nil {
+	if err := downloadPageScripts(ctx, request.URL, tempDir); err != nil {
 		plan.Cleanup()
 		return nil, err
 	}

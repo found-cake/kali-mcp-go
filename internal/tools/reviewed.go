@@ -12,7 +12,7 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"ffuf", "-u", rewriteLoopbackTarget(request.URL), "-w", wordlist, "-noninteractive", "-ac"}
+	args := []string{"ffuf", "-u", request.URL, "-w", wordlist, "-noninteractive", "-ac"}
 	if request.FilterSize != "" {
 		args = append(args, "-fs", request.FilterSize)
 	}
@@ -27,7 +27,7 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"feroxbuster", "--url", rewriteLoopbackTarget(request.URL), "--wordlist", wordlist, "--auto-tune"}
+	args := []string{"feroxbuster", "--url", request.URL, "--wordlist", wordlist, "--auto-tune"}
 	if request.FilterSize != "" {
 		args = append(args, "--filter-size", request.FilterSize)
 	}
@@ -38,7 +38,7 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 }
 
 func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
-	args := []string{"nuclei", "-u", rewriteLoopbackTarget(request.Target)}
+	args := []string{"nuclei", "-u", request.Target}
 	if !request.AllowUnsafe {
 		args = append(args, "-etags", "dos,fuzz", "-no-interactsh")
 	}
@@ -63,13 +63,13 @@ func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(args, rewriteLoopbackTarget(request.Target)), nil
+	return append(args, request.Target), nil
 }
 
 func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 	args := []string{"jwt_tool", request.Token}
 	if request.TargetURL != "" {
-		args = append(args, "-t", rewriteLoopbackTarget(request.TargetURL))
+		args = append(args, "-t", request.TargetURL)
 	}
 	if request.RequestHeader != "" {
 		args = append(args, "-rh", request.RequestHeader)
@@ -97,12 +97,12 @@ func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 }
 
 func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
-	args := []string{"dalfox", "scan", rewriteLoopbackTarget(request.Target), "--format", "json", "--no-color"}
+	args := []string{"dalfox", "scan", request.Target, "--format", "json", "--no-color"}
 	return appendSplitArgs(args, request.AdditionalArgs, "additional_args")
 }
 
 func BrowserArgs(request dto.BrowserRequest) ([]string, error) {
-	args := []string{"browser-check", "--url", rewriteLoopbackTarget(request.URL)}
+	args := []string{"browser-check", "--url", request.URL}
 	if request.WaitMilliseconds > 0 {
 		args = append(args, "--wait-ms", strconv.Itoa(request.WaitMilliseconds))
 	}
