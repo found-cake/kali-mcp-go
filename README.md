@@ -50,7 +50,9 @@ The rewrite was motivated by running into real bottlenecks when spinning up mult
 | `mcp-client` host | Linux, Windows, or macOS |
 | Build from source | Go 1.27+ |
 
-Required tools: `nmap`, `gobuster`, `dirb`, `nikto`, `tshark`, `sqlmap`, `msfconsole`, `hydra`, `john`, `wpscan`, `enum4linux`
+Core tools: `nmap`, `gobuster`, `dirb`, `nikto`, `tshark`, `sqlmap`, `msfconsole`, `hydra`, `john`, `wpscan`, `enum4linux`
+
+The Docker image also includes `ffuf`, `feroxbuster`, `nuclei`, `whatweb`, `jwt_tool`, `dalfox`, Playwright with Chromium, `retire`, `osv-scanner`, `jq`, Node.js, and npm.
 
 ---
 
@@ -274,7 +276,11 @@ To use a fixed token instead of the generated one, pass it explicitly with `-e K
 
 The `latest` and versioned images are built from Kali's last release when a project release tag is published. The `rolling` image is rebuilt from Kali Rolling every two weeks and whenever a project release tag is published. `--pull=always` checks the registry whenever the MCP server starts, but Docker downloads image layers only when the published digest has changed. Use a version tag such as `:v1.2.3` and omit `--pull=always` if you prefer a fixed image.
 
-The container uses Docker's default network. For Linux host networking, localhost targets, or packet capture, add `--network host --cap-add NET_ADMIN --cap-add NET_RAW` when your Docker environment supports it. Mount host files explicitly when a tool needs them, for example `-v "$PWD:/workspace:ro"`, and use the resulting `/workspace/...` path in the tool request.
+The container uses Docker's default network. In Docker mode, loopback targets such as `127.0.0.1`, `localhost`, and `[::1]` are automatically translated to the host-side IPv4 address. Set `KALI_MCP_LOOPBACK_HOST` to override the host alias, or set it to an empty value when you intentionally need to target the Kali container itself. On Linux, persistent containers that bypass the bundled entrypoint may also need `--add-host host.docker.internal:host-gateway`.
+
+Nmap's packaged file capability is removed during image construction because Docker rejects execution when that capability exceeds the container bounding set. TCP connect scans such as `-sT -Pn` work with Docker's default capabilities. Add `--cap-add NET_RAW --cap-add NET_ADMIN` only when a scan that actually opens raw sockets requires them. For troubleshooting, check the Nmap binary permissions and file capabilities, mount options, and seccomp/AppArmor policy before adding capabilities.
+
+Mount host files explicitly when a tool needs them, for example `-v "$PWD:/workspace:ro"`, and use the resulting `/workspace/...` path in the tool request.
 
 > **Security:** The image intentionally includes `execute_command` and runs Kali tools inside the container. The generated token protects the container's internal API but does not restrict what the container can reach. Restrict its network access where practical, and only test systems you own or have explicit written permission to assess.
 
@@ -410,6 +416,7 @@ Notes:
 | `KALI_MCP_API_TOKEN` | both | Bearer token for API authentication; required for separate processes, optional in Docker mode because the entrypoint generates one when omitted |
 | `KALI_MCP_DIR_WORDLIST` | kali-server | Override default dir wordlist (default: `/usr/share/wordlists/dirb/common.txt`) |
 | `KALI_MCP_JOHN_WORDLIST` | kali-server | Override default John wordlist (default: `/usr/share/wordlists/rockyou.txt`) |
+| `KALI_MCP_LOOPBACK_HOST` | kali-server | Host alias or IPv4 address used to translate container loopback targets (Docker default: `host.docker.internal`) |
 
 > `ReadTimeout` is enforced for incoming request bodies, while streaming responses remain unrestricted by `WriteTimeout`.
 
@@ -422,7 +429,7 @@ Notes:
 | `server_health` | Check server status and tool availability |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
-| `gobuster_scan` | Directory / DNS / vhost brute-force (POST result) |
+| `gobuster_scan` | Directory / DNS / vhost brute-force (SSE streaming) |
 | `dirb_scan` | Web content scanner (SSE streaming) |
 | `nikto_scan` | Web server vulnerability scanner (SSE streaming) |
 | `tshark_capture` | Packet capture and analysis (SSE streaming) |
@@ -433,6 +440,15 @@ Notes:
 | `john_crack` | Password hash cracker |
 | `wpscan_analyze` | WordPress vulnerability scanner (SSE streaming) |
 | `enum4linux_scan` | Windows / Samba enumeration (SSE streaming) |
+| `ffuf_scan` | Web content discovery with automatic calibration, size filtering, and optional recursion |
+| `feroxbuster_scan` | Recursive web content discovery with automatic tuning |
+| `nuclei_scan` | Nuclei scan; DoS, fuzz, and OAST templates are excluded unless explicitly enabled |
+| `whatweb_scan` | Web technology and framework fingerprinting |
+| `jwt_analyze` | JWT decoding and optional live playbook/forced-error/all-tests assessment |
+| `dalfox_scan` | XSS candidate scanning with JSON findings |
+| `browser_check` | Headless Chromium verification of dialogs, console output, page errors, and optional rendered DOM |
+| `retirejs_scan` | Vulnerable JavaScript dependency scan from a local path or public bundles downloaded from a page URL |
+| `osv_scan` | OSV dependency scan for mounted source trees and lockfiles |
 
 ### SSE support summary
 
@@ -440,12 +456,22 @@ These MCP tools now stream incremental output over SSE instead of waiting for a 
 
 - `execute_command`
 - `nmap_scan`
+- `gobuster_scan`
 - `dirb_scan`
 - `nikto_scan`
 - `wpscan_analyze`
 - `enum4linux_scan`
 - `sqlmap_scan`
 - `tshark_capture`
+- `ffuf_scan`
+- `feroxbuster_scan`
+- `nuclei_scan`
+- `whatweb_scan`
+- `jwt_analyze`
+- `dalfox_scan`
+- `browser_check`
+- `retirejs_scan`
+- `osv_scan`
 
 Streaming requests support an optional `timeout` field (seconds) to override the default 300-second request limit for that specific run. For `tshark_capture`, this request `timeout` is distinct from the capture `duration` field.
 
@@ -457,10 +483,31 @@ Quiet streams may also emit lightweight heartbeat SSE events to keep the connect
 
 These tools still use a normal POST request/response flow:
 
-- `gobuster_scan`
 - `metasploit_run`
 - `john_crack`
 - `server_health`
+
+### Structured results
+
+Every tool exposes an MCP output schema and returns both readable text and structured content. The structured result separates:
+
+- `execution_status`: `succeeded`, `failed`, or `timed_out`
+- `finding_status`: `detected`, `not_detected`, or `unknown`
+- exit code, timeout, and partial-result state
+- target translation warnings
+- `http_requests` for SQLmap traffic captured during the run
+
+Tool process failures and timeouts set MCP `isError`; a successful scan with no finding does not.
+
+### SQLmap JSON and raw requests
+
+`sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
+
+### Scan load and artifacts
+
+Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. FFUF enables automatic calibration by default for SPA wildcard responses; use `filter_size` when a stable fallback length is known.
+
+John accepts either `hash_file` or an inline `hash`. Inline hashes and John state live under a temporary HOME that is deleted after the run. Set `mask_plaintext` to redact recovered plaintext from returned output. JWT Tool likewise starts from a clean temporary HOME seeded with its packaged configuration, then removes that workspace after each call.
 
 ### Choosing between `hydra_attack` and `hydra_attack_stream`
 
