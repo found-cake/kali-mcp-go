@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -38,23 +39,43 @@ func allEssentialToolsAvailable(status map[string]bool) bool {
 }
 
 func toAPIResult(r *executor.Result) dto.ToolResult {
-	return dto.ToolResult{
+	result := dto.ToolResult{
 		Stdout:          r.Stdout,
 		Stderr:          r.Stderr,
 		ReturnCode:      r.ReturnCode,
-		Success:         r.Success(),
 		TimedOut:        r.TimedOut,
+		Cancelled:       r.Cancelled,
 		PartialResults:  r.TimedOut && (r.Stdout != "" || r.Stderr != ""),
 		ExecutionStatus: executionStatus(r),
 		FindingStatus:   dto.FindingsUnknown,
 		HTTPRequests:    r.HTTPRequests,
-		Warnings:        r.Warnings,
+		DurationMS:      r.Duration.Milliseconds(),
+		Execution: dto.ExecutionMetadata{
+			Tool:         r.Tool,
+			ToolVersion:  r.ToolVersion,
+			ArgvRedacted: r.ArgvRedacted,
+			StartedAt:    r.StartedAt,
+			TimeoutMS:    r.Timeout.Milliseconds(),
+		},
+		Warnings: r.Warnings,
 	}
+	if result.ExecutionStatus != dto.ExecutionSucceeded {
+		result.Failure = &dto.FailureInfo{
+			Code:      r.FailureCode,
+			Message:   strings.TrimSpace(r.Stderr),
+			Retryable: r.TimedOut || r.Cancelled,
+		}
+	}
+	result.Finalize()
+	return result
 }
 
 func executionStatus(r *executor.Result) dto.ExecutionStatus {
 	if r.TimedOut {
 		return dto.ExecutionTimedOut
+	}
+	if r.Cancelled {
+		return dto.ExecutionCancelled
 	}
 	if r.ReturnCode != 0 {
 		return dto.ExecutionFailed

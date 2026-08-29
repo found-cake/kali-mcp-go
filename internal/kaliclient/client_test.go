@@ -190,11 +190,14 @@ func TestStreamMarksPartialTimedOutResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if !res.Success {
-		t.Fatalf("expected success=true for partial timed out result")
+	if res.Success {
+		t.Fatalf("expected success=false for partial timed out result")
 	}
 	if !res.PartialResults {
 		t.Fatalf("expected partial_results=true")
+	}
+	if res.ExecutionStatus != dto.ExecutionTimedOut {
+		t.Fatalf("expected timed_out execution status, got %q", res.ExecutionStatus)
 	}
 }
 

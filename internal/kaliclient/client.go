@@ -136,9 +136,13 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		stderrLines  []string
 		returnCode   int
 		timedOut     bool
+		cancelled    bool
 		done         bool
 		finalError   string
-		httpRequests int
+		httpRequests *int
+		durationMS   int64
+		failure      *dto.FailureInfo
+		execution    dto.ExecutionMetadata
 		warnings     []string
 	)
 
@@ -166,8 +170,12 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 			}
 			returnCode = *ev.ReturnCode
 			timedOut = ev.TimedOut
+			cancelled = ev.Cancelled
 			finalError = ev.Error
 			httpRequests = ev.HTTPRequests
+			durationMS = ev.DurationMS
+			failure = ev.Failure
+			execution = ev.Execution
 			warnings = append(warnings, ev.Warnings...)
 			done = true
 			break
@@ -200,21 +208,27 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		Stdout:         join(stdoutLines),
 		Stderr:         join(stderrLines),
 		ReturnCode:     returnCode,
-		Success:        (!timedOut && returnCode == 0) || (timedOut && (len(stdoutLines) > 0 || len(stderrLines) > 0)),
 		TimedOut:       timedOut,
-		PartialResults: timedOut && (len(stdoutLines) > 0 || len(stderrLines) > 0),
+		Cancelled:      cancelled,
+		PartialResults: (timedOut || cancelled) && (len(stdoutLines) > 0 || len(stderrLines) > 0),
 		HTTPRequests:   httpRequests,
+		DurationMS:     durationMS,
+		Failure:        failure,
+		Execution:      execution,
 		Warnings:       warnings,
 		FindingStatus:  dto.FindingsUnknown,
 	}
 	switch {
 	case timedOut:
 		result.ExecutionStatus = dto.ExecutionTimedOut
+	case cancelled:
+		result.ExecutionStatus = dto.ExecutionCancelled
 	case returnCode != 0:
 		result.ExecutionStatus = dto.ExecutionFailed
 	default:
 		result.ExecutionStatus = dto.ExecutionSucceeded
 	}
+	result.Finalize()
 	return result, nil
 }
 

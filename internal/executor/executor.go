@@ -20,15 +20,20 @@ type Result struct {
 	Stderr       string
 	ReturnCode   int
 	TimedOut     bool
-	HTTPRequests int
+	Cancelled    bool
+	HTTPRequests *int
 	Warnings     []string
+	StartedAt    time.Time
+	Duration     time.Duration
+	FailureCode  string
+	Tool         string
+	ToolVersion  string
+	ArgvRedacted []string
+	Timeout      time.Duration
 }
 
 func (r *Result) Success() bool {
-	if r.TimedOut {
-		return r.Stdout != "" || r.Stderr != ""
-	}
-	return r.ReturnCode == 0
+	return !r.TimedOut && !r.Cancelled && r.ReturnCode == 0
 }
 
 type Line struct {
@@ -82,6 +87,18 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	if timeout <= 0 {
 		timeout = dto.DefaultTimeout
 	}
+	startedAt := time.Now().UTC()
+	result := &Result{
+		ReturnCode:   -1,
+		StartedAt:    startedAt,
+		Tool:         cmdSpec.name,
+		ToolVersion:  toolVersion(ctx, cmdSpec.name),
+		ArgvRedacted: redactArgs(cmdSpec.name, cmdSpec.args),
+		Timeout:      timeout,
+	}
+	defer func() {
+		result.Duration = time.Since(startedAt)
+	}()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -89,18 +106,32 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return &Result{Stderr: fmt.Sprintf("stdout pipe: %v", err), ReturnCode: -1}
+		result.Stderr = fmt.Sprintf("stdout pipe: %v", err)
+		result.FailureCode = "process_setup_failed"
+		return result
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		_ = stdoutPipe.Close()
-		return &Result{Stderr: fmt.Sprintf("stderr pipe: %v", err), ReturnCode: -1}
+		result.Stderr = fmt.Sprintf("stderr pipe: %v", err)
+		result.FailureCode = "process_setup_failed"
+		return result
 	}
 
 	if err := cmd.Start(); err != nil {
 		_ = stdoutPipe.Close()
 		_ = stderrPipe.Close()
-		return &Result{Stderr: fmt.Sprintf("start: %v", err), ReturnCode: -1}
+		result.Stderr = fmt.Sprintf("start: %v", err)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			result.Cancelled = true
+			result.FailureCode = "cancelled"
+		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			result.TimedOut = true
+			result.FailureCode = "timed_out"
+		} else {
+			result.FailureCode = "process_start_failed"
+		}
+		return result
 	}
 
 	cancelPipeClose := closePipesOnCancel(ctx, stdoutPipe, stderrPipe)
@@ -136,6 +167,7 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 
 	waitErr := cmd.Wait()
 	timedOut := ctx.Err() == context.DeadlineExceeded
+	cancelled := ctx.Err() == context.Canceled
 
 	rc := 0
 	if cmd.ProcessState != nil {
@@ -143,6 +175,10 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	if timedOut {
 		rc = -1
+		result.FailureCode = "timed_out"
+	} else if cancelled {
+		rc = -1
+		result.FailureCode = "cancelled"
 	}
 	if waitErr != nil && !timedOut {
 		var exitErr *exec.ExitError
@@ -167,14 +203,17 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	if scanFailed && rc == 0 {
 		rc = -1
+		result.FailureCode = "output_read_failed"
 	}
-
-	return &Result{
-		Stdout:     stdout.String(),
-		Stderr:     stderr.String(),
-		ReturnCode: rc,
-		TimedOut:   timedOut,
+	if rc != 0 && result.FailureCode == "" {
+		result.FailureCode = "nonzero_exit"
 	}
+	result.Stdout = stdout.String()
+	result.Stderr = stderr.String()
+	result.ReturnCode = rc
+	result.TimedOut = timedOut
+	result.Cancelled = cancelled
+	return result
 }
 
 func newScanner(r io.Reader) *bufio.Scanner {

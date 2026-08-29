@@ -1,6 +1,9 @@
 package dto
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 type ExecutionStatus string
 
@@ -8,6 +11,7 @@ const (
 	ExecutionSucceeded ExecutionStatus = "succeeded"
 	ExecutionFailed    ExecutionStatus = "failed"
 	ExecutionTimedOut  ExecutionStatus = "timed_out"
+	ExecutionCancelled ExecutionStatus = "cancelled"
 )
 
 type FindingStatus string
@@ -18,17 +22,45 @@ const (
 	FindingsUnknown     FindingStatus = "unknown"
 )
 
+type FailureInfo struct {
+	Code            string `json:"code"`
+	Message         string `json:"message"`
+	Retryable       bool   `json:"retryable"`
+	ResumeSupported bool   `json:"resume_supported"`
+}
+
+type ExecutionMetadata struct {
+	Tool         string    `json:"tool"`
+	ToolVersion  string    `json:"tool_version"`
+	ArgvRedacted []string  `json:"argv_redacted"`
+	StartedAt    time.Time `json:"started_at"`
+	TimeoutMS    int64     `json:"timeout_ms"`
+}
+
 type ToolResult struct {
-	Stdout          string          `json:"stdout"`
-	Stderr          string          `json:"stderr"`
-	ReturnCode      int             `json:"return_code"`
-	Success         bool            `json:"success"`
-	TimedOut        bool            `json:"timed_out"`
-	PartialResults  bool            `json:"partial_results,omitempty"`
-	ExecutionStatus ExecutionStatus `json:"execution_status"`
-	FindingStatus   FindingStatus   `json:"finding_status"`
-	HTTPRequests    int             `json:"http_requests,omitempty"`
-	Warnings        []string        `json:"warnings,omitempty"`
+	Stdout          string            `json:"stdout"`
+	Stderr          string            `json:"stderr"`
+	ReturnCode      int               `json:"return_code"`
+	Success         bool              `json:"success"`
+	TimedOut        bool              `json:"timed_out"`
+	Cancelled       bool              `json:"cancelled"`
+	PartialResults  bool              `json:"partial_results"`
+	ExecutionStatus ExecutionStatus   `json:"execution_status"`
+	FindingStatus   FindingStatus     `json:"finding_status"`
+	HTTPRequests    *int              `json:"http_requests"`
+	DurationMS      int64             `json:"duration_ms"`
+	Failure         *FailureInfo      `json:"failure"`
+	Execution       ExecutionMetadata `json:"execution"`
+	Warnings        []string          `json:"warnings,omitempty"`
+}
+
+func (r *ToolResult) Finalize() {
+	r.Success = r.ExecutionStatus == ExecutionSucceeded
+	r.TimedOut = r.ExecutionStatus == ExecutionTimedOut
+	r.Cancelled = r.ExecutionStatus == ExecutionCancelled
+	if r.Success {
+		r.Failure = nil
+	}
 }
 
 func (r *ToolResult) Format() string {

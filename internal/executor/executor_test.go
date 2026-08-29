@@ -127,6 +127,12 @@ func TestStreamShellStopsPromptlyAfterCancel(t *testing.T) {
 		if res == nil {
 			t.Fatal("expected non-nil result")
 		}
+		if !res.Cancelled || res.TimedOut {
+			t.Fatalf("expected cancellation without timeout, got %+v", res)
+		}
+		if res.Duration <= 0 || res.StartedAt.IsZero() {
+			t.Fatalf("expected execution timing metadata, got %+v", res)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected canceled stream to finish promptly")
 	}

@@ -21,6 +21,7 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	}
 	result.FindingStatus = dto.FindingsUnknown
 	if result.ExecutionStatus != dto.ExecutionSucceeded {
+		finalizeClassifiedResult(&result)
 		return result
 	}
 	output := strings.ToLower(result.Stdout + "\n" + result.Stderr)
@@ -98,7 +99,31 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 			result.FindingStatus = dto.FindingsDetected
 		}
 	}
+	finalizeClassifiedResult(&result)
 	return result
+}
+
+func finalizeClassifiedResult(result *dto.ToolResult) {
+	if result.ExecutionStatus != dto.ExecutionSucceeded && result.Failure == nil {
+		code := "nonzero_exit"
+		retryable := false
+		switch result.ExecutionStatus {
+		case dto.ExecutionTimedOut:
+			code = "timed_out"
+			retryable = true
+		case dto.ExecutionCancelled:
+			code = "cancelled"
+			retryable = true
+		case dto.ExecutionFailed:
+		default:
+		}
+		message := strings.TrimSpace(result.Stderr)
+		if message == "" {
+			message = strings.TrimSpace(result.Stdout)
+		}
+		result.Failure = &dto.FailureInfo{Code: code, Message: message, Retryable: retryable}
+	}
+	result.Finalize()
 }
 
 func osvFindingStatus(stdout string) dto.FindingStatus {

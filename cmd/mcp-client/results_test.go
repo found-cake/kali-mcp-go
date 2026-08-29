@@ -32,6 +32,12 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 			if got.ExecutionStatus != test.exec || got.FindingStatus != test.find {
 				t.Fatalf("classification mismatch: %+v", got)
 			}
+			if got.Success != (got.ExecutionStatus == dto.ExecutionSucceeded) {
+				t.Fatalf("success disagrees with execution status: %+v", got)
+			}
+			if got.ExecutionStatus != dto.ExecutionSucceeded && got.Failure == nil {
+				t.Fatalf("expected structured failure metadata: %+v", got)
+			}
 		})
 	}
 }

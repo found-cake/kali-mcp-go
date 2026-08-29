@@ -115,26 +115,6 @@ func handleEnum4linuxStream(c fiber.Ctx) error {
 	return runToolStream(c, validateEnum4linuxRequest, tools.Enum4linuxArgs)
 }
 
-func handleSQLMapStream(c fiber.Ctx) error {
-	req, err := parseRequest(c, validateSQLMapRequest)
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	plan, err := tools.PrepareSQLMap(req)
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	args := plan.Args()
-	execCtx, cancel := context.WithCancel(c.Context())
-	lines, done := executor.StreamExec(execCtx, commandTimeout(req.Timeout), args[0], args[1:]...)
-	done = annotateResult(done, func(result *executor.Result) {
-		result.HTTPRequests = plan.HTTPRequestCount()
-		result.Warnings = tools.TargetWarnings(req)
-	})
-	release := retainExecutionLease(c)
-	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.Cleanup)
-}
-
 func handleTsharkStream(c fiber.Ctx) error {
 	return runToolStream(c, validateTsharkRequest, tools.TsharkArgs)
 }

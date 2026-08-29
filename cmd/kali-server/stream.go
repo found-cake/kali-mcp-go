@@ -157,11 +157,25 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 		Done:         true,
 		ReturnCode:   &returnCode,
 		TimedOut:     result.TimedOut,
+		Cancelled:    result.Cancelled,
 		HTTPRequests: result.HTTPRequests,
-		Warnings:     result.Warnings,
+		DurationMS:   result.Duration.Milliseconds(),
+		Execution: dto.ExecutionMetadata{
+			Tool:         result.Tool,
+			ToolVersion:  result.ToolVersion,
+			ArgvRedacted: result.ArgvRedacted,
+			StartedAt:    result.StartedAt,
+			TimeoutMS:    result.Timeout.Milliseconds(),
+		},
+		Warnings: result.Warnings,
 	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr
+		doneEvent.Failure = &dto.FailureInfo{
+			Code:      result.FailureCode,
+			Message:   terminalErr,
+			Retryable: result.TimedOut || result.Cancelled,
+		}
 	}
 	payload, err := json.Marshal(doneEvent)
 	if err != nil {
