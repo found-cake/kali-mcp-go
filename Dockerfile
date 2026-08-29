@@ -1,6 +1,6 @@
 ARG KALI_BASE_IMAGE=kalilinux/kali-last-release
 
-FROM golang:1.27-bookworm AS build
+FROM golang:bookworm AS build
 
 WORKDIR /src
 
