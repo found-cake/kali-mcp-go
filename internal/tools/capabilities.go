@@ -24,6 +24,7 @@ var scanToolCapabilities = []dto.ScanToolCapability{
 	{Tool: "dalfox_scan", RuntimeTool: "dalfox", TargetInputFormat: dto.TargetInputURLOrFile, Profiles: []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm}, SupportedControls: []dto.ScanControl{dto.ScanControlConcurrency}},
 	{Tool: "browser_check", RuntimeTool: "browser-check", TargetInputFormat: dto.TargetInputWebURL, Profiles: []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm}},
 	{Tool: "retirejs_scan", RuntimeTool: "retire", TargetInputFormat: dto.TargetInputURLOrFile},
+	{Tool: "http_request", RuntimeTool: "http-request", TargetInputFormat: dto.TargetInputWebURL, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon}},
 }
 
 var orderedProfiles = []dto.SafetyProfile{

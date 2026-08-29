@@ -1,5 +1,7 @@
 package dto
 
+import "encoding/json"
+
 type TimeoutRequest interface {
 	GetRequestTimeout() int
 }
@@ -236,3 +238,17 @@ type OSVRequest struct {
 }
 
 func (r OSVRequest) GetRequestTimeout() int { return r.Timeout }
+
+type HTTPRequest struct {
+	ScanOptions
+	URL              string            `json:"url,omitempty" jsonschema:"HTTP or HTTPS URL; omit when target_context is supplied"`
+	Method           string            `json:"method,omitempty" jsonschema:"GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS (default GET)"`
+	Headers          map[string]string `json:"headers,omitempty" jsonschema:"request headers; Authorization and Cookie values are automatically redacted"`
+	Body             string            `json:"body,omitempty" jsonschema:"raw request body; mutually exclusive with json_body"`
+	JSONBody         json.RawMessage   `json:"json_body,omitempty" jsonschema:"JSON request body; mutually exclusive with body"`
+	FollowRedirects  bool              `json:"follow_redirects,omitempty" jsonschema:"follow at most five same-origin redirects"`
+	MaxResponseBytes int               `json:"max_response_bytes,omitempty" jsonschema:"maximum response body bytes to retain (default 1048576, maximum 4194304)"`
+	Timeout          int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds (default 30, maximum 300)"`
+}
+
+func (r HTTPRequest) GetRequestTimeout() int { return r.Timeout }

@@ -36,6 +36,7 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	foundAssessmentStarter := false
 	foundResolver := false
 	foundCapabilities := false
+	foundHTTPRequest := false
 	for _, tool := range listed.Tools {
 		if tool.Name == "start_blackbox_assessment" {
 			foundAssessmentStarter = true
@@ -45,6 +46,14 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 		}
 		if tool.Name == "get_scan_capabilities" {
 			foundCapabilities = true
+		}
+		if tool.Name == "http_request" {
+			foundHTTPRequest = true
+			properties, _ := schemaProperties(tool.InputSchema)
+			jsonBody, _ := properties["json_body"].(map[string]any)
+			if jsonBody["type"] == "array" {
+				t.Fatal("http_request json_body must accept arbitrary JSON rather than a byte array")
+			}
 		}
 		schema, ok := tool.InputSchema.(map[string]any)
 		if !ok {
@@ -69,9 +78,21 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	if !foundCapabilities {
 		t.Fatal("get_scan_capabilities tool is missing")
 	}
+	if !foundHTTPRequest {
+		t.Fatal("http_request tool is missing")
+	}
 	if foundAssessmentStarter {
 		t.Fatal("start_blackbox_assessment duplicates dedicated MCP tools")
 	}
+}
+
+func schemaProperties(schema any) (map[string]any, bool) {
+	object, ok := schema.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	properties, ok := object["properties"].(map[string]any)
+	return properties, ok
 }
 
 func TestMCPToolsDoNotExposeServerSideCredentialSessions(t *testing.T) {

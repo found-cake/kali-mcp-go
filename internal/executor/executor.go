@@ -35,6 +35,7 @@ type Result struct {
 	SPABaseline       *dto.SPABaseline
 	FalsePositiveRisk string
 	Artifacts         []dto.ArtifactRef
+	HTTPResponse      *dto.HTTPResponseMetadata
 }
 
 func (r *Result) Success() bool {

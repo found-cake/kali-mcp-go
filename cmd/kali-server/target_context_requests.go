@@ -67,6 +67,8 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 		return setWebTarget(&value.URL, claims.BrowserTarget)
 	case *dto.RetireRequest:
 		return setWebTarget(&value.URL, claims.BrowserTarget)
+	case *dto.HTTPRequest:
+		return setWebTarget(&value.URL, claims.BrowserTarget)
 	default:
 		return fmt.Errorf("target_context is not supported for this request")
 	}

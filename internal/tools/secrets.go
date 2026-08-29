@@ -3,6 +3,7 @@ package tools
 import (
 	"cmp"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -43,8 +44,28 @@ func RequestSecrets(request any) []string {
 		secrets = append(secrets, value.RedactValues...)
 	case dto.JWTRequest:
 		secrets = append(secrets, value.Token, value.RequestHeader, value.RequestCookie)
+	case dto.HTTPRequest:
+		for name, header := range value.Headers {
+			if sensitiveName(name) {
+				secrets = append(secrets, header)
+			}
+		}
 	}
 	return normalizedSecrets(secrets)
+}
+
+func RedactHeaders(headers http.Header, secrets []string) http.Header {
+	redacted := headers.Clone()
+	for name, values := range redacted {
+		if sensitiveName(name) {
+			redacted[name] = []string{"[REDACTED]"}
+			continue
+		}
+		for index := range values {
+			values[index] = RedactText(values[index], secrets)
+		}
+	}
+	return redacted
 }
 
 func RedactText(value string, secrets []string) string {

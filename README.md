@@ -433,6 +433,7 @@ Notes:
 | `get_scan_capabilities` | Inspect profile compatibility, target formats, supported controls, and effective default wordlists |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
 | `result_artifact_read` | Read a bearer-protected JSON result retained for one hour after a scan |
+| `http_request` | Send one bounded HTTP request with structured status, headers, body preview, provenance, and artifact output |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
 | `gobuster_scan` | Directory / DNS / vhost brute-force (SSE streaming) |
@@ -544,6 +545,10 @@ The MCP server instructions and tool descriptions identify authorized black-box 
 ### SQLmap JSON and raw requests
 
 `sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
+
+### Bounded manual HTTP requests
+
+Use `http_request` instead of `execute_command` with curl for one-off validation. It accepts HTTP(S) only, one request per call, an optional arbitrary `json_body`, bounded raw bodies and responses, a maximum 300-second timeout, and at most five same-origin redirects. Loopback targets require a selected `target_context` or the legacy explicit URL plus receipt. Authorization, Cookie, and Set-Cookie values are masked before inline output or artifact storage.
 
 ### Scan load, SPA baselines, and artifacts
 

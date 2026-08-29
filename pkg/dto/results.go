@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -66,29 +67,40 @@ type ExecutionMetadata struct {
 	Max5xxResponses int           `json:"max_5xx_responses"`
 }
 
+type HTTPResponseMetadata struct {
+	StatusCode    int         `json:"status_code"`
+	Headers       http.Header `json:"headers"`
+	FinalURL      string      `json:"final_url"`
+	ContentLength int64       `json:"content_length"`
+	BodyBytes     int         `json:"body_bytes"`
+	BodyEncoding  string      `json:"body_encoding"`
+	BodyTruncated bool        `json:"body_truncated"`
+}
+
 type ToolResult struct {
-	Stdout            string            `json:"stdout"`
-	Stderr            string            `json:"stderr"`
-	StdoutBytes       int               `json:"stdout_bytes"`
-	StderrBytes       int               `json:"stderr_bytes"`
-	OutputTruncated   bool              `json:"output_truncated"`
-	ReturnCode        int               `json:"return_code"`
-	Success           bool              `json:"success"`
-	TimedOut          bool              `json:"timed_out"`
-	Cancelled         bool              `json:"cancelled"`
-	PartialResults    bool              `json:"partial_results"`
-	Status            RunStatus         `json:"status"`
-	ExecutionStatus   ExecutionStatus   `json:"execution_status"`
-	FindingStatus     FindingStatus     `json:"finding_status"`
-	HTTPRequests      *int              `json:"http_requests"`
-	DurationMS        int64             `json:"duration_ms"`
-	Failure           *FailureInfo      `json:"failure"`
-	Execution         ExecutionMetadata `json:"execution"`
-	Target            *TargetProvenance `json:"target"`
-	SPABaseline       *SPABaseline      `json:"spa_baseline"`
-	FalsePositiveRisk string            `json:"false_positive_risk"`
-	Warnings          []string          `json:"warnings,omitempty"`
-	Artifacts         []ArtifactRef     `json:"artifacts"`
+	Stdout            string                `json:"stdout"`
+	Stderr            string                `json:"stderr"`
+	StdoutBytes       int                   `json:"stdout_bytes"`
+	StderrBytes       int                   `json:"stderr_bytes"`
+	OutputTruncated   bool                  `json:"output_truncated"`
+	ReturnCode        int                   `json:"return_code"`
+	Success           bool                  `json:"success"`
+	TimedOut          bool                  `json:"timed_out"`
+	Cancelled         bool                  `json:"cancelled"`
+	PartialResults    bool                  `json:"partial_results"`
+	Status            RunStatus             `json:"status"`
+	ExecutionStatus   ExecutionStatus       `json:"execution_status"`
+	FindingStatus     FindingStatus         `json:"finding_status"`
+	HTTPRequests      *int                  `json:"http_requests"`
+	DurationMS        int64                 `json:"duration_ms"`
+	Failure           *FailureInfo          `json:"failure"`
+	Execution         ExecutionMetadata     `json:"execution"`
+	Target            *TargetProvenance     `json:"target"`
+	SPABaseline       *SPABaseline          `json:"spa_baseline"`
+	FalsePositiveRisk string                `json:"false_positive_risk"`
+	Warnings          []string              `json:"warnings,omitempty"`
+	Artifacts         []ArtifactRef         `json:"artifacts"`
+	HTTPResponse      *HTTPResponseMetadata `json:"http_response,omitempty"`
 }
 
 func (r ToolResult) Compact(maximumBytes int) ToolResult {

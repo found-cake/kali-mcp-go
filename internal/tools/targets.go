@@ -66,6 +66,8 @@ func RequestTarget(request any) string {
 		return value.URL
 	case dto.RetireRequest:
 		return value.URL
+	case dto.HTTPRequest:
+		return value.URL
 	default:
 		return ""
 	}
