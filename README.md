@@ -429,9 +429,6 @@ Notes:
 |---|---|
 | `server_health` | Check server status and tool availability |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
-| `auth_session_create` | Store target-bound headers/cookies behind an opaque, expiring handle |
-| `auth_session_list` | List active authentication session metadata without exposing credentials |
-| `auth_session_delete` | Immediately discard an authentication session and its credentials |
 | `result_artifact_read` | Read a bearer-protected JSON result retained for one hour after a scan |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
@@ -531,11 +528,9 @@ Dedicated scan requests accept a `profile` plus optional `max_requests`, `rate_l
 
 The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate, concurrency, and request-limit flags; the outer timeout also shrinks to the request/rate budget. When `health_url` is present, the server probes it before and after the run. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Nuclei DoS, fuzz, and interactsh selectors remain blocked unless `allow_unsafe` is explicitly enabled.
 
-### Authentication sessions
+### Credential ownership
 
-Use `auth_session_create` instead of copying tokens through multiple tool calls. Supply an exact HTTP(S) `origin`, headers and/or a cookie, an optional TTL of at most 3,600 seconds, and an optional allowlist of tool binaries. The server returns a handle such as `auth_...`; pass it as `session_id` on later scan requests.
-
-The session can only be used against the same origin and, when configured, the specified tools. Returned metadata contains header names and a cookie-present flag, never values. Execution argv is redacted. Sessions expire automatically and can be removed immediately with `auth_session_delete`. Supported tools are FFUF, Nuclei, Feroxbuster, Gobuster, SQLmap, Dalfox, WhatWeb, and Browser Check.
+Authentication tokens and cookies remain owned by the calling agent or orchestrator. Pass credentials only in request-scoped fields supported by the selected tool. `kali-server` does not create, list, retain, or reuse credential sessions across calls, and sensitive command arguments remain redacted from execution metadata.
 
 ### Natural-language tool routing
 

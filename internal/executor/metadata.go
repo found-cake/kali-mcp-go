@@ -63,7 +63,7 @@ func redactArgs(name string, args []string) []string {
 
 func sensitiveFlag(name, flag string) bool {
 	switch flag {
-	case "--cookie", "--header", "--headers-base64", "-H", "-rh", "-rc":
+	case "--cookie", "--header", "-H", "-rh", "-rc":
 		return true
 	case "-b", "-c":
 		return name == "ffuf" || name == "gobuster" || name == "nuclei"

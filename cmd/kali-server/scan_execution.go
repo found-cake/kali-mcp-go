@@ -76,10 +76,6 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if provenance != nil {
 		target = provenance.Selected
 	}
-	controlledArgs, err = applyRequestedAuthSession(c, effective, controlledArgs, target)
-	if err != nil {
-		return nil, err
-	}
 	release := func() {}
 	if scheduler := schedulerFromContext(c); scheduler != nil {
 		release, err = scheduler.acquire(target, scanWeight(controlledArgs[0]))

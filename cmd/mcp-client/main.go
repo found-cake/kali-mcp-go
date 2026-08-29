@@ -61,7 +61,6 @@ func main() {
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	registerTargetResolver(srv, kali)
-	registerAuthSessions(srv, kali)
 	registerResultArtifacts(srv, kali)
 	addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Discover web content, DNS subdomains, or virtual hosts with Gobuster.", "/api/tools/gobuster/stream")
 	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Run a specified Metasploit module against the authorized target.", "/api/tools/metasploit")
@@ -169,7 +168,7 @@ const safetyInstructions = `ROUTING:
 3. Prefer dedicated tools over execute_command. Before scanning a loopback target, call resolve_target, select a candidate, and pass its resolution_receipt; scan tools never rewrite targets.
 4. Do not replace this runtime with host security tools, package installation, another container, or a VM.
 5. Use safe-recon or another purpose-specific safety profile and bounded scan controls. Do not run multiple heavy scanners against one target in parallel.
-6. Store reusable target credentials with auth_session_create and pass only session_id to scanners; delete the session after testing.
+6. Keep target credentials in the caller or orchestrator. Send them only in request-scoped fields supported by a dedicated tool; this server does not retain credential sessions.
 
 SECURITY:
 1. Only engage targets the user explicitly authorized.

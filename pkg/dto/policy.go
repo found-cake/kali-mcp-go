@@ -12,7 +12,6 @@ const (
 
 type ScanOptions struct {
 	ResolutionReceipt string        `json:"resolution_receipt,omitempty" jsonschema:"receipt returned by resolve_target for the selected target"`
-	SessionID         string        `json:"session_id,omitempty" jsonschema:"opaque target authentication session handle"`
 	Profile           SafetyProfile `json:"profile,omitempty" jsonschema:"safe-recon|web-discovery-low-rate|sqli-verify-low-risk|browser-xss-confirm|explicit-custom"`
 	MaxRequests       int           `json:"max_requests,omitempty" jsonschema:"maximum HTTP requests when the selected tool can enforce it"`
 	RateLimit         int           `json:"rate_limit,omitempty" jsonschema:"maximum requests per second when the selected tool can enforce it"`

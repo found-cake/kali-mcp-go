@@ -3,7 +3,7 @@
 const { chromium } = require("/usr/local/lib/node_modules/playwright");
 
 function parseArgs(argv) {
-  const options = { waitMs: 500, includeDom: false, headers: {} };
+  const options = { waitMs: 500, includeDom: false };
   for (let index = 0; index < argv.length; index += 1) {
     switch (argv[index]) {
       case "--url":
@@ -14,9 +14,6 @@ function parseArgs(argv) {
         break;
       case "--include-dom":
         options.includeDom = true;
-        break;
-      case "--headers-base64":
-        options.headers = JSON.parse(Buffer.from(argv[++index], "base64url").toString("utf8"));
         break;
       default:
         throw new Error(`unknown argument: ${argv[index]}`);
@@ -39,7 +36,7 @@ async function main() {
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   try {
-    const page = await browser.newPage({ extraHTTPHeaders: options.headers });
+    const page = await browser.newPage();
     const dialogs = [];
     const consoleMessages = [];
     const pageErrors = [];

@@ -89,7 +89,6 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	limiter := newExecutionLimiter(maxConcurrentExecutions)
 	weightedCapacity := max(maxConcurrentExecutions, 3)
 	scheduler := newTargetScheduler(weightedCapacity, 3)
-	authSessions := newAuthSessionStore()
 	artifacts, err := newArtifactStore()
 	if err != nil {
 		panic(err)
@@ -103,7 +102,6 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 		app.Use(debugRequestLogMiddleware(print))
 	}
 	app.Use(targetSchedulerMiddleware(scheduler))
-	app.Use(authSessionStoreMiddleware(authSessions))
 	app.Use(artifactStoreMiddleware(artifacts))
 	app.Hooks().OnPostShutdown(func(error) error { return artifacts.close() })
 
@@ -117,9 +115,6 @@ func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) 
 	api.Post("/command", withExecutionLimit(limiter, handleCommand))
 	api.Post("/command/stream", withExecutionLimit(limiter, handleCommandStream))
 	api.Post("/tools/resolve-target", withExecutionLimit(limiter, handleResolveTarget))
-	api.Post("/sessions", handleCreateAuthSession)
-	api.Get("/sessions", handleListAuthSessions)
-	api.Delete("/sessions/:id", handleDeleteAuthSession)
 	api.Get("/artifacts/:id", handleGetArtifact)
 
 	api.Post("/tools/gobuster", withExecutionLimit(limiter, handleGobuster))
