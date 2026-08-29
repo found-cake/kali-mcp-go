@@ -168,7 +168,7 @@ const safetyInstructions = `ROUTING:
 3. Prefer dedicated tools over execute_command. Before scanning a loopback target, call resolve_target, select a candidate, and pass its resolution_receipt; scan tools never rewrite targets.
 4. Do not replace this runtime with host security tools, package installation, another container, or a VM.
 5. Use safe-recon or another purpose-specific safety profile and bounded scan controls. Do not run multiple heavy scanners against one target in parallel.
-6. Keep target credentials in the caller or orchestrator. Send them only in request-scoped fields supported by a dedicated tool; this server does not retain credential sessions.
+6. This MCP does not store or manage target credentials. Manage them directly using safeguards appropriate to the current environment, and pass them only through request-scoped fields supported by the selected dedicated tool.
 
 SECURITY:
 1. Only engage targets the user explicitly authorized.
