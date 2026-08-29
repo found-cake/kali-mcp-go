@@ -37,6 +37,7 @@ type Result struct {
 	FalsePositiveRisk string
 	Artifacts         []dto.ArtifactRef
 	HTTPResponse      *dto.HTTPResponseMetadata
+	Progress          *dto.ProgressMetadata
 }
 
 func (r *Result) Success() bool {
@@ -44,8 +45,9 @@ func (r *Result) Success() bool {
 }
 
 type Line struct {
-	Stream string
-	Text   string
+	Stream   string
+	Text     string
+	Sequence int
 }
 
 type commandSpec struct {
@@ -95,6 +97,7 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 		timeout = dto.DefaultTimeout
 	}
 	startedAt := time.Now().UTC()
+	progress := newOutputProgress()
 	result := &Result{
 		ReturnCode:   -1,
 		StartedAt:    startedAt,
@@ -105,6 +108,8 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	defer func() {
 		result.Duration = time.Since(startedAt)
+		result.Progress = progress.snapshot()
+		result.FinalizeProgress()
 	}()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -155,9 +160,10 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 		sc := newScanner(r)
 		for sc.Scan() {
 			text := sc.Text()
+			sequence := progress.observe(text)
 			buf.WriteString(text)
 			buf.WriteByte('\n')
-			if emit != nil && !emit(ctx, Line{Stream: stream, Text: text}) {
+			if emit != nil && !emit(ctx, Line{Stream: stream, Text: text, Sequence: sequence}) {
 				return
 			}
 		}

@@ -19,6 +19,7 @@ func TestProtectResultRedactsBeforeArtifactStorage(t *testing.T) {
 	result := &executor.Result{
 		Stdout:       "token=private-value\n",
 		ArgvRedacted: []string{"-c", "printf private-value"},
+		Progress:     &dto.ProgressMetadata{LastObservedOutput: "token=private-value"},
 	}
 	request := dto.CommandRequest{RedactValues: []string{"private-value"}}
 
@@ -33,7 +34,7 @@ func TestProtectResultRedactsBeforeArtifactStorage(t *testing.T) {
 	}
 
 	// Then: neither inline output nor the artifact contains the secret.
-	if strings.Contains(result.Stdout, "private-value") || strings.Contains(string(payload), "private-value") {
+	if strings.Contains(result.Stdout, "private-value") || strings.Contains(result.Progress.LastObservedOutput, "private-value") || strings.Contains(string(payload), "private-value") {
 		t.Fatalf("secret remains in protected result: stdout=%q artifact=%s", result.Stdout, payload)
 	}
 }

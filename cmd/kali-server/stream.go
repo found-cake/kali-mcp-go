@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -92,6 +93,7 @@ func (s streamRun) run(w streamWriter) {
 	defer ticker.Stop()
 
 	var streamedStderr strings.Builder
+	progress := dto.ProgressMetadata{Phase: dto.ProgressRunning}
 	wroteDone := false
 	linesCh := s.lines
 	doneCh := s.done
@@ -112,7 +114,16 @@ func (s streamRun) run(w streamWriter) {
 				streamedStderr.WriteString(line.Text)
 				streamedStderr.WriteByte('\n')
 			}
-			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Stream: line.Stream, Line: line.Text})
+			if line.Sequence == 0 {
+				progress.ObservedOutputItems++
+				progress.LastObservedOutput = line.Text
+			} else if line.Sequence > progress.ObservedOutputItems {
+				progress.ObservedOutputItems = line.Sequence
+				progress.LastObservedOutput = line.Text
+			}
+			progress.Checkpoint = fmt.Sprintf("output-item-%d", progress.ObservedOutputItems)
+			eventProgress := progress
+			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Stream: line.Stream, Line: line.Text, Progress: &eventProgress})
 			if err != nil {
 				if s.cancel != nil {
 					s.cancel()
@@ -136,11 +147,16 @@ func (s streamRun) run(w streamWriter) {
 			if result != nil && result.CallID == "" {
 				result.CallID = s.callID
 			}
+			if result != nil && (result.Progress == nil || result.Progress.ObservedOutputItems < progress.ObservedOutputItems) {
+				result.Progress = &progress
+				result.FinalizeProgress()
+			}
 			writeStreamDoneEvent(w, result, streamedStderr.String())
 			wroteDone = true
 			return
 		case <-ticker.Chan():
-			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Heartbeat: true})
+			eventProgress := progress
+			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Heartbeat: true, Progress: &eventProgress})
 			if err != nil {
 				if s.cancel != nil {
 					s.cancel()
@@ -197,6 +213,7 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 		FalsePositiveRisk: result.FalsePositiveRisk,
 		Warnings:          result.Warnings,
 		Artifacts:         result.Artifacts,
+		Progress:          result.Progress,
 	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr

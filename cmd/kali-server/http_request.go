@@ -245,6 +245,14 @@ func httpRequestTimeout(seconds int) time.Duration {
 
 func sendHTTPRequestResult(c fiber.Ctx, result *executor.Result, request dto.HTTPRequest) error {
 	result.Duration = time.Since(result.StartedAt)
+	if result.HTTPResponse != nil {
+		result.Progress = &dto.ProgressMetadata{
+			ObservedOutputItems: 1,
+			LastObservedOutput:  fmt.Sprintf("HTTP %d", result.HTTPResponse.StatusCode),
+			Checkpoint:          "response-1",
+		}
+	}
+	result.FinalizeProgress()
 	protectResult(artifactStoreFromContext(c), result, request)
 	return c.JSON(toAPIResult(result))
 }

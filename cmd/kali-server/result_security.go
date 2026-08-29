@@ -14,6 +14,9 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 	secrets := tools.RequestSecrets(request)
 	result.Stdout = tools.RedactText(result.Stdout, secrets)
 	result.Stderr = tools.RedactText(result.Stderr, secrets)
+	if result.Progress != nil {
+		result.Progress.LastObservedOutput = tools.RedactText(result.Progress.LastObservedOutput, secrets)
+	}
 	for index := range result.ArgvRedacted {
 		result.ArgvRedacted[index] = tools.RedactText(result.ArgvRedacted[index], secrets)
 	}

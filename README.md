@@ -504,6 +504,7 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 - `execution_status`: the detailed process state retained for existing clients
 - `finding_status`: `detected`, `not_detected`, or `unknown`
 - `partial_results`, `http_requests`, `duration_ms`, original stdout/stderr byte counts, and `output_truncated`
+- `progress`: phase, observed output item count, last redacted output item, exact HTTP request count when known, request budget, and a stateless checkpoint
 - `target`: original target, explicitly selected target, resolution ID, and selection basis
 - `execution`: redacted argv, tool version, start/end time, timeout, profile, rate, concurrency, request budget, health URL, and 5xx threshold
 - `failure`: reason, retryability, resume support, and the bounded cost of a fresh retry
@@ -514,6 +515,8 @@ Tool process failures and timeouts set MCP `isError`; a successful scan with no 
 Every HTTP call also emits one JSON telemetry record containing its `call_id`, MCP operation, path, start/end time, duration, and HTTP status. Target and credential values remain in the protected structured result rather than server logs.
 
 `http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the original redacted sizes. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
+
+Progress checkpoints describe already observed output but are not server-side jobs. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without shared MCP session memory.
 
 ### Explicit target resolution
 

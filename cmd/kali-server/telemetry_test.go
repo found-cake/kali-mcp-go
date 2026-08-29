@@ -77,5 +77,11 @@ func TestToolCallTelemetryCorrelatesEverySSEEvent(t *testing.T) {
 		if event.CallID != callID {
 			t.Fatalf("expected event call ID %q, got %+v", callID, event)
 		}
+		if event.Progress == nil {
+			t.Fatalf("expected progress on every event, got %+v", event)
+		}
+	}
+	if events[2].Progress.Phase != dto.ProgressCompleted || events[2].Progress.ObservedOutputItems != 2 || events[2].Progress.ResumeSupported {
+		t.Fatalf("unexpected final stream progress: %+v", events[2].Progress)
 	}
 }

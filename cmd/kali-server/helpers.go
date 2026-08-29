@@ -74,6 +74,7 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 		Warnings:          r.Warnings,
 		Artifacts:         r.Artifacts,
 		HTTPResponse:      r.HTTPResponse,
+		Progress:          r.Progress,
 	}
 	if result.ExecutionStatus != dto.ExecutionSucceeded {
 		result.Failure = &dto.FailureInfo{

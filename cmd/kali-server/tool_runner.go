@@ -59,12 +59,12 @@ func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 		lines, breakerTripped = monitorFiveXXResponses(lines, plan.options.Max5xxResponses, cancel)
 	}
 	done = annotateResult(done, func(result *executor.Result) {
-		plan.annotate(result)
 		if breakerTripped != nil && breakerTripped.Load() {
 			result.Cancelled = true
 			result.FailureCode = "target_5xx_threshold"
 			result.Warnings = append(result.Warnings, "scan cancelled after target 5xx threshold")
 		}
+		plan.annotate(result)
 	})
 	release := retainExecutionLease(c)
 	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.release)

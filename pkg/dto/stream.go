@@ -21,4 +21,5 @@ type StreamEvent struct {
 	FalsePositiveRisk string            `json:"false_positive_risk,omitempty"`
 	Warnings          []string          `json:"warnings,omitempty"`
 	Artifacts         []ArtifactRef     `json:"artifacts,omitempty"`
+	Progress          *ProgressMetadata `json:"progress,omitempty"`
 }

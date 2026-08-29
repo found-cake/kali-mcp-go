@@ -85,6 +85,9 @@ func TestStreamDeliversDoneAfterLineDrain(t *testing.T) {
 	if res.ReturnCode != 0 {
 		t.Fatalf("expected return code 0, got %d", res.ReturnCode)
 	}
+	if res.Progress == nil || res.Progress.Phase != "completed" || res.Progress.ObservedOutputItems != 1 || res.Progress.LastObservedOutput != "ok" {
+		t.Fatalf("unexpected final progress: %+v", res.Progress)
+	}
 }
 
 func TestStreamExecDeliversDoneAfterLineDrain(t *testing.T) {
@@ -150,6 +153,9 @@ func TestRunTimeoutDoesNotReportExpectedPipeClosureAsOutputFailure(t *testing.T)
 	}
 	if strings.Contains(result.Stderr, "scan:") {
 		t.Fatalf("unexpected pipe closure error: %q", result.Stderr)
+	}
+	if result.Progress == nil || result.Progress.Phase != "timed_out" || result.Progress.ResumeSupported {
+		t.Fatalf("unexpected timeout progress: %+v", result.Progress)
 	}
 }
 

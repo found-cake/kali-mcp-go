@@ -103,6 +103,7 @@ type ToolResult struct {
 	Warnings          []string              `json:"warnings,omitempty"`
 	Artifacts         []ArtifactRef         `json:"artifacts"`
 	HTTPResponse      *HTTPResponseMetadata `json:"http_response,omitempty"`
+	Progress          *ProgressMetadata     `json:"progress,omitempty"`
 }
 
 func (r ToolResult) Compact(maximumBytes int) ToolResult {

@@ -112,6 +112,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
 	result.Warnings = append(result.Warnings, p.extraWarnings...)
+	result.FinalizeProgress()
 	if p.healthURL != "" {
 		if err := probeTargetHealth(p.context, p.healthURL); err != nil {
 			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())

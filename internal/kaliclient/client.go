@@ -152,6 +152,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		warnings          []string
 		artifacts         []dto.ArtifactRef
 		callID            = resp.Header.Get(dto.CallIDHeader)
+		progress          *dto.ProgressMetadata
 	)
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -168,6 +169,9 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		}
 		if ev.Error != "" && !ev.Done {
 			return nil, fmt.Errorf("server: %s", ev.Error)
+		}
+		if ev.Progress != nil {
+			progress = ev.Progress
 		}
 		if ev.Heartbeat {
 			continue
@@ -192,6 +196,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 			falsePositiveRisk = ev.FalsePositiveRisk
 			warnings = append(warnings, ev.Warnings...)
 			artifacts = append(artifacts, ev.Artifacts...)
+			progress = ev.Progress
 			done = true
 			break
 		}
@@ -236,6 +241,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		FalsePositiveRisk: falsePositiveRisk,
 		Warnings:          warnings,
 		Artifacts:         artifacts,
+		Progress:          progress,
 		FindingStatus:     dto.FindingsUnknown,
 	}
 	switch {
