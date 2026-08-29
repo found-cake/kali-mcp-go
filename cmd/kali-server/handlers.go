@@ -42,9 +42,11 @@ func handleCommandStream(c fiber.Ctx) error {
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
 	lines = protectStream(execCtx, lines, req)
+	callID := callIDFromContext(c)
+	artifacts := artifactStoreFromContext(c)
 	done = annotateResult(done, func(result *executor.Result) {
-		result.CallID = callIDFromContext(c)
-		protectResult(artifactStoreFromContext(c), result, req)
+		result.CallID = callID
+		protectResult(artifacts, result, req)
 	})
 	release := retainExecutionLease(c)
 	return sendToolStreamWithCancel(c, lines, done, cancel, release)
