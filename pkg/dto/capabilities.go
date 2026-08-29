@@ -38,7 +38,17 @@ type ScanToolCapability struct {
 	SupportedControls []ScanControl     `json:"supported_controls"`
 }
 
+type WordlistCapability struct {
+	Name       string   `json:"name"`
+	Path       string   `json:"path"`
+	Purpose    string   `json:"purpose"`
+	Available  bool     `json:"available"`
+	SizeBytes  int64    `json:"size_bytes"`
+	DefaultFor []string `json:"default_for"`
+}
+
 type ScanCapabilitiesResult struct {
-	Profiles []ScanProfileCapability `json:"profiles"`
-	Tools    []ScanToolCapability    `json:"tools"`
+	Profiles  []ScanProfileCapability `json:"profiles"`
+	Tools     []ScanToolCapability    `json:"tools"`
+	Wordlists []WordlistCapability    `json:"wordlists"`
 }

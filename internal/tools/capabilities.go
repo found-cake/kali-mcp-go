@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"os"
 	"slices"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -33,6 +34,13 @@ var orderedProfiles = []dto.SafetyProfile{
 	dto.ProfileExplicitCustom,
 }
 
+type wordlistDefinition struct {
+	name       string
+	purpose    string
+	path       string
+	defaultFor []string
+}
+
 func ScanCapabilities() dto.ScanCapabilitiesResult {
 	tools := make([]dto.ScanToolCapability, 0, len(scanToolCapabilities))
 	for _, capability := range scanToolCapabilities {
@@ -56,7 +64,39 @@ func ScanCapabilities() dto.ScanCapabilitiesResult {
 			},
 		})
 	}
-	return dto.ScanCapabilitiesResult{Profiles: profiles, Tools: tools}
+	return dto.ScanCapabilitiesResult{Profiles: profiles, Tools: tools, Wordlists: wordlistCapabilities()}
+}
+
+func wordlistCapabilities() []dto.WordlistCapability {
+	return []dto.WordlistCapability{
+		wordlistCapability(wordlistDefinition{
+			name:       "directory-discovery",
+			purpose:    "web path and content discovery",
+			path:       DefaultDirWordlistPath(),
+			defaultFor: []string{"gobuster_scan", "dirb_scan", "ffuf_scan", "feroxbuster_scan"},
+		}),
+		wordlistCapability(wordlistDefinition{
+			name:       "password-audit",
+			purpose:    "password hash auditing",
+			path:       DefaultJohnWordlistPath(),
+			defaultFor: []string{"john_crack"},
+		}),
+	}
+}
+
+func wordlistCapability(definition wordlistDefinition) dto.WordlistCapability {
+	capability := dto.WordlistCapability{
+		Name:       definition.name,
+		Path:       definition.path,
+		Purpose:    definition.purpose,
+		DefaultFor: slices.Clone(definition.defaultFor),
+	}
+	info, err := os.Stat(definition.path)
+	if err == nil && info.Mode().IsRegular() {
+		capability.Available = true
+		capability.SizeBytes = info.Size()
+	}
+	return capability
 }
 
 func compatibleMCPTools(profile dto.SafetyProfile) []string {

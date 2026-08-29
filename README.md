@@ -430,6 +430,7 @@ Notes:
 | MCP tool | Description |
 |---|---|
 | `server_health` | Check server status and tool availability |
+| `get_scan_capabilities` | Inspect profile compatibility, target formats, supported controls, and effective default wordlists |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
 | `result_artifact_read` | Read a bearer-protected JSON result retained for one hour after a scan |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
@@ -519,6 +520,8 @@ For a loopback target, call `resolve_target`, choose one returned candidate, and
 ### Safety profiles and budgets
 
 Dedicated scan requests accept a `profile` plus optional `max_requests`, `rate_limit`, `concurrency`, `health_url`, and `max_5xx_responses` controls. Available profiles are:
+
+Call `get_scan_capabilities` before composing a scan when profile compatibility or a wordlist path is uncertain. Its response uses MCP-facing tool names, reports the effective environment-configured defaults, and marks missing wordlist files unavailable. An explicitly supplied missing wordlist remains an error and is never silently replaced.
 
 | Profile | Intended use |
 |---|---|

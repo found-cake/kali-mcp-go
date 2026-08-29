@@ -13,7 +13,7 @@ import (
 func registerScanCapabilities(server *mcp.Server, kali *kaliclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_scan_capabilities",
-		Description: "Inspect safety-profile compatibility, target input formats, and supported controls before invoking scan tools.",
+		Description: "Inspect safety-profile compatibility, target input formats, supported controls, and effective default wordlists before invoking tools.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, dto.ScanCapabilitiesResult, error) {
 		result, err := kali.ScanCapabilities(ctx)
 		if err != nil {
@@ -46,6 +46,10 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 			fmt.Fprintf(&output, " controls=%s", strings.Join(controls, ","))
 		}
 		output.WriteByte('\n')
+	}
+	output.WriteString("wordlists:\n")
+	for _, wordlist := range result.Wordlists {
+		fmt.Fprintf(&output, "- %s: path=%s available=%t size_bytes=%d default_for=%s\n", wordlist.Name, wordlist.Path, wordlist.Available, wordlist.SizeBytes, strings.Join(wordlist.DefaultFor, ","))
 	}
 	return output.String()
 }
