@@ -19,6 +19,7 @@ func handleResolveTarget(c fiber.Ctx) error {
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
+	result.CallID = callIDFromContext(c)
 	lifetime, err := resolutionLifetime(request.ValidForSeconds)
 	if err != nil {
 		return badRequest(c, err.Error())

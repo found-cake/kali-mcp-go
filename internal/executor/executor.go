@@ -16,6 +16,7 @@ import (
 )
 
 type Result struct {
+	CallID            string
 	Stdout            string
 	Stderr            string
 	ReturnCode        int

@@ -58,6 +58,7 @@ type ExecutionMetadata struct {
 	ToolVersion     string        `json:"tool_version"`
 	ArgvRedacted    []string      `json:"argv_redacted"`
 	StartedAt       time.Time     `json:"started_at"`
+	EndedAt         time.Time     `json:"ended_at"`
 	TimeoutMS       int64         `json:"timeout_ms"`
 	Profile         SafetyProfile `json:"profile"`
 	MaxRequests     int           `json:"max_requests"`
@@ -78,6 +79,7 @@ type HTTPResponseMetadata struct {
 }
 
 type ToolResult struct {
+	CallID            string                `json:"call_id"`
 	Stdout            string                `json:"stdout"`
 	Stderr            string                `json:"stderr"`
 	StdoutBytes       int                   `json:"stdout_bytes"`
@@ -172,6 +174,7 @@ func (r *ToolResult) Format() string {
 }
 
 type HealthResult struct {
+	CallID                     string          `json:"call_id"`
 	Status                     string          `json:"status"`
 	Message                    string          `json:"message"`
 	ToolsStatus                map[string]bool `json:"tools_status"`

@@ -48,6 +48,7 @@ type WordlistCapability struct {
 }
 
 type ScanCapabilitiesResult struct {
+	CallID    string                  `json:"call_id"`
 	Profiles  []ScanProfileCapability `json:"profiles"`
 	Tools     []ScanToolCapability    `json:"tools"`
 	Wordlists []WordlistCapability    `json:"wordlists"`

@@ -101,12 +101,15 @@ func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.Tool
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, respBody)
+		return nil, serverResponseError(resp, respBody)
 	}
 
 	var result dto.ToolResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
+	}
+	if result.CallID == "" {
+		result.CallID = resp.Header.Get(dto.CallIDHeader)
 	}
 	return &result, nil
 }
@@ -128,7 +131,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, respBody)
+		return nil, serverResponseError(resp, respBody)
 	}
 
 	var (
@@ -148,6 +151,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		falsePositiveRisk string
 		warnings          []string
 		artifacts         []dto.ArtifactRef
+		callID            = resp.Header.Get(dto.CallIDHeader)
 	)
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -173,6 +177,9 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 				return nil, fmt.Errorf("stream done event missing return_code")
 			}
 			returnCode = *ev.ReturnCode
+			if ev.CallID != "" {
+				callID = ev.CallID
+			}
 			timedOut = ev.TimedOut
 			cancelled = ev.Cancelled
 			finalError = ev.Error
@@ -213,6 +220,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 	}
 
 	result := &dto.ToolResult{
+		CallID:            callID,
 		Stdout:            join(stdoutLines),
 		Stderr:            join(stderrLines),
 		ReturnCode:        returnCode,
@@ -244,6 +252,14 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 	return result, nil
 }
 
+func serverResponseError(response *http.Response, body []byte) error {
+	callID := response.Header.Get(dto.CallIDHeader)
+	if callID == "" {
+		return fmt.Errorf("server error %d: %s", response.StatusCode, body)
+	}
+	return fmt.Errorf("server error %d (call_id %s): %s", response.StatusCode, callID, body)
+}
+
 func (c *Client) Health(ctx context.Context) (*dto.HealthResult, error) {
 	reqCtx, cancel := c.requestContext(ctx, struct{}{})
 	defer cancel()
@@ -260,6 +276,9 @@ func (c *Client) Health(ctx context.Context) (*dto.HealthResult, error) {
 	var h dto.HealthResult
 	if err := json.NewDecoder(resp.Body).Decode(&h); err != nil {
 		return nil, err
+	}
+	if h.CallID == "" {
+		h.CallID = resp.Header.Get(dto.CallIDHeader)
 	}
 	return &h, nil
 }

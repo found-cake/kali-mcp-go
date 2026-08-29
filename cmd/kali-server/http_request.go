@@ -67,6 +67,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	startedAt := time.Now().UTC()
 	requestCount := 1
 	result := &executor.Result{
+		CallID:       callIDFromContext(c),
 		ReturnCode:   -1,
 		HTTPRequests: &requestCount,
 		StartedAt:    startedAt,

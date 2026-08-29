@@ -27,11 +27,14 @@ func (c *Client) ResolveTarget(ctx context.Context, body dto.ResolveTargetReques
 		if readErr != nil {
 			return nil, fmt.Errorf("read resolver error response: %w", readErr)
 		}
-		return nil, fmt.Errorf("server error %d: %s", response.StatusCode, responseBody)
+		return nil, serverResponseError(response, responseBody)
 	}
 	var result dto.TargetResolutionResult
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode target resolution: %w", err)
+	}
+	if result.CallID == "" {
+		result.CallID = response.Header.Get(dto.CallIDHeader)
 	}
 	return &result, nil
 }

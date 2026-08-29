@@ -57,30 +57,44 @@ func sendToolStreamWithTicker(c fiber.Ctx, lines <-chan executor.Line, done <-ch
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("X-Accel-Buffering", "no")
+	callID := callIDFromContext(c)
 
 	return c.SendStreamWriter(func(w *bufio.Writer) {
-		runSendToolStream(w, lines, done, cancel, tickerFactory, cleanups...)
+		streamRun{lines: lines, done: done, cancel: cancel, tickerFactory: tickerFactory, cleanups: cleanups, callID: callID}.run(w)
 	})
 }
 
 func runSendToolStream(w streamWriter, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker, cleanups ...func()) {
+	streamRun{lines: lines, done: done, cancel: cancel, tickerFactory: tickerFactory, cleanups: cleanups}.run(w)
+}
+
+type streamRun struct {
+	lines         <-chan executor.Line
+	done          <-chan *executor.Result
+	cancel        context.CancelFunc
+	tickerFactory func() streamTicker
+	cleanups      []func()
+	callID        string
+}
+
+func (s streamRun) run(w streamWriter) {
 	// Register in reverse so deferred execution preserves the caller's cleanup order.
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		if cleanups[i] != nil {
-			defer cleanups[i]()
+	for i := len(s.cleanups) - 1; i >= 0; i-- {
+		if s.cleanups[i] != nil {
+			defer s.cleanups[i]()
 		}
 	}
-	if cancel != nil {
-		defer cancel()
+	if s.cancel != nil {
+		defer s.cancel()
 	}
 
-	ticker := tickerFactory()
+	ticker := s.tickerFactory()
 	defer ticker.Stop()
 
 	var streamedStderr strings.Builder
 	wroteDone := false
-	linesCh := lines
-	doneCh := done
+	linesCh := s.lines
+	doneCh := s.done
 
 	for linesCh != nil || doneCh != nil {
 		var resultCh <-chan *executor.Result
@@ -98,18 +112,18 @@ func runSendToolStream(w streamWriter, lines <-chan executor.Line, done <-chan *
 				streamedStderr.WriteString(line.Text)
 				streamedStderr.WriteByte('\n')
 			}
-			payload, err := json.Marshal(dto.StreamEvent{Stream: line.Stream, Line: line.Text})
+			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Stream: line.Stream, Line: line.Text})
 			if err != nil {
-				if cancel != nil {
-					cancel()
+				if s.cancel != nil {
+					s.cancel()
 				}
 				go drainStreamLines(linesCh)
 				writeStreamDoneFallback(w, "internal error: failed to encode stream event")
 				return
 			}
 			if err := writeStreamPayload(w, payload); err != nil {
-				if cancel != nil {
-					cancel()
+				if s.cancel != nil {
+					s.cancel()
 				}
 				go drainStreamLines(linesCh)
 				return
@@ -119,22 +133,25 @@ func runSendToolStream(w streamWriter, lines <-chan executor.Line, done <-chan *
 				doneCh = nil
 				continue
 			}
+			if result != nil && result.CallID == "" {
+				result.CallID = s.callID
+			}
 			writeStreamDoneEvent(w, result, streamedStderr.String())
 			wroteDone = true
 			return
 		case <-ticker.Chan():
-			payload, err := json.Marshal(dto.StreamEvent{Heartbeat: true})
+			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Heartbeat: true})
 			if err != nil {
-				if cancel != nil {
-					cancel()
+				if s.cancel != nil {
+					s.cancel()
 				}
 				go drainStreamLines(linesCh)
 				writeStreamDoneFallback(w, "internal error: failed to encode heartbeat event")
 				return
 			}
 			if err := writeStreamPayload(w, payload); err != nil {
-				if cancel != nil {
-					cancel()
+				if s.cancel != nil {
+					s.cancel()
 				}
 				go drainStreamLines(linesCh)
 				return
@@ -154,6 +171,7 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 	}
 	returnCode := result.ReturnCode
 	doneEvent := dto.StreamEvent{
+		CallID:       result.CallID,
 		Done:         true,
 		ReturnCode:   &returnCode,
 		TimedOut:     result.TimedOut,
@@ -165,6 +183,7 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 			ToolVersion:     result.ToolVersion,
 			ArgvRedacted:    result.ArgvRedacted,
 			StartedAt:       result.StartedAt,
+			EndedAt:         result.StartedAt.Add(result.Duration),
 			TimeoutMS:       result.Timeout.Milliseconds(),
 			Profile:         result.Policy.Profile,
 			MaxRequests:     result.Policy.MaxRequests,

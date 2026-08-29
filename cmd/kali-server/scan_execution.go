@@ -33,6 +33,7 @@ func scanPreparationError(c fiber.Ctx, err error) error {
 }
 
 type scanExecutionPlan struct {
+	callID            string
 	args              []string
 	options           dto.ScanOptions
 	target            *dto.TargetProvenance
@@ -96,13 +97,15 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		}
 	}
 	return &scanExecutionPlan{
-		args: controlledArgs, options: effective, target: provenance, timeout: timeout,
+		callID: callIDFromContext(c),
+		args:   controlledArgs, options: effective, target: provenance, timeout: timeout,
 		release: release, healthURL: effective.HealthURL, request: request, context: c.Context(),
 		artifactStore: artifactStoreFromContext(c),
 	}, nil
 }
 
 func (p *scanExecutionPlan) annotate(result *executor.Result) {
+	result.CallID = p.callID
 	result.Target = p.target
 	result.Warnings = append(result.Warnings, targetWarnings(p.request, p.target)...)
 	result.Policy = p.options

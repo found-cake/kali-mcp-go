@@ -23,6 +23,7 @@ func handleCommand(c fiber.Ctx) error {
 	}
 	timeout := commandTimeout(req.Timeout)
 	result := executor.RunShell(c.Context(), timeout, req.Command)
+	result.CallID = callIDFromContext(c)
 	protectResult(artifactStoreFromContext(c), result, req)
 	return c.JSON(toAPIResult(result))
 }
@@ -42,6 +43,7 @@ func handleCommandStream(c fiber.Ctx) error {
 	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
 	lines = protectStream(execCtx, lines, req)
 	done = annotateResult(done, func(result *executor.Result) {
+		result.CallID = callIDFromContext(c)
 		protectResult(artifactStoreFromContext(c), result, req)
 	})
 	release := retainExecutionLease(c)
@@ -109,6 +111,7 @@ func handleMetasploit(c fiber.Ctx) error {
 	defer os.Remove(rcFile)
 	args := tools.MetasploitArgs(rcFile)
 	result := executor.RunExec(c.Context(), 0, args[0], args[1:]...)
+	result.CallID = callIDFromContext(c)
 	protectResult(artifactStoreFromContext(c), result, req)
 	return c.JSON(toAPIResult(result))
 }
@@ -133,6 +136,7 @@ func handleJohn(c fiber.Ctx) error {
 	defer plan.Cleanup()
 	args := plan.Args()
 	result := executor.RunExec(c.Context(), commandTimeout(req.Timeout), args[0], args[1:]...)
+	result.CallID = callIDFromContext(c)
 	if req.MaskPlaintext {
 		result.Stdout = tools.RedactJohnOutput(result.Stdout)
 		result.Stderr = tools.RedactJohnOutput(result.Stderr)
@@ -219,6 +223,7 @@ func handleHealth(c fiber.Ctx) error {
 	}
 
 	return c.JSON(dto.HealthResult{
+		CallID:                     callIDFromContext(c),
 		Status:                     healthStatus,
 		Message:                    message,
 		ToolsStatus:                status,

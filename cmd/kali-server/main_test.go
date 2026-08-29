@@ -1089,20 +1089,27 @@ func TestNewAppWithDebugLogsRequests(t *testing.T) {
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("expected status %d, got %d", fiber.StatusUnauthorized, resp.StatusCode)
 	}
-	if len(lines) != 1 {
-		t.Fatalf("expected one debug log line, got %d (%v)", len(lines), lines)
+	if len(lines) != 2 {
+		t.Fatalf("expected telemetry and debug log lines, got %d (%v)", len(lines), lines)
 	}
-	if !strings.Contains(lines[0], "POST /api/tools/nmap/stream -> 401 (") {
-		t.Fatalf("expected method/path/status log line, got %q", lines[0])
+	var telemetry callTelemetryRecord
+	if err := json.Unmarshal([]byte(lines[0]), &telemetry); err != nil {
+		t.Fatalf("decode telemetry: %v", err)
+	}
+	if telemetry.CallID == "" || telemetry.Operation != "nmap_scan" || telemetry.HTTPStatus != fiber.StatusUnauthorized {
+		t.Fatalf("unexpected telemetry: %+v", telemetry)
+	}
+	if !strings.Contains(lines[1], "POST /api/tools/nmap/stream -> 401 (") {
+		t.Fatalf("expected method/path/status debug line, got %q", lines[1])
 	}
 }
 
-func TestNewAppWithoutDebugDoesNotLogRequests(t *testing.T) {
+func TestNewAppWithoutDebugLogsOnlyStructuredTelemetry(t *testing.T) {
 	t.Parallel()
 
-	logged := false
-	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, func(string, ...any) {
-		logged = true
+	var lines []string
+	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, func(format string, args ...any) {
+		lines = append(lines, fmt.Sprintf(format, args...))
 	})
 
 	req, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
@@ -1120,8 +1127,15 @@ func TestNewAppWithoutDebugDoesNotLogRequests(t *testing.T) {
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("expected status %d, got %d", fiber.StatusUnauthorized, resp.StatusCode)
 	}
-	if logged {
-		t.Fatal("expected debug logging to stay disabled")
+	if len(lines) != 1 {
+		t.Fatalf("expected one telemetry log line, got %d (%v)", len(lines), lines)
+	}
+	var telemetry callTelemetryRecord
+	if err := json.Unmarshal([]byte(lines[0]), &telemetry); err != nil {
+		t.Fatalf("decode telemetry: %v", err)
+	}
+	if telemetry.CallID == "" || telemetry.HTTPStatus != fiber.StatusUnauthorized {
+		t.Fatalf("unexpected telemetry: %+v", telemetry)
 	}
 }
 

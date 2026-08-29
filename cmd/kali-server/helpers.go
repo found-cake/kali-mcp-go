@@ -41,6 +41,7 @@ func allEssentialToolsAvailable(status map[string]bool) bool {
 
 func toAPIResult(r *executor.Result) dto.ToolResult {
 	result := dto.ToolResult{
+		CallID:          r.CallID,
 		Stdout:          r.Stdout,
 		Stderr:          r.Stderr,
 		StdoutBytes:     len(r.Stdout),
@@ -58,6 +59,7 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 			ToolVersion:     r.ToolVersion,
 			ArgvRedacted:    r.ArgvRedacted,
 			StartedAt:       r.StartedAt,
+			EndedAt:         r.StartedAt.Add(r.Duration),
 			TimeoutMS:       r.Timeout.Milliseconds(),
 			Profile:         r.Policy.Profile,
 			MaxRequests:     r.Policy.MaxRequests,

@@ -33,6 +33,7 @@ type TargetCandidate struct {
 }
 
 type TargetResolutionResult struct {
+	CallID                   string            `json:"call_id"`
 	OriginalTarget           string            `json:"original_target"`
 	Loopback                 bool              `json:"loopback"`
 	Candidates               []TargetCandidate `json:"candidates"`

@@ -7,6 +7,7 @@ type ArtifactReadRequest struct {
 }
 
 type ArtifactReadResult struct {
+	CallID     string `json:"call_id"`
 	ArtifactID string `json:"artifact_id"`
 	Content    string `json:"content"`
 	Offset     int64  `json:"offset"`

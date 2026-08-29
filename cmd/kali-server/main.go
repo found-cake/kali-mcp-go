@@ -101,6 +101,7 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	if debug {
 		app.Use(debugRequestLogMiddleware(print))
 	}
+	app.Use(callTelemetryMiddleware(print))
 	app.Use(targetSchedulerMiddleware(scheduler))
 	app.Use(artifactStoreMiddleware(artifacts))
 	app.Hooks().OnPostShutdown(func(error) error { return artifacts.close() })

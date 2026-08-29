@@ -30,11 +30,14 @@ func (c *Client) ReadArtifact(ctx context.Context, body dto.ArtifactReadRequest)
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
 		responseBody, _ := io.ReadAll(response.Body)
-		return nil, fmt.Errorf("server error %d: %s", response.StatusCode, responseBody)
+		return nil, serverResponseError(response, responseBody)
 	}
 	var result dto.ArtifactReadResult
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode artifact response: %w", err)
+	}
+	if result.CallID == "" {
+		result.CallID = response.Header.Get(dto.CallIDHeader)
 	}
 	return &result, nil
 }

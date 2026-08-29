@@ -1,6 +1,9 @@
 package dto
 
+const CallIDHeader = "X-Kali-MCP-Call-ID"
+
 type StreamEvent struct {
+	CallID            string            `json:"call_id,omitempty"`
 	Stream            string            `json:"stream,omitempty"`
 	Line              string            `json:"line,omitempty"`
 	Heartbeat         bool              `json:"heartbeat,omitempty"`

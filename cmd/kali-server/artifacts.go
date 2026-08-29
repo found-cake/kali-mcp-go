@@ -209,5 +209,6 @@ func handleGetArtifactPage(c fiber.Ctx) error {
 	if err != nil {
 		return badRequest(c, errInvalidArtifactPage.Error())
 	}
+	page.CallID = callIDFromContext(c)
 	return c.JSON(page)
 }

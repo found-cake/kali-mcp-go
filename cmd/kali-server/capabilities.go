@@ -6,5 +6,7 @@ import (
 )
 
 func handleScanCapabilities(c fiber.Ctx) error {
-	return c.JSON(tools.ScanCapabilities())
+	result := tools.ScanCapabilities()
+	result.CallID = callIDFromContext(c)
+	return c.JSON(result)
 }
