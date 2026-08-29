@@ -18,7 +18,10 @@ import (
 
 var essentialToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark"}
 
-var exposedToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark", "sqlmap", "msfconsole", "hydra", "john", "wpscan", "enum4linux"}
+var exposedToolBinaries = []string{
+	"nmap", "gobuster", "dirb", "nikto", "tshark", "sqlmap", "msfconsole", "hydra", "john", "wpscan", "enum4linux",
+	"ffuf", "feroxbuster", "nuclei", "whatweb", "jwt_tool", "dalfox", "browser-check", "retire", "osv-scanner",
+}
 
 const shutdownTimeout = 10 * time.Second
 
@@ -104,6 +107,7 @@ func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) 
 	api.Post("/command/stream", withExecutionLimit(limiter, handleCommandStream))
 
 	api.Post("/tools/gobuster", withExecutionLimit(limiter, handleGobuster))
+	api.Post("/tools/gobuster/stream", withExecutionLimit(limiter, handleGobusterStream))
 	api.Post("/tools/nmap/stream", withExecutionLimit(limiter, handleNmapStream))
 	api.Post("/tools/dirb/stream", withExecutionLimit(limiter, handleDirbStream))
 	api.Post("/tools/nikto/stream", withExecutionLimit(limiter, handleNiktoStream))
@@ -115,6 +119,15 @@ func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) 
 	api.Post("/tools/hydra", withExecutionLimit(limiter, handleHydra))
 	api.Post("/tools/hydra/stream", withExecutionLimit(limiter, handleHydraStream))
 	api.Post("/tools/john", withExecutionLimit(limiter, handleJohn))
+	api.Post("/tools/ffuf/stream", withExecutionLimit(limiter, handleFFUFStream))
+	api.Post("/tools/feroxbuster/stream", withExecutionLimit(limiter, handleFeroxbusterStream))
+	api.Post("/tools/nuclei/stream", withExecutionLimit(limiter, handleNucleiStream))
+	api.Post("/tools/whatweb/stream", withExecutionLimit(limiter, handleWhatWebStream))
+	api.Post("/tools/jwt/stream", withExecutionLimit(limiter, handleJWTStream))
+	api.Post("/tools/dalfox/stream", withExecutionLimit(limiter, handleDalfoxStream))
+	api.Post("/tools/browser/stream", withExecutionLimit(limiter, handleBrowserStream))
+	api.Post("/tools/retire/stream", withExecutionLimit(limiter, handleRetireStream))
+	api.Post("/tools/osv/stream", withExecutionLimit(limiter, handleOSVStream))
 
 	app.Get("/health", handleHealth)
 }

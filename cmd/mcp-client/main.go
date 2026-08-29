@@ -60,7 +60,7 @@ func main() {
 }
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
-	addPostTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster")
+	addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster/stream")
 	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
 	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack. Use for quick single-credential checks; prefer hydra_attack_stream for long-running jobs, such as those using username_file/password_file.", "/api/tools/hydra")
 	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
@@ -80,18 +80,27 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	addStreamTool[dto.HydraRequest](srv, kali, "hydra_attack_stream", "Run Hydra password brute-force attack with real-time streaming output. Use for large jobs or when username_file/password_file is specified.", "/api/tools/hydra/stream")
 	addStreamTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "/api/tools/wpscan/stream")
 	addStreamTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "/api/tools/enum4linux/stream")
+	addStreamTool[dto.FFUFRequest](srv, kali, "ffuf_scan", "Discover web content with automatic calibration, response-size filtering, and optional recursion.", "/api/tools/ffuf/stream")
+	addStreamTool[dto.FeroxbusterRequest](srv, kali, "feroxbuster_scan", "Recursively discover web content with automatic tuning.", "/api/tools/feroxbuster/stream")
+	addStreamTool[dto.NucleiRequest](srv, kali, "nuclei_scan", "Run Nuclei with DoS, fuzz, and interactsh templates excluded unless allow_unsafe is explicitly enabled.", "/api/tools/nuclei/stream")
+	addStreamTool[dto.WhatWebRequest](srv, kali, "whatweb_scan", "Fingerprint web technologies and frameworks.", "/api/tools/whatweb/stream")
+	addStreamTool[dto.JWTRequest](srv, kali, "jwt_analyze", "Analyze JWTs and optionally run jwt_tool live playbook, forced-error, or all-tests scans.", "/api/tools/jwt/stream")
+	addStreamTool[dto.DalfoxRequest](srv, kali, "dalfox_scan", "Collect and verify XSS candidates with Dalfox.", "/api/tools/dalfox/stream")
+	addStreamTool[dto.BrowserRequest](srv, kali, "browser_check", "Load a page in headless Chromium and report dialogs, console messages, page errors, and the rendered DOM.", "/api/tools/browser/stream")
+	addStreamTool[dto.RetireRequest](srv, kali, "retirejs_scan", "Scan local JavaScript bundles for vulnerable dependencies with Retire.js.", "/api/tools/retire/stream")
+	addStreamTool[dto.OSVRequest](srv, kali, "osv_scan", "Scan source lockfiles and manifests for known vulnerable dependencies with OSV-Scanner.", "/api/tools/osv/stream")
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",
 		Description: "Check kali-server health and tool availability.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, dto.HealthResult, error) {
 		h, err := kali.Health(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, dto.HealthResult{}, err
 		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: formatHealthSummary(h)}},
-		}, nil, nil
+		}, *h, nil
 	})
 }
 
@@ -124,9 +133,9 @@ func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, descri
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        name,
 		Description: description,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
 		r, err := kali.Stream(ctx, endpoint, in)
-		return textResult(r, err)
+		return textResult(name, r, err)
 	})
 }
 
@@ -134,19 +143,21 @@ func addPostTool[T any](srv *mcp.Server, kali *kaliclient.Client, name, descript
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        name,
 		Description: description,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
 		r, err := kali.Post(ctx, endpoint, in)
-		return textResult(r, err)
+		return textResult(name, r, err)
 	})
 }
 
-func textResult(r *dto.ToolResult, err error) (*mcp.CallToolResult, any, error) {
+func textResult(name string, r *dto.ToolResult, err error) (*mcp.CallToolResult, dto.ToolResult, error) {
 	if err != nil {
-		return nil, struct{}{}, err
+		return nil, dto.ToolResult{}, err
 	}
+	structured := classifyToolResult(name, *r)
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: r.Format()}},
-	}, nil, nil
+		Content: []mcp.Content{&mcp.TextContent{Text: structured.Format()}},
+		IsError: structured.ExecutionStatus != dto.ExecutionSucceeded,
+	}, structured, nil
 }
 
 const safetyInstructions = `CRITICAL SECURITY RULES:
