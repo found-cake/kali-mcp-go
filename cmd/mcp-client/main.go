@@ -61,39 +61,39 @@ func main() {
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	registerTargetResolver(srv, kali)
-	addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster/stream")
-	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
-	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack. Use for quick single-credential checks; prefer hydra_attack_stream for long-running jobs, such as those using username_file/password_file.", "/api/tools/hydra")
-	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Run John the Ripper password cracker.", "/api/tools/john")
+	addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Discover web content, DNS subdomains, or virtual hosts with Gobuster.", "/api/tools/gobuster/stream")
+	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Run a specified Metasploit module against the authorized target.", "/api/tools/metasploit")
+	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run a short credential audit with Hydra. Use hydra_attack_stream for file-based or long-running attempts.", "/api/tools/hydra")
+	addPostTool[dto.JohnRequest](srv, kali, "john_crack", "Audit a supplied password hash with John the Ripper and optionally mask recovered plaintext.", "/api/tools/john")
 
 	addStreamTool[dto.CommandRequest](
 		srv,
 		kali,
 		"execute_command",
-		"Execute an arbitrary shell command on the Kali Linux machine.",
+		"Run a command in the Kali runtime when no dedicated MCP tool covers the authorized check.",
 		"/api/command/stream",
 	)
-	addStreamTool[dto.NmapRequest](srv, kali, "nmap_scan", "Run an Nmap scan against a target.", "/api/tools/nmap/stream")
-	addStreamTool[dto.DirbRequest](srv, kali, "dirb_scan", "Run Dirb web content scanner.", "/api/tools/dirb/stream")
-	addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Run Nikto web server vulnerability scanner.", "/api/tools/nikto/stream")
-	addStreamTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Run SQLmap SQL injection scanner.", "/api/tools/sqlmap/stream")
-	addStreamTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Run Tshark packet capture and analysis.", "/api/tools/tshark/stream")
-	addStreamTool[dto.HydraRequest](srv, kali, "hydra_attack_stream", "Run Hydra password brute-force attack with real-time streaming output. Use for large jobs or when username_file/password_file is specified.", "/api/tools/hydra/stream")
-	addStreamTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Run WPScan WordPress vulnerability scanner.", "/api/tools/wpscan/stream")
-	addStreamTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Run Enum4linux Windows/Samba enumeration.", "/api/tools/enum4linux/stream")
-	addStreamTool[dto.FFUFRequest](srv, kali, "ffuf_scan", "Discover web content with automatic calibration, response-size filtering, and optional recursion.", "/api/tools/ffuf/stream")
-	addStreamTool[dto.FeroxbusterRequest](srv, kali, "feroxbuster_scan", "Recursively discover web content with automatic tuning.", "/api/tools/feroxbuster/stream")
-	addStreamTool[dto.NucleiRequest](srv, kali, "nuclei_scan", "Run Nuclei with DoS, fuzz, and interactsh templates excluded unless allow_unsafe is explicitly enabled.", "/api/tools/nuclei/stream")
-	addStreamTool[dto.WhatWebRequest](srv, kali, "whatweb_scan", "Fingerprint web technologies and frameworks.", "/api/tools/whatweb/stream")
-	addStreamTool[dto.JWTRequest](srv, kali, "jwt_analyze", "Analyze JWTs and optionally run jwt_tool live playbook, forced-error, or all-tests scans.", "/api/tools/jwt/stream")
+	addStreamTool[dto.NmapRequest](srv, kali, "nmap_scan", "Discover ports, services, and network exposure with Nmap.", "/api/tools/nmap/stream")
+	addStreamTool[dto.DirbRequest](srv, kali, "dirb_scan", "Discover web paths and content with Dirb and a wordlist.", "/api/tools/dirb/stream")
+	addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan", "Check a web server for common misconfigurations and known vulnerability patterns with Nikto.", "/api/tools/nikto/stream")
+	addStreamTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan", "Verify a SQL-injection hypothesis from a URL, JSON body, or raw HTTP request with SQLmap.", "/api/tools/sqlmap/stream")
+	addStreamTool[dto.TsharkRequest](srv, kali, "tshark_capture", "Capture packets or analyze a PCAP with Tshark using explicit filters and limits.", "/api/tools/tshark/stream")
+	addStreamTool[dto.HydraRequest](srv, kali, "hydra_attack_stream", "Stream a long-running or file-based credential audit with Hydra.", "/api/tools/hydra/stream")
+	addStreamTool[dto.WPScanRequest](srv, kali, "wpscan_analyze", "Fingerprint and assess a WordPress target with WPScan.", "/api/tools/wpscan/stream")
+	addStreamTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan", "Enumerate Windows and Samba services with Enum4linux.", "/api/tools/enum4linux/stream")
+	addStreamTool[dto.FFUFRequest](srv, kali, "ffuf_scan", "Discover web content with FFUF, including SPA fallback calibration and recursion.", "/api/tools/ffuf/stream")
+	addStreamTool[dto.FeroxbusterRequest](srv, kali, "feroxbuster_scan", "Recursively discover web content with Feroxbuster and automatic tuning.", "/api/tools/feroxbuster/stream")
+	addStreamTool[dto.NucleiRequest](srv, kali, "nuclei_scan", "Run template-based vulnerability checks with Nuclei. DoS, fuzz, and interactsh templates are excluded by default.", "/api/tools/nuclei/stream")
+	addStreamTool[dto.WhatWebRequest](srv, kali, "whatweb_scan", "Fingerprint web technologies and frameworks with WhatWeb, typically during initial reconnaissance.", "/api/tools/whatweb/stream")
+	addStreamTool[dto.JWTRequest](srv, kali, "jwt_analyze", "Decode and assess JWTs for alg=none, forced-error, playbook, or key-confusion cases with jwt_tool.", "/api/tools/jwt/stream")
 	addStreamTool[dto.DalfoxRequest](srv, kali, "dalfox_scan", "Collect and verify XSS candidates with Dalfox.", "/api/tools/dalfox/stream")
-	addStreamTool[dto.BrowserRequest](srv, kali, "browser_check", "Load a page in headless Chromium and report dialogs, console messages, page errors, and the rendered DOM.", "/api/tools/browser/stream")
-	addStreamTool[dto.RetireRequest](srv, kali, "retirejs_scan", "Scan local JavaScript bundles for vulnerable dependencies with Retire.js.", "/api/tools/retire/stream")
-	addStreamTool[dto.OSVRequest](srv, kali, "osv_scan", "Scan source lockfiles and manifests for known vulnerable dependencies with OSV-Scanner.", "/api/tools/osv/stream")
+	addStreamTool[dto.BrowserRequest](srv, kali, "browser_check", "Verify DOM-XSS execution and inspect browser dialogs, console output, page errors, and rendered DOM with Chromium.", "/api/tools/browser/stream")
+	addStreamTool[dto.RetireRequest](srv, kali, "retirejs_scan", "Identify vulnerable JavaScript dependencies on a page or mounted bundle path with Retire.js.", "/api/tools/retire/stream")
+	addStreamTool[dto.OSVRequest](srv, kali, "osv_scan", "Identify known vulnerable dependencies in a mounted source tree with OSV-Scanner.", "/api/tools/osv/stream")
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",
-		Description: "Check kali-server health and tool availability.",
+		Description: "Check Kali runtime health and installed-tool readiness.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, dto.HealthResult, error) {
 		h, err := kali.Health(ctx)
 		if err != nil {
