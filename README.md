@@ -162,6 +162,8 @@ codex mcp add kali-mcp -- \
 
 Run `codex mcp list` to verify the registration, or `/mcp` inside Codex to inspect the connected server.
 
+Once registered, prompts that ask for Kali tools or a black-box assessment should call the relevant tools from this existing MCP runtime directly. Call `resolve_target` before scanning a loopback target. MCP instructions prohibit checking the host for Kali binaries or installing, pulling, building, or starting a second Kali environment.
+
 For longer scans, the equivalent `~/.codex/config.toml` configuration is:
 
 ```toml
@@ -498,6 +500,10 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 - `http_requests` for SQLmap traffic captured during the run
 
 Tool process failures and timeouts set MCP `isError`; a successful scan with no finding does not.
+
+### Natural-language tool routing
+
+The MCP server instructions and tool descriptions identify authorized black-box penetration testing, security assessment, reconnaissance, enumeration, and requests to use Kali tools as intended use cases. Users do not need to say `MCP` or `kali-mcp`. Include an explicit authorized target and scope, for example: `Run an authorized black-box assessment of http://127.0.0.1:3000 with Kali tools; resolve the target first, then enumerate ports, services, and web technologies.`
 
 ### SQLmap JSON and raw requests
 
