@@ -5,8 +5,9 @@ type TimeoutRequest interface {
 }
 
 type CommandRequest struct {
-	Command string `json:"command" jsonschema:"required,the shell command to run on Kali"`
-	Timeout int    `json:"timeout,omitempty" jsonschema:"timeout in seconds (0 = default 300s)"`
+	Command      string   `json:"command" jsonschema:"required,the shell command to run on Kali"`
+	Timeout      int      `json:"timeout,omitempty" jsonschema:"timeout in seconds (0 = default 300s)"`
+	RedactValues []string `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in inline output and retained artifacts"`
 }
 
 func (r CommandRequest) GetRequestTimeout() int { return r.Timeout }
@@ -87,8 +88,9 @@ type SQLMapRequest struct {
 func (r SQLMapRequest) GetRequestTimeout() int { return r.Timeout }
 
 type MetasploitRequest struct {
-	Module  string            `json:"module" jsonschema:"required,module path e.g. exploit/multi/handler"`
-	Options map[string]string `json:"options,omitempty" jsonschema:"module options as key-value pairs"`
+	Module       string            `json:"module" jsonschema:"required,module path e.g. exploit/multi/handler"`
+	Options      map[string]string `json:"options,omitempty" jsonschema:"module options as key-value pairs"`
+	RedactValues []string          `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in output"`
 }
 
 type HydraRequest struct {
@@ -106,13 +108,14 @@ type HydraRequest struct {
 func (r HydraRequest) GetRequestTimeout() int { return r.Timeout }
 
 type JohnRequest struct {
-	HashFile       string `json:"hash_file,omitempty" jsonschema:"path to hash file; mutually exclusive with hash"`
-	Hash           string `json:"hash,omitempty" jsonschema:"inline hash; stored in a mode-0600 temporary file and deleted after the run"`
-	Wordlist       string `json:"wordlist,omitempty" jsonschema:"path to wordlist (default: rockyou.txt)"`
-	Format         string `json:"format,omitempty" jsonschema:"hash format e.g. md5crypt"`
-	MaskPlaintext  bool   `json:"mask_plaintext,omitempty" jsonschema:"mask recovered plaintext passwords in returned output"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra john arguments"`
-	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the cracking run (0 = default 300s)"`
+	HashFile       string   `json:"hash_file,omitempty" jsonschema:"path to hash file; mutually exclusive with hash"`
+	Hash           string   `json:"hash,omitempty" jsonschema:"inline hash; stored in a mode-0600 temporary file and deleted after the run"`
+	Wordlist       string   `json:"wordlist,omitempty" jsonschema:"path to wordlist (default: rockyou.txt)"`
+	Format         string   `json:"format,omitempty" jsonschema:"hash format e.g. md5crypt"`
+	MaskPlaintext  bool     `json:"mask_plaintext,omitempty" jsonschema:"mask recovered plaintext passwords in returned output"`
+	RedactValues   []string `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in output"`
+	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra john arguments"`
+	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the cracking run (0 = default 300s)"`
 }
 
 func (r JohnRequest) GetRequestTimeout() int { return r.Timeout }

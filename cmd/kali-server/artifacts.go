@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -19,9 +21,15 @@ import (
 const (
 	artifactStoreLocalKey = "artifact-store"
 	artifactTTL           = time.Hour
+	defaultArtifactPage   = 16 * 1024
+	minimumArtifactPage   = 256
+	maximumArtifactPage   = 64 * 1024
 )
 
-var errArtifactNotFound = errors.New("artifact not found or expired")
+var (
+	errArtifactNotFound    = errors.New("artifact not found or expired")
+	errInvalidArtifactPage = errors.New("invalid artifact page")
+)
 
 type storedArtifact struct {
 	path      string
@@ -83,6 +91,46 @@ func (s *artifactStore) read(id string, now time.Time) ([]byte, error) {
 	return payload, nil
 }
 
+func (s *artifactStore) readPage(request dto.ArtifactReadRequest, now time.Time) (dto.ArtifactReadResult, error) {
+	payload, err := s.read(request.ArtifactID, now)
+	if err != nil {
+		return dto.ArtifactReadResult{}, err
+	}
+	limit, err := artifactPageSize(request.Limit)
+	if err != nil {
+		return dto.ArtifactReadResult{}, err
+	}
+	total := int64(len(payload))
+	if request.Offset < 0 || request.Offset > total {
+		return dto.ArtifactReadResult{}, errInvalidArtifactPage
+	}
+	if request.Offset < total && !utf8.RuneStart(payload[request.Offset]) {
+		return dto.ArtifactReadResult{}, errInvalidArtifactPage
+	}
+	end := min(request.Offset+int64(limit), total)
+	for end < total && end > request.Offset && !utf8.RuneStart(payload[end]) {
+		end--
+	}
+	return dto.ArtifactReadResult{
+		ArtifactID: request.ArtifactID,
+		Content:    string(payload[request.Offset:end]),
+		Offset:     request.Offset,
+		NextOffset: end,
+		HasMore:    end < total,
+		TotalBytes: total,
+	}, nil
+}
+
+func artifactPageSize(requested int) (int, error) {
+	if requested == 0 {
+		return defaultArtifactPage, nil
+	}
+	if requested < minimumArtifactPage || requested > maximumArtifactPage {
+		return 0, errInvalidArtifactPage
+	}
+	return requested, nil
+}
+
 func (s *artifactStore) close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -139,4 +187,27 @@ func handleGetArtifact(c fiber.Ctx) error {
 	}
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	return c.Send(payload)
+}
+
+func handleGetArtifactPage(c fiber.Ctx) error {
+	offset, err := strconv.ParseInt(c.Query("offset", "0"), 10, 64)
+	if err != nil {
+		return badRequest(c, "offset must be an integer")
+	}
+	limit, err := strconv.Atoi(c.Query("limit", "0"))
+	if err != nil {
+		return badRequest(c, "limit must be an integer")
+	}
+	page, err := artifactStoreFromContext(c).readPage(dto.ArtifactReadRequest{
+		ArtifactID: c.Params("id"),
+		Offset:     offset,
+		Limit:      limit,
+	}, time.Now().UTC())
+	if errors.Is(err, errArtifactNotFound) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": errArtifactNotFound.Error()})
+	}
+	if err != nil {
+		return badRequest(c, errInvalidArtifactPage.Error())
+	}
+	return c.JSON(page)
 }

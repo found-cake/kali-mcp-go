@@ -114,7 +114,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())
 		}
 	}
-	attachResultArtifact(p.artifactStore, result)
+	protectResult(p.artifactStore, result, p.request)
 }
 
 func probeTargetHealth(ctx context.Context, target string) error {

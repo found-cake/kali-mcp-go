@@ -117,6 +117,7 @@ func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) 
 	api.Get("/tools/capabilities", handleScanCapabilities)
 	api.Post("/tools/resolve-target", withExecutionLimit(limiter, handleResolveTarget))
 	api.Get("/artifacts/:id", handleGetArtifact)
+	api.Get("/artifacts/:id/page", handleGetArtifactPage)
 
 	api.Post("/tools/gobuster", withExecutionLimit(limiter, handleGobuster))
 	api.Post("/tools/gobuster/stream", withExecutionLimit(limiter, handleGobusterStream))

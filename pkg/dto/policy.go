@@ -19,6 +19,7 @@ type ScanOptions struct {
 	Concurrency       int           `json:"concurrency,omitempty" jsonschema:"maximum tool-level concurrency when supported"`
 	HealthURL         string        `json:"health_url,omitempty" jsonschema:"optional target health URL checked before and after the scan"`
 	Max5xxResponses   int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when supported"`
+	RedactValues      []string      `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in inline output and retained artifacts"`
 }
 
 func (o ScanOptions) GetScanOptions() ScanOptions { return o }

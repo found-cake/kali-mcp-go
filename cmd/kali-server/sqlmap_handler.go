@@ -25,6 +25,7 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
+	lines = protectStream(execCtx, lines, req)
 	done = annotateResult(done, func(result *executor.Result) {
 		count := sqlmapPlan.HTTPRequestCount()
 		result.HTTPRequests = &count

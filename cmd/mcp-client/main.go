@@ -17,6 +17,8 @@ import (
 
 var version = "dev"
 
+const defaultInlineOutputBytes = 8 * 1024
+
 func implementationVersion() string {
 	trimmed := strings.TrimSpace(version)
 	if trimmed == "" {
@@ -157,6 +159,7 @@ func textResult(name string, r *dto.ToolResult, err error) (*mcp.CallToolResult,
 		return nil, dto.ToolResult{}, err
 	}
 	structured := classifyToolResult(name, *r)
+	structured = structured.Compact(defaultInlineOutputBytes)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: structured.Format()}},
 		IsError: structured.ExecutionStatus != dto.ExecutionSucceeded,

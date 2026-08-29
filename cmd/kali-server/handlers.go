@@ -23,6 +23,7 @@ func handleCommand(c fiber.Ctx) error {
 	}
 	timeout := commandTimeout(req.Timeout)
 	result := executor.RunShell(c.Context(), timeout, req.Command)
+	protectResult(artifactStoreFromContext(c), result, req)
 	return c.JSON(toAPIResult(result))
 }
 
@@ -39,6 +40,10 @@ func handleCommandStream(c fiber.Ctx) error {
 	timeout := commandTimeout(req.Timeout)
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
+	lines = protectStream(execCtx, lines, req)
+	done = annotateResult(done, func(result *executor.Result) {
+		protectResult(artifactStoreFromContext(c), result, req)
+	})
 	release := retainExecutionLease(c)
 	return sendToolStreamWithCancel(c, lines, done, cancel, release)
 }
@@ -103,7 +108,9 @@ func handleMetasploit(c fiber.Ctx) error {
 	}
 	defer os.Remove(rcFile)
 	args := tools.MetasploitArgs(rcFile)
-	return c.JSON(toAPIResult(executor.RunExec(c.Context(), 0, args[0], args[1:]...)))
+	result := executor.RunExec(c.Context(), 0, args[0], args[1:]...)
+	protectResult(artifactStoreFromContext(c), result, req)
+	return c.JSON(toAPIResult(result))
 }
 
 func handleHydra(c fiber.Ctx) error {
@@ -130,6 +137,7 @@ func handleJohn(c fiber.Ctx) error {
 		result.Stdout = tools.RedactJohnOutput(result.Stdout)
 		result.Stderr = tools.RedactJohnOutput(result.Stderr)
 	}
+	protectResult(artifactStoreFromContext(c), result, req)
 	return c.JSON(toAPIResult(result))
 }
 
@@ -174,6 +182,7 @@ func handleRetireStream(c fiber.Ctx) error {
 	scanPlan.args = retirePlan.Args()
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
+	lines = protectStream(execCtx, lines, req)
 	done = annotateResult(done, func(result *executor.Result) {
 		scanPlan.annotate(result)
 	})

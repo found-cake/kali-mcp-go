@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestGobusterRequestCarriesTimeout(t *testing.T) {
@@ -92,5 +93,24 @@ func TestToolResultJSONAlwaysCarriesStableExecutionFields(t *testing.T) {
 	}
 	if decoded["http_requests"] != nil {
 		t.Fatalf("expected unknown request count to be null: %s", encoded)
+	}
+}
+
+func TestToolResultCompactLimitsInlineOutputAndReportsOriginalSize(t *testing.T) {
+	// Given: a result whose output is too large for an MCP transcript.
+	result := ToolResult{Stdout: strings.Repeat("가", 200), Stderr: strings.Repeat("error", 100)}
+
+	// When: the result is compacted for inline delivery.
+	compacted := result.Compact(128)
+
+	// Then: previews remain valid UTF-8 and the original sizes stay machine-readable.
+	if len(compacted.Stdout) > 160 || len(compacted.Stderr) > 160 || !compacted.OutputTruncated {
+		t.Fatalf("output was not compacted: %+v", compacted)
+	}
+	if compacted.StdoutBytes != len(result.Stdout) || compacted.StderrBytes != len(result.Stderr) {
+		t.Fatalf("unexpected original sizes: %+v", compacted)
+	}
+	if !utf8.ValidString(compacted.Stdout) || !utf8.ValidString(compacted.Stderr) {
+		t.Fatal("compacted output is not valid UTF-8")
 	}
 }

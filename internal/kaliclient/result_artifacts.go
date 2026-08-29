@@ -7,14 +7,19 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func (c *Client) ReadArtifact(ctx context.Context, artifactID string) (*dto.ArtifactReadResult, error) {
+func (c *Client) ReadArtifact(ctx context.Context, body dto.ArtifactReadRequest) (*dto.ArtifactReadResult, error) {
 	requestContext, cancel := c.requestContext(ctx, nil)
 	defer cancel()
-	request, err := c.newJSONRequest(requestContext, http.MethodGet, "/api/artifacts/"+url.PathEscape(artifactID), nil, true)
+	query := url.Values{}
+	query.Set("offset", strconv.FormatInt(body.Offset, 10))
+	query.Set("limit", strconv.Itoa(body.Limit))
+	endpoint := "/api/artifacts/" + url.PathEscape(body.ArtifactID) + "/page?" + query.Encode()
+	request, err := c.newJSONRequest(requestContext, http.MethodGet, endpoint, nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("create artifact request: %w", err)
 	}
@@ -27,9 +32,9 @@ func (c *Client) ReadArtifact(ctx context.Context, artifactID string) (*dto.Arti
 		responseBody, _ := io.ReadAll(response.Body)
 		return nil, fmt.Errorf("server error %d: %s", response.StatusCode, responseBody)
 	}
-	var content json.RawMessage
-	if err := json.NewDecoder(response.Body).Decode(&content); err != nil {
+	var result dto.ArtifactReadResult
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode artifact response: %w", err)
 	}
-	return &dto.ArtifactReadResult{ArtifactID: artifactID, Content: string(content)}, nil
+	return &result, nil
 }

@@ -13,12 +13,12 @@ import (
 func registerResultArtifacts(server *mcp.Server, kali *kaliclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "result_artifact_read",
-		Description: "Read a bearer-protected JSON result artifact retained by kali-server for one hour after a scan.",
+		Description: "Read one bounded UTF-8 page from a bearer-protected redacted result artifact. Start at offset 0 and continue with next_offset while has_more is true.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.ArtifactReadRequest) (*mcp.CallToolResult, dto.ArtifactReadResult, error) {
 		if strings.TrimSpace(request.ArtifactID) == "" {
 			return nil, dto.ArtifactReadResult{}, fmt.Errorf("artifact_id is required")
 		}
-		result, err := kali.ReadArtifact(ctx, request.ArtifactID)
+		result, err := kali.ReadArtifact(ctx, request)
 		if err != nil {
 			return nil, dto.ArtifactReadResult{}, err
 		}

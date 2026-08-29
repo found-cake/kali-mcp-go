@@ -501,7 +501,7 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 - `success`: derived from `status`; a timeout or cancellation is never reported as successful
 - `execution_status`: the detailed process state retained for existing clients
 - `finding_status`: `detected`, `not_detected`, or `unknown`
-- `partial_results`, `http_requests`, and `duration_ms`
+- `partial_results`, `http_requests`, `duration_ms`, original stdout/stderr byte counts, and `output_truncated`
 - `target`: original target, explicitly selected target, resolution ID, and selection basis
 - `execution`: redacted argv, tool version, start time, timeout, profile, rate, concurrency, request budget, health URL, and 5xx threshold
 - `failure`: reason, retryability, resume support, and the bounded cost of a fresh retry
@@ -509,7 +509,7 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 
 Tool process failures and timeouts set MCP `isError`; a successful scan with no finding does not.
 
-`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`; retained output can be fetched with `result_artifact_read` until its `expires_at` timestamp.
+`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the original redacted sizes. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
 
 ### Explicit target resolution
 
@@ -551,7 +551,7 @@ Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/u
 
 John accepts either `hash_file` or an inline `hash`. Inline hashes and John state live under a temporary HOME that is deleted after the run. Set `mask_plaintext` to redact recovered plaintext from returned output. JWT Tool likewise starts from a clean temporary HOME seeded with its packaged configuration, then removes that workspace after each call.
 
-Completed, failed, timed-out, and cancelled scans write a mode-`0600` JSON result into a private server directory. The result contains an opaque artifact ID and `/api/artifacts/...` location, both protected by the same bearer token. Artifacts expire after one hour and are removed when the server shuts down.
+Completed, failed, timed-out, and cancelled tool calls write a mode-`0600` JSON result into a private server directory before the MCP response is compacted. The result contains an opaque artifact ID and `/api/artifacts/...` location, both protected by the same bearer token. Artifacts expire after one hour and are removed when the server shuts down. Known Authorization, Cookie, password, hash, and JWT values are replaced before streaming or storage; callers can add exact values through `redact_values`, subject to bounded count and size limits.
 
 ### Choosing between `hydra_attack` and `hydra_attack_stream`
 

@@ -3,6 +3,7 @@ package dto
 import (
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type ExecutionStatus string
@@ -68,6 +69,9 @@ type ExecutionMetadata struct {
 type ToolResult struct {
 	Stdout            string            `json:"stdout"`
 	Stderr            string            `json:"stderr"`
+	StdoutBytes       int               `json:"stdout_bytes"`
+	StderrBytes       int               `json:"stderr_bytes"`
+	OutputTruncated   bool              `json:"output_truncated"`
 	ReturnCode        int               `json:"return_code"`
 	Success           bool              `json:"success"`
 	TimedOut          bool              `json:"timed_out"`
@@ -85,6 +89,28 @@ type ToolResult struct {
 	FalsePositiveRisk string            `json:"false_positive_risk"`
 	Warnings          []string          `json:"warnings,omitempty"`
 	Artifacts         []ArtifactRef     `json:"artifacts"`
+}
+
+func (r ToolResult) Compact(maximumBytes int) ToolResult {
+	r.StdoutBytes = len(r.Stdout)
+	r.StderrBytes = len(r.Stderr)
+	stdout, stdoutTruncated := compactUTF8(r.Stdout, maximumBytes)
+	stderr, stderrTruncated := compactUTF8(r.Stderr, maximumBytes)
+	r.Stdout = stdout
+	r.Stderr = stderr
+	r.OutputTruncated = stdoutTruncated || stderrTruncated
+	return r
+}
+
+func compactUTF8(value string, maximumBytes int) (string, bool) {
+	if maximumBytes < 0 || len(value) <= maximumBytes {
+		return value, false
+	}
+	end := maximumBytes
+	for end > 0 && !utf8.RuneStart(value[end]) {
+		end--
+	}
+	return value[:end], true
 }
 
 func (r *ToolResult) Finalize() {
@@ -123,6 +149,9 @@ func (r *ToolResult) Format() string {
 		} else {
 			sb.WriteString("[WARNING: timed out with no output]")
 		}
+	}
+	if r.OutputTruncated {
+		sb.WriteString("\n\n[output truncated — read the result artifact for full redacted output]")
 	}
 	if sb.Len() == 0 {
 		sb.WriteString("(no output)")

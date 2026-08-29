@@ -43,6 +43,8 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 	result := dto.ToolResult{
 		Stdout:          r.Stdout,
 		Stderr:          r.Stderr,
+		StdoutBytes:     len(r.Stdout),
+		StderrBytes:     len(r.Stderr),
 		ReturnCode:      r.ReturnCode,
 		TimedOut:        r.TimedOut,
 		Cancelled:       r.Cancelled,
@@ -116,6 +118,9 @@ func parseRequest[T any](c fiber.Ctx, validate func(T) error) (T, error) {
 	bindErr := bindJSON(c, &req)
 	if bindErr != nil {
 		return req, fmt.Errorf("invalid request body")
+	}
+	if err := tools.ValidateRequestSecrets(req); err != nil {
+		return req, err
 	}
 	resolved, err := applyRequestTargetContext(apiTokenFromContext(c), req, time.Now().UTC())
 	if err != nil {
