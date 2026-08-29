@@ -17,11 +17,6 @@ RUN CGO_ENABLED=0 \
 FROM ${KALI_BASE_IMAGE}
 
 ARG TARGETARCH
-ARG DALFOX_VERSION=3.2.1
-ARG JWT_TOOL_VERSION=2.3.0
-ARG OSV_SCANNER_VERSION=2.5.1
-ARG PLAYWRIGHT_VERSION=1.62.1
-ARG RETIRE_VERSION=5.7.0
 
 # Nmap cannot exec when its NET_ADMIN file capability exceeds Docker's default bounding set.
 RUN apt-get update \
@@ -70,15 +65,18 @@ RUN set -eux; \
         arm64) dalfox_arch="aarch64"; osv_arch="arm64" ;; \
         *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
-    dalfox_asset="dalfox-v${DALFOX_VERSION}-linux-${dalfox_arch}-musl.tar.gz"; \
-    curl -fsSL "https://github.com/hahwul/dalfox/releases/download/v${DALFOX_VERSION}/${dalfox_asset}" -o "/tmp/${dalfox_asset}"; \
-    curl -fsSL "https://github.com/hahwul/dalfox/releases/download/v${DALFOX_VERSION}/${dalfox_asset}.sha256" -o "/tmp/${dalfox_asset}.sha256"; \
+    dalfox_release_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/hahwul/dalfox/releases/latest)"; \
+    dalfox_tag="$(basename "$dalfox_release_url")"; \
+    test -n "$dalfox_tag"; \
+    dalfox_asset="dalfox-${dalfox_tag}-linux-${dalfox_arch}-musl.tar.gz"; \
+    curl -fsSL "https://github.com/hahwul/dalfox/releases/download/${dalfox_tag}/${dalfox_asset}" -o "/tmp/${dalfox_asset}"; \
+    curl -fsSL "https://github.com/hahwul/dalfox/releases/download/${dalfox_tag}/${dalfox_asset}.sha256" -o "/tmp/${dalfox_asset}.sha256"; \
     echo "$(awk '{print $1}' "/tmp/${dalfox_asset}.sha256")  /tmp/${dalfox_asset}" | sha256sum -c -; \
     dalfox_dir="${dalfox_asset%.tar.gz}"; \
     tar -xzf "/tmp/${dalfox_asset}" -C /usr/local/bin --strip-components=1 "${dalfox_dir}/dalfox"; \
     osv_asset="osv-scanner_linux_${osv_arch}"; \
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/${osv_asset}" -o "/usr/local/bin/osv-scanner"; \
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS" -o /tmp/osv-scanner_SHA256SUMS; \
+    curl -fsSL "https://github.com/google/osv-scanner/releases/latest/download/${osv_asset}" -o "/usr/local/bin/osv-scanner"; \
+    curl -fsSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_SHA256SUMS" -o /tmp/osv-scanner_SHA256SUMS; \
     osv_checksum="$(grep " ${osv_asset}$" /tmp/osv-scanner_SHA256SUMS | awk '{print $1}')"; \
     echo "${osv_checksum}  /usr/local/bin/osv-scanner" | sha256sum -c -; \
     chmod 0755 /usr/local/bin/dalfox /usr/local/bin/osv-scanner; \
@@ -86,7 +84,10 @@ RUN set -eux; \
 
 RUN set -eux; \
     mkdir -p /opt/jwt_tool; \
-    curl -fsSL "https://github.com/ticarpi/jwt_tool/archive/refs/tags/v${JWT_TOOL_VERSION}.tar.gz" \
+    jwt_release_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/ticarpi/jwt_tool/releases/latest)"; \
+    jwt_tag="$(basename "$jwt_release_url")"; \
+    test -n "$jwt_tag"; \
+    curl -fsSL "https://github.com/ticarpi/jwt_tool/archive/refs/tags/${jwt_tag}.tar.gz" \
         | tar -xz --strip-components=1 -C /opt/jwt_tool; \
     python3 -m venv /opt/jwt_tool/.venv; \
     /opt/jwt_tool/.venv/bin/pip install --no-cache-dir -r /opt/jwt_tool/requirements.txt; \
@@ -95,8 +96,8 @@ RUN set -eux; \
         eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJzZWVkIn0. >/dev/null 2>&1 \
         || test -f /opt/jwt_tool-seed/.jwt_tool/jwtconf.ini; \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install -g \
-        "playwright@${PLAYWRIGHT_VERSION}" \
-        "retire@${RETIRE_VERSION}"
+        playwright \
+        retire
 
 COPY --from=build /out/kali-server /out/mcp-client /usr/local/bin/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
@@ -112,6 +113,7 @@ RUN set -eux; \
     jq --version; \
     nuclei -version; \
     osv-scanner --version; \
+    playwright --version; \
     retire --version; \
     whatweb --version
 
