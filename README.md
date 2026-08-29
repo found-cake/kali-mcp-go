@@ -429,6 +429,10 @@ Notes:
 |---|---|
 | `server_health` | Check server status and tool availability |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
+| `auth_session_create` | Store target-bound headers/cookies behind an opaque, expiring handle |
+| `auth_session_list` | List active authentication session metadata without exposing credentials |
+| `auth_session_delete` | Immediately discard an authentication session and its credentials |
+| `result_artifact_read` | Read a bearer-protected JSON result retained for one hour after a scan |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
 | `gobuster_scan` | Directory / DNS / vhost brute-force (SSE streaming) |
@@ -493,13 +497,45 @@ These tools still use a normal POST request/response flow:
 
 Every tool exposes an MCP output schema and returns both readable text and structured content. The structured result separates:
 
-- `execution_status`: `succeeded`, `failed`, or `timed_out`
+- `status`: `completed`, `failed`, `timeout`, or `cancelled`
+- `success`: derived from `status`; a timeout or cancellation is never reported as successful
+- `execution_status`: the detailed process state retained for existing clients
 - `finding_status`: `detected`, `not_detected`, or `unknown`
-- exit code, timeout, and partial-result state
-- loopback target warnings
-- `http_requests` for SQLmap traffic captured during the run
+- `partial_results`, `http_requests`, and `duration_ms`
+- `target`: original target, explicitly selected target, resolution ID, and selection basis
+- `execution`: redacted argv, tool version, start time, timeout, profile, rate, concurrency, request budget, health URL, and 5xx threshold
+- `failure`: reason, retryability, resume support, and the bounded cost of a fresh retry
+- `artifacts`: opaque IDs and bearer-protected locations for JSON results retained for one hour
 
 Tool process failures and timeouts set MCP `isError`; a successful scan with no finding does not.
+
+`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`; retained output can be fetched with `result_artifact_read` until its `expires_at` timestamp.
+
+### Explicit target resolution
+
+Scan tools never silently rewrite a target. `127.0.0.1`, `localhost`, and `[::1]` refer to the machine or container running `kali-server`, whether that runtime is Docker, a VM, or a directly installed Linux host.
+
+For a loopback target, call `resolve_target`, choose one returned candidate, and pass its `resolution_receipt` to the scan together with the chosen target. The receipt is signed, expires after ten minutes, and proves that the selected target was one of the inspected candidates. Loopback scans without a valid receipt are rejected. Non-loopback targets remain usable without a receipt, but their results carry an unverified-target warning.
+
+### Safety profiles and budgets
+
+Dedicated scan requests accept a `profile` plus optional `max_requests`, `rate_limit`, `concurrency`, `health_url`, and `max_5xx_responses` controls. Available profiles are:
+
+| Profile | Intended use |
+|---|---|
+| `safe-recon` | Low-impact service and technology reconnaissance |
+| `web-discovery-low-rate` | Bounded path discovery with conservative concurrency |
+| `sqli-verify-low-risk` | Targeted SQL injection verification with a low request rate |
+| `browser-xss-confirm` | Browser-backed confirmation of a specific XSS candidate |
+| `explicit-custom` | Explicit caller-supplied controls within hard server limits |
+
+The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate, concurrency, and request-limit flags; the outer timeout also shrinks to the request/rate budget. When `health_url` is present, the server probes it before and after the run. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Nuclei DoS, fuzz, and interactsh selectors remain blocked unless `allow_unsafe` is explicitly enabled.
+
+### Authentication sessions
+
+Use `auth_session_create` instead of copying tokens through multiple tool calls. Supply an exact HTTP(S) `origin`, headers and/or a cookie, an optional TTL of at most 3,600 seconds, and an optional allowlist of tool binaries. The server returns a handle such as `auth_...`; pass it as `session_id` on later scan requests.
+
+The session can only be used against the same origin and, when configured, the specified tools. Returned metadata contains header names and a cookie-present flag, never values. Execution argv is redacted. Sessions expire automatically and can be removed immediately with `auth_session_delete`. Supported tools are FFUF, Nuclei, Feroxbuster, Gobuster, SQLmap, Dalfox, WhatWeb, and Browser Check.
 
 ### Natural-language tool routing
 
@@ -509,11 +545,13 @@ The MCP server instructions and tool descriptions identify authorized black-box 
 
 `sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
 
-### Scan load and artifacts
+### Scan load, SPA baselines, and artifacts
 
-Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. FFUF enables automatic calibration by default for SPA wildcard responses; use `filter_size` when a stable fallback length is known.
+Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. Before FFUF starts, the server samples random missing paths and compares status, length, and normalized body hashes. A stable successful fallback is excluded by size, and every result includes the measured baseline plus `false_positive_risk`. An unstable fallback remains visible with a warning.
 
 John accepts either `hash_file` or an inline `hash`. Inline hashes and John state live under a temporary HOME that is deleted after the run. Set `mask_plaintext` to redact recovered plaintext from returned output. JWT Tool likewise starts from a clean temporary HOME seeded with its packaged configuration, then removes that workspace after each call.
+
+Completed, failed, timed-out, and cancelled scans write a mode-`0600` JSON result into a private server directory. The result contains an opaque artifact ID and `/api/artifacts/...` location, both protected by the same bearer token. Artifacts expire after one hour and are removed when the server shuts down.
 
 ### Choosing between `hydra_attack` and `hydra_attack_stream`
 
