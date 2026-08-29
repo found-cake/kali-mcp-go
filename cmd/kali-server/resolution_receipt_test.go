@@ -61,7 +61,6 @@ func TestResolutionReceiptAllowsPathSpecificScanOnResolvedOrigin(t *testing.T) {
 
 	// When: FFUF selects a path placeholder on that same origin.
 	provenance, err := verifyResolutionReceipt("secret", issued.Token, "http://172.17.0.1:3000/FUZZ", now)
-
 	// Then: the path-specific scan remains verified against the resolved origin.
 	if err != nil {
 		t.Fatalf("verify same-origin path: %v", err)
@@ -97,7 +96,6 @@ func TestResolutionReceiptAllowsNetworkFormDerivedFromResolvedWebTarget(t *testi
 
 	// When: Nmap selects the resolver-provided network form.
 	provenance, err := verifyResolutionReceipt("secret", issued.Token, "host.docker.internal", now)
-
 	// Then: the derived host is verified as the only reachable candidate.
 	if err != nil {
 		t.Fatalf("verify network target: %v", err)
