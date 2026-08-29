@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -10,6 +11,10 @@ import (
 
 func handleSQLMapStream(c fiber.Ctx) error {
 	req, err := parseRequest(c, validateSQLMapRequest)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	provenance, err := resolveTargetProvenance(req, apiTokenFromContext(c), time.Now().UTC())
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
@@ -23,7 +28,8 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	done = annotateResult(done, func(result *executor.Result) {
 		count := plan.HTTPRequestCount()
 		result.HTTPRequests = &count
-		result.Warnings = tools.TargetWarnings(req)
+		result.Target = provenance
+		result.Warnings = targetWarnings(req, provenance)
 	})
 	release := retainExecutionLease(c)
 	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.Cleanup)

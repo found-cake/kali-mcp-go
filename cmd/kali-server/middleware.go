@@ -35,6 +35,7 @@ func bearerAuthMiddleware(apiToken string) fiber.Handler {
 		if subtle.ConstantTimeCompare(providedSum[:], expectedSum[:]) != 1 {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid bearer token"})
 		}
+		c.Locals(apiTokenLocalKey, apiToken)
 		return c.Next()
 	}
 }

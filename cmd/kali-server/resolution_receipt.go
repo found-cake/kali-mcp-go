@@ -1,0 +1,148 @@
+package main
+
+import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/found-cake/kali-mcp-go/internal/tools"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
+	"github.com/gofiber/fiber/v3"
+)
+
+const (
+	apiTokenLocalKey          = "api-token"
+	resolutionReceiptLifetime = 10 * time.Minute
+)
+
+var (
+	errResolutionRequired       = errors.New("target resolution is required for loopback targets")
+	errInvalidResolutionReceipt = errors.New("invalid target resolution receipt")
+	errExpiredResolutionReceipt = errors.New("target resolution receipt has expired")
+	errResolutionTargetMismatch = errors.New("selected target is not present in the resolution receipt")
+)
+
+type resolutionReceiptClaims struct {
+	ResolutionID string   `json:"resolution_id"`
+	Original     string   `json:"original"`
+	Candidates   []string `json:"candidates"`
+	Recommended  string   `json:"recommended,omitempty"`
+	ExpiresAt    int64    `json:"expires_at"`
+}
+
+type issuedResolutionReceipt struct {
+	Token     string
+	ID        string
+	ExpiresAt time.Time
+}
+
+func issueResolutionReceipt(secret string, result dto.TargetResolutionResult, now time.Time) (issuedResolutionReceipt, error) {
+	identifier := make([]byte, 12)
+	if _, err := rand.Read(identifier); err != nil {
+		return issuedResolutionReceipt{}, fmt.Errorf("generate resolution id: %w", err)
+	}
+	expiresAt := now.Add(resolutionReceiptLifetime).UTC()
+	resolutionID := hex.EncodeToString(identifier)
+	claims := resolutionReceiptClaims{
+		ResolutionID: resolutionID,
+		Original:     result.OriginalTarget,
+		Recommended:  result.RecommendedTarget,
+		ExpiresAt:    expiresAt.Unix(),
+		Candidates:   make([]string, 0, len(result.Candidates)),
+	}
+	for _, candidate := range result.Candidates {
+		claims.Candidates = append(claims.Candidates, candidate.Target)
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		return issuedResolutionReceipt{}, fmt.Errorf("encode resolution receipt: %w", err)
+	}
+	encodedPayload := base64.RawURLEncoding.EncodeToString(payload)
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(encodedPayload))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return issuedResolutionReceipt{Token: encodedPayload + "." + signature, ID: resolutionID, ExpiresAt: expiresAt}, nil
+}
+
+func verifyResolutionReceipt(secret, receipt, selected string, now time.Time) (*dto.TargetProvenance, error) {
+	encodedPayload, encodedSignature, found := strings.Cut(receipt, ".")
+	if !found || encodedPayload == "" || encodedSignature == "" {
+		return nil, errInvalidResolutionReceipt
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(encodedSignature)
+	if err != nil {
+		return nil, fmt.Errorf("decode receipt signature: %w", errInvalidResolutionReceipt)
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(encodedPayload))
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return nil, errInvalidResolutionReceipt
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(encodedPayload)
+	if err != nil {
+		return nil, fmt.Errorf("decode receipt payload: %w", errInvalidResolutionReceipt)
+	}
+	var claims resolutionReceiptClaims
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("parse receipt payload: %w", errInvalidResolutionReceipt)
+	}
+	if !now.Before(time.Unix(claims.ExpiresAt, 0)) {
+		return nil, errExpiredResolutionReceipt
+	}
+	matched := false
+	for _, candidate := range claims.Candidates {
+		if candidate == selected {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return nil, errResolutionTargetMismatch
+	}
+	reason := "explicit_candidate"
+	if selected == claims.Recommended && claims.Recommended != "" {
+		reason = "only_reachable_candidate"
+	}
+	return &dto.TargetProvenance{
+		Original:        claims.Original,
+		Selected:        selected,
+		ResolutionID:    claims.ResolutionID,
+		SelectionReason: reason,
+		Verified:        true,
+	}, nil
+}
+
+func resolveTargetProvenance(request any, secret string, now time.Time) (*dto.TargetProvenance, error) {
+	target := tools.RequestTarget(request)
+	if target == "" {
+		return nil, nil
+	}
+	scanRequest, ok := request.(dto.ScanRequest)
+	if !ok || scanRequest.GetScanOptions().ResolutionReceipt == "" {
+		if tools.IsLoopbackTarget(target) {
+			return nil, errResolutionRequired
+		}
+		return &dto.TargetProvenance{Original: target, Selected: target, SelectionReason: "unverified_direct_target"}, nil
+	}
+	return verifyResolutionReceipt(secret, scanRequest.GetScanOptions().ResolutionReceipt, target, now)
+}
+
+func apiTokenFromContext(c fiber.Ctx) string {
+	value, _ := c.Locals(apiTokenLocalKey).(string)
+	return value
+}
+
+func targetWarnings(request any, provenance *dto.TargetProvenance) []string {
+	warnings := tools.TargetWarnings(request)
+	if provenance != nil && !provenance.Verified {
+		warnings = append(warnings, "target was not verified by resolve_target")
+	}
+	return warnings
+}

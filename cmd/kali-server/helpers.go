@@ -57,6 +57,7 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 			StartedAt:    r.StartedAt,
 			TimeoutMS:    r.Timeout.Milliseconds(),
 		},
+		Target:   r.Target,
 		Warnings: r.Warnings,
 	}
 	if result.ExecutionStatus != dto.ExecutionSucceeded {

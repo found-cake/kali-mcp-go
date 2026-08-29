@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -17,6 +18,17 @@ func handleResolveTarget(c fiber.Ctx) error {
 	result, err := tools.ResolveTarget(c.Context(), request)
 	if err != nil {
 		return badRequest(c, err.Error())
+	}
+	receipt, err := issueResolutionReceipt(apiTokenFromContext(c), *result, time.Now().UTC())
+	if err != nil {
+		return internalServerError(c, err.Error())
+	}
+	result.ResolutionID = receipt.ID
+	result.ResolutionReceipt = receipt.Token
+	result.ReceiptExpiresAt = receipt.ExpiresAt
+	result.RecommendationBasis = "explicit_selection_required"
+	if result.RecommendedTarget != "" {
+		result.RecommendationBasis = "only_reachable_candidate"
 	}
 	return c.JSON(result)
 }

@@ -1,5 +1,7 @@
 package dto
 
+import "time"
+
 type TargetScope string
 
 const (
@@ -26,9 +28,21 @@ type TargetCandidate struct {
 }
 
 type TargetResolutionResult struct {
-	OriginalTarget    string            `json:"original_target"`
-	Loopback          bool              `json:"loopback"`
-	Candidates        []TargetCandidate `json:"candidates"`
-	RecommendedTarget string            `json:"recommended_target,omitempty"`
-	Warnings          []string          `json:"warnings,omitempty"`
+	OriginalTarget      string            `json:"original_target"`
+	Loopback            bool              `json:"loopback"`
+	Candidates          []TargetCandidate `json:"candidates"`
+	RecommendedTarget   string            `json:"recommended_target,omitempty"`
+	ResolutionID        string            `json:"resolution_id,omitempty"`
+	ResolutionReceipt   string            `json:"resolution_receipt,omitempty"`
+	ReceiptExpiresAt    time.Time         `json:"receipt_expires_at,omitempty"`
+	RecommendationBasis string            `json:"recommendation_basis,omitempty"`
+	Warnings            []string          `json:"warnings,omitempty"`
+}
+
+type TargetProvenance struct {
+	Original        string `json:"original"`
+	Selected        string `json:"selected"`
+	ResolutionID    string `json:"resolution_id,omitempty"`
+	SelectionReason string `json:"selection_reason"`
+	Verified        bool   `json:"verified"`
 }

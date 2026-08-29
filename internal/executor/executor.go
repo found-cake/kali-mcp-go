@@ -30,6 +30,7 @@ type Result struct {
 	ToolVersion  string
 	ArgvRedacted []string
 	Timeout      time.Duration
+	Target       *dto.TargetProvenance
 }
 
 func (r *Result) Success() bool {

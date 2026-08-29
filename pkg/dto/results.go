@@ -51,6 +51,7 @@ type ToolResult struct {
 	DurationMS      int64             `json:"duration_ms"`
 	Failure         *FailureInfo      `json:"failure"`
 	Execution       ExecutionMetadata `json:"execution"`
+	Target          *TargetProvenance `json:"target"`
 	Warnings        []string          `json:"warnings,omitempty"`
 }
 

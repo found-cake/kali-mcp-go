@@ -13,5 +13,6 @@ type StreamEvent struct {
 	DurationMS   int64             `json:"duration_ms,omitempty"`
 	Failure      *FailureInfo      `json:"failure,omitempty"`
 	Execution    ExecutionMetadata `json:"execution,omitempty"`
+	Target       *TargetProvenance `json:"target,omitempty"`
 	Warnings     []string          `json:"warnings,omitempty"`
 }

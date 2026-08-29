@@ -18,7 +18,7 @@ func isLoopbackHost(host string) bool {
 }
 
 func TargetWarnings(request any) []string {
-	target := requestTarget(request)
+	target := RequestTarget(request)
 	host := targetHost(target)
 	if sqlmap, ok := request.(dto.SQLMapRequest); ok && host == "" {
 		host = rawRequestHost(sqlmap.RawRequest)
@@ -29,7 +29,7 @@ func TargetWarnings(request any) []string {
 	return []string{"loopback target refers to the kali-server runtime; call resolve_target to inspect Docker-host and gateway candidates"}
 }
 
-func requestTarget(request any) string {
+func RequestTarget(request any) string {
 	switch value := request.(type) {
 	case dto.NmapRequest:
 		return value.Target
@@ -40,7 +40,10 @@ func requestTarget(request any) string {
 	case dto.NiktoRequest:
 		return value.Target
 	case dto.SQLMapRequest:
-		return value.URL
+		if value.URL != "" {
+			return value.URL
+		}
+		return rawRequestHost(value.RawRequest)
 	case dto.HydraRequest:
 		return value.Target
 	case dto.WPScanRequest:
@@ -66,6 +69,10 @@ func requestTarget(request any) string {
 	default:
 		return ""
 	}
+}
+
+func IsLoopbackTarget(target string) bool {
+	return isLoopbackHost(targetHost(target))
 }
 
 func targetHost(target string) string {

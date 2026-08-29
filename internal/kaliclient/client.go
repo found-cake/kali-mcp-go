@@ -143,6 +143,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		durationMS   int64
 		failure      *dto.FailureInfo
 		execution    dto.ExecutionMetadata
+		target       *dto.TargetProvenance
 		warnings     []string
 	)
 
@@ -176,6 +177,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 			durationMS = ev.DurationMS
 			failure = ev.Failure
 			execution = ev.Execution
+			target = ev.Target
 			warnings = append(warnings, ev.Warnings...)
 			done = true
 			break
@@ -215,6 +217,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		DurationMS:     durationMS,
 		Failure:        failure,
 		Execution:      execution,
+		Target:         target,
 		Warnings:       warnings,
 		FindingStatus:  dto.FindingsUnknown,
 	}

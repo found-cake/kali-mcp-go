@@ -167,6 +167,7 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 			StartedAt:    result.StartedAt,
 			TimeoutMS:    result.Timeout.Milliseconds(),
 		},
+		Target:   result.Target,
 		Warnings: result.Warnings,
 	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
