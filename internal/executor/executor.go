@@ -16,22 +16,24 @@ import (
 )
 
 type Result struct {
-	Stdout       string
-	Stderr       string
-	ReturnCode   int
-	TimedOut     bool
-	Cancelled    bool
-	HTTPRequests *int
-	Warnings     []string
-	StartedAt    time.Time
-	Duration     time.Duration
-	FailureCode  string
-	Tool         string
-	ToolVersion  string
-	ArgvRedacted []string
-	Timeout      time.Duration
-	Target       *dto.TargetProvenance
-	Policy       dto.ScanOptions
+	Stdout            string
+	Stderr            string
+	ReturnCode        int
+	TimedOut          bool
+	Cancelled         bool
+	HTTPRequests      *int
+	Warnings          []string
+	StartedAt         time.Time
+	Duration          time.Duration
+	FailureCode       string
+	Tool              string
+	ToolVersion       string
+	ArgvRedacted      []string
+	Timeout           time.Duration
+	Target            *dto.TargetProvenance
+	Policy            dto.ScanOptions
+	SPABaseline       *dto.SPABaseline
+	FalsePositiveRisk string
 }
 
 func (r *Result) Success() bool {

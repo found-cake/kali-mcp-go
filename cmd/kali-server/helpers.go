@@ -63,8 +63,10 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 			HealthURL:       r.Policy.HealthURL,
 			Max5xxResponses: r.Policy.Max5xxResponses,
 		},
-		Target:   r.Target,
-		Warnings: r.Warnings,
+		Target:            r.Target,
+		SPABaseline:       r.SPABaseline,
+		FalsePositiveRisk: r.FalsePositiveRisk,
+		Warnings:          r.Warnings,
 	}
 	if result.ExecutionStatus != dto.ExecutionSucceeded {
 		result.Failure = &dto.FailureInfo{

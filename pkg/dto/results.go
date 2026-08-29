@@ -44,21 +44,23 @@ type ExecutionMetadata struct {
 }
 
 type ToolResult struct {
-	Stdout          string            `json:"stdout"`
-	Stderr          string            `json:"stderr"`
-	ReturnCode      int               `json:"return_code"`
-	Success         bool              `json:"success"`
-	TimedOut        bool              `json:"timed_out"`
-	Cancelled       bool              `json:"cancelled"`
-	PartialResults  bool              `json:"partial_results"`
-	ExecutionStatus ExecutionStatus   `json:"execution_status"`
-	FindingStatus   FindingStatus     `json:"finding_status"`
-	HTTPRequests    *int              `json:"http_requests"`
-	DurationMS      int64             `json:"duration_ms"`
-	Failure         *FailureInfo      `json:"failure"`
-	Execution       ExecutionMetadata `json:"execution"`
-	Target          *TargetProvenance `json:"target"`
-	Warnings        []string          `json:"warnings,omitempty"`
+	Stdout            string            `json:"stdout"`
+	Stderr            string            `json:"stderr"`
+	ReturnCode        int               `json:"return_code"`
+	Success           bool              `json:"success"`
+	TimedOut          bool              `json:"timed_out"`
+	Cancelled         bool              `json:"cancelled"`
+	PartialResults    bool              `json:"partial_results"`
+	ExecutionStatus   ExecutionStatus   `json:"execution_status"`
+	FindingStatus     FindingStatus     `json:"finding_status"`
+	HTTPRequests      *int              `json:"http_requests"`
+	DurationMS        int64             `json:"duration_ms"`
+	Failure           *FailureInfo      `json:"failure"`
+	Execution         ExecutionMetadata `json:"execution"`
+	Target            *TargetProvenance `json:"target"`
+	SPABaseline       *SPABaseline      `json:"spa_baseline"`
+	FalsePositiveRisk string            `json:"false_positive_risk"`
+	Warnings          []string          `json:"warnings,omitempty"`
 }
 
 func (r *ToolResult) Finalize() {

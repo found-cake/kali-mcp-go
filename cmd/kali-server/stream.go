@@ -173,8 +173,10 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 			HealthURL:       result.Policy.HealthURL,
 			Max5xxResponses: result.Policy.Max5xxResponses,
 		},
-		Target:   result.Target,
-		Warnings: result.Warnings,
+		Target:            result.Target,
+		SPABaseline:       result.SPABaseline,
+		FalsePositiveRisk: result.FalsePositiveRisk,
+		Warnings:          result.Warnings,
 	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr

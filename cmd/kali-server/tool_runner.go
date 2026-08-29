@@ -47,6 +47,10 @@ func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, ar
 	if err != nil {
 		return scanPreparationError(c, err)
 	}
+	return executeStreamPlan(c, plan)
+}
+
+func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, plan.timeout, plan.args[0], plan.args[1:]...)
 	var breakerTripped *atomic.Bool

@@ -133,10 +133,6 @@ func handleJohn(c fiber.Ctx) error {
 	return c.JSON(toAPIResult(result))
 }
 
-func handleFFUFStream(c fiber.Ctx) error {
-	return runToolStream(c, validateFFUFRequest, tools.FFUFArgs)
-}
-
 func handleFeroxbusterStream(c fiber.Ctx) error {
 	return runToolStream(c, validateFeroxbusterRequest, tools.FeroxbusterArgs)
 }

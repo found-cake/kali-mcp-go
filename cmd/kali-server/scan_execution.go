@@ -33,14 +33,17 @@ func scanPreparationError(c fiber.Ctx, err error) error {
 }
 
 type scanExecutionPlan struct {
-	args      []string
-	options   dto.ScanOptions
-	target    *dto.TargetProvenance
-	timeout   time.Duration
-	release   func()
-	healthURL string
-	request   any
-	context   context.Context
+	args              []string
+	options           dto.ScanOptions
+	target            *dto.TargetProvenance
+	timeout           time.Duration
+	release           func()
+	healthURL         string
+	request           any
+	context           context.Context
+	spaBaseline       *dto.SPABaseline
+	falsePositiveRisk string
+	extraWarnings     []string
 }
 
 func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanExecutionPlan, error) {
@@ -101,6 +104,9 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.Target = p.target
 	result.Warnings = append(result.Warnings, targetWarnings(p.request, p.target)...)
 	result.Policy = p.options
+	result.SPABaseline = p.spaBaseline
+	result.FalsePositiveRisk = p.falsePositiveRisk
+	result.Warnings = append(result.Warnings, p.extraWarnings...)
 	if p.healthURL != "" {
 		if err := probeTargetHealth(p.context, p.healthURL); err != nil {
 			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())

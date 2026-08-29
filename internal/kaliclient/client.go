@@ -132,19 +132,21 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 	}
 
 	var (
-		stdoutLines  []string
-		stderrLines  []string
-		returnCode   int
-		timedOut     bool
-		cancelled    bool
-		done         bool
-		finalError   string
-		httpRequests *int
-		durationMS   int64
-		failure      *dto.FailureInfo
-		execution    dto.ExecutionMetadata
-		target       *dto.TargetProvenance
-		warnings     []string
+		stdoutLines       []string
+		stderrLines       []string
+		returnCode        int
+		timedOut          bool
+		cancelled         bool
+		done              bool
+		finalError        string
+		httpRequests      *int
+		durationMS        int64
+		failure           *dto.FailureInfo
+		execution         dto.ExecutionMetadata
+		target            *dto.TargetProvenance
+		spaBaseline       *dto.SPABaseline
+		falsePositiveRisk string
+		warnings          []string
 	)
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -178,6 +180,8 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 			failure = ev.Failure
 			execution = ev.Execution
 			target = ev.Target
+			spaBaseline = ev.SPABaseline
+			falsePositiveRisk = ev.FalsePositiveRisk
 			warnings = append(warnings, ev.Warnings...)
 			done = true
 			break
@@ -207,19 +211,21 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 	}
 
 	result := &dto.ToolResult{
-		Stdout:         join(stdoutLines),
-		Stderr:         join(stderrLines),
-		ReturnCode:     returnCode,
-		TimedOut:       timedOut,
-		Cancelled:      cancelled,
-		PartialResults: (timedOut || cancelled) && (len(stdoutLines) > 0 || len(stderrLines) > 0),
-		HTTPRequests:   httpRequests,
-		DurationMS:     durationMS,
-		Failure:        failure,
-		Execution:      execution,
-		Target:         target,
-		Warnings:       warnings,
-		FindingStatus:  dto.FindingsUnknown,
+		Stdout:            join(stdoutLines),
+		Stderr:            join(stderrLines),
+		ReturnCode:        returnCode,
+		TimedOut:          timedOut,
+		Cancelled:         cancelled,
+		PartialResults:    (timedOut || cancelled) && (len(stdoutLines) > 0 || len(stderrLines) > 0),
+		HTTPRequests:      httpRequests,
+		DurationMS:        durationMS,
+		Failure:           failure,
+		Execution:         execution,
+		Target:            target,
+		SPABaseline:       spaBaseline,
+		FalsePositiveRisk: falsePositiveRisk,
+		Warnings:          warnings,
+		FindingStatus:     dto.FindingsUnknown,
 	}
 	switch {
 	case timedOut:
