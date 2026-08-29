@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -23,7 +24,13 @@ func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]stri
 	if len(args) == 0 {
 		return internalServerError(c, "internal error: no command generated")
 	}
-	return c.JSON(toAPIResult(executor.RunExec(c.Context(), 0, args[0], args[1:]...)))
+	timeout := time.Duration(0)
+	if timed, ok := any(req).(dto.TimeoutRequest); ok {
+		timeout = commandTimeout(timed.GetRequestTimeout())
+	}
+	result := executor.RunExec(c.Context(), timeout, args[0], args[1:]...)
+	result.Warnings = tools.TargetWarnings(req)
+	return c.JSON(toAPIResult(result))
 }
 
 func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
@@ -41,6 +48,9 @@ func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, ar
 	execCtx, cancel := context.WithCancel(c.Context())
 	timeout := commandTimeout(req.GetRequestTimeout())
 	lines, done := executor.StreamExec(execCtx, timeout, args[0], args[1:]...)
+	done = annotateResult(done, func(result *executor.Result) {
+		result.Warnings = tools.TargetWarnings(req)
+	})
 	release := retainExecutionLease(c)
 	return sendToolStreamWithCancel(c, lines, done, cancel, release)
 }
@@ -82,15 +92,11 @@ func handleNmapStream(c fiber.Ctx) error {
 }
 
 func handleGobuster(c fiber.Ctx) error {
-	return runTool(c, func(req dto.GobusterRequest) error {
-		if req.URL == "" {
-			return fmt.Errorf("url is required")
-		}
-		if !tools.ValidGobusterMode(req.Mode) {
-			return fmt.Errorf("mode must be dir|dns|fuzz|vhost")
-		}
-		return nil
-	}, tools.GobusterArgs)
+	return runTool(c, validateGobusterRequest, tools.GobusterArgs)
+}
+
+func handleGobusterStream(c fiber.Ctx) error {
+	return runToolStream(c, validateGobusterRequest, tools.GobusterArgs)
 }
 
 func handleDirbStream(c fiber.Ctx) error {
@@ -110,7 +116,23 @@ func handleEnum4linuxStream(c fiber.Ctx) error {
 }
 
 func handleSQLMapStream(c fiber.Ctx) error {
-	return runToolStream(c, validateSQLMapRequest, tools.SQLMapArgs)
+	req, err := parseRequest(c, validateSQLMapRequest)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	plan, err := tools.PrepareSQLMap(req)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	args := plan.Args()
+	execCtx, cancel := context.WithCancel(c.Context())
+	lines, done := executor.StreamExec(execCtx, commandTimeout(req.Timeout), args[0], args[1:]...)
+	done = annotateResult(done, func(result *executor.Result) {
+		result.HTTPRequests = plan.HTTPRequestCount()
+		result.Warnings = tools.TargetWarnings(req)
+	})
+	release := retainExecutionLease(c)
+	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.Cleanup)
 }
 
 func handleTsharkStream(c fiber.Ctx) error {
@@ -157,12 +179,87 @@ func handleHydraStream(c fiber.Ctx) error {
 }
 
 func handleJohn(c fiber.Ctx) error {
-	return runTool(c, func(req dto.JohnRequest) error {
-		if req.HashFile == "" {
-			return fmt.Errorf("hash_file is required")
+	req, err := parseRequest(c, validateJohnRequest)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	plan, err := tools.PrepareJohn(req)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	defer plan.Cleanup()
+	args := plan.Args()
+	result := executor.RunExec(c.Context(), commandTimeout(req.Timeout), args[0], args[1:]...)
+	if req.MaskPlaintext {
+		result.Stdout = tools.RedactJohnOutput(result.Stdout)
+		result.Stderr = tools.RedactJohnOutput(result.Stderr)
+	}
+	return c.JSON(toAPIResult(result))
+}
+
+func handleFFUFStream(c fiber.Ctx) error {
+	return runToolStream(c, validateFFUFRequest, tools.FFUFArgs)
+}
+
+func handleFeroxbusterStream(c fiber.Ctx) error {
+	return runToolStream(c, validateFeroxbusterRequest, tools.FeroxbusterArgs)
+}
+
+func handleNucleiStream(c fiber.Ctx) error {
+	return runToolStream(c, validateNucleiRequest, tools.NucleiArgs)
+}
+
+func handleWhatWebStream(c fiber.Ctx) error {
+	return runToolStream(c, validateWhatWebRequest, tools.WhatWebArgs)
+}
+
+func handleJWTStream(c fiber.Ctx) error {
+	return runToolStream(c, validateJWTRequest, tools.JWTToolArgs)
+}
+
+func handleDalfoxStream(c fiber.Ctx) error {
+	return runToolStream(c, validateDalfoxRequest, tools.DalfoxArgs)
+}
+
+func handleBrowserStream(c fiber.Ctx) error {
+	return runToolStream(c, validateBrowserRequest, tools.BrowserArgs)
+}
+
+func handleRetireStream(c fiber.Ctx) error {
+	req, err := parseRequest(c, validateRetireRequest)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	plan, err := tools.PrepareRetire(c.Context(), req)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+	args := plan.Args()
+	execCtx, cancel := context.WithCancel(c.Context())
+	lines, done := executor.StreamExec(execCtx, commandTimeout(req.Timeout), args[0], args[1:]...)
+	done = annotateResult(done, func(result *executor.Result) {
+		result.Warnings = tools.TargetWarnings(req)
+	})
+	release := retainExecutionLease(c)
+	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.Cleanup)
+}
+
+func handleOSVStream(c fiber.Ctx) error {
+	return runToolStream(c, validateOSVRequest, tools.OSVArgs)
+}
+
+func annotateResult(done <-chan *executor.Result, annotate func(*executor.Result)) <-chan *executor.Result {
+	annotated := make(chan *executor.Result, 1)
+	go func() {
+		defer close(annotated)
+		result, ok := <-done
+		if !ok {
+			return
 		}
-		return nil
-	}, tools.JohnArgs)
+		annotate(result)
+		annotated <- result
+	}()
+	return annotated
 }
 
 func handleHealth(c fiber.Ctx) error {

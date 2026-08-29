@@ -533,7 +533,7 @@ func TestHandleEnum4linuxStreamRejectsMissingTarget(t *testing.T) {
 	}
 }
 
-func TestHandleSQLMapStreamRejectsMissingURL(t *testing.T) {
+func TestHandleSQLMapStreamRejectsMissingSource(t *testing.T) {
 	t.Parallel()
 
 	app := fiber.New()
@@ -555,8 +555,8 @@ func TestHandleSQLMapStreamRejectsMissingURL(t *testing.T) {
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
 	}
-	if !strings.Contains(string(body), "url is required") {
-		t.Fatalf("expected url validation message, got %s", string(body))
+	if !strings.Contains(string(body), "provide exactly one of url, request_file, or raw_request") {
+		t.Fatalf("expected source validation message, got %s", string(body))
 	}
 }
 
