@@ -276,7 +276,7 @@ To use a fixed token instead of the generated one, pass it explicitly with `-e K
 
 The `latest` and versioned images are built from Kali's last release when a project release tag is published. The `rolling` image is rebuilt from Kali Rolling every two weeks and whenever a project release tag is published. `--pull=always` checks the registry whenever the MCP server starts, but Docker downloads image layers only when the published digest has changed. Use a version tag such as `:v1.2.3` and omit `--pull=always` if you prefer a fixed image.
 
-The container uses Docker's default network. In Docker mode, loopback targets such as `127.0.0.1`, `localhost`, and `[::1]` are automatically translated to the host-side IPv4 address. Set `KALI_MCP_LOOPBACK_HOST` to override the host alias, or set it to an empty value when you intentionally need to target the Kali container itself. On Linux, persistent containers that bypass the bundled entrypoint may also need `--add-host host.docker.internal:host-gateway`.
+The container uses Docker's default network. Scan tools never rewrite loopback targets: `127.0.0.1`, `localhost`, and `[::1]` always refer to the runtime where `kali-server` is running. Call `resolve_target` first to inspect the Kali runtime, `host.docker.internal` when it resolves, and the Linux default gateway. The resolver performs only bounded TCP connects to the requested port and returns a recommendation only when exactly one candidate is reachable. On Linux, persistent containers may need `--add-host host.docker.internal:host-gateway`.
 
 Nmap's packaged file capability is removed during image construction because Docker rejects execution when that capability exceeds the container bounding set. TCP connect scans such as `-sT -Pn` work with Docker's default capabilities. Add `--cap-add NET_RAW --cap-add NET_ADMIN` only when a scan that actually opens raw sockets requires them. For troubleshooting, check the Nmap binary permissions and file capabilities, mount options, and seccomp/AppArmor policy before adding capabilities.
 
@@ -416,7 +416,6 @@ Notes:
 | `KALI_MCP_API_TOKEN` | both | Bearer token for API authentication; required for separate processes, optional in Docker mode because the entrypoint generates one when omitted |
 | `KALI_MCP_DIR_WORDLIST` | kali-server | Override default dir wordlist (default: `/usr/share/wordlists/dirb/common.txt`) |
 | `KALI_MCP_JOHN_WORDLIST` | kali-server | Override default John wordlist (default: `/usr/share/wordlists/rockyou.txt`) |
-| `KALI_MCP_LOOPBACK_HOST` | kali-server | Host alias or IPv4 address used to translate container loopback targets (Docker default: `host.docker.internal`) |
 
 > `ReadTimeout` is enforced for incoming request bodies, while streaming responses remain unrestricted by `WriteTimeout`.
 
@@ -427,6 +426,7 @@ Notes:
 | MCP tool | Description |
 |---|---|
 | `server_health` | Check server status and tool availability |
+| `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
 | `gobuster_scan` | Directory / DNS / vhost brute-force (SSE streaming) |
@@ -494,7 +494,7 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 - `execution_status`: `succeeded`, `failed`, or `timed_out`
 - `finding_status`: `detected`, `not_detected`, or `unknown`
 - exit code, timeout, and partial-result state
-- target translation warnings
+- loopback target warnings
 - `http_requests` for SQLmap traffic captured during the run
 
 Tool process failures and timeouts set MCP `isError`; a successful scan with no finding does not.
