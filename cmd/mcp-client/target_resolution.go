@@ -13,7 +13,7 @@ import (
 func registerTargetResolver(server *mcp.Server, kali *kaliclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "resolve_target",
-		Description: "Resolve target candidates from the Kali runtime without rewriting the requested target. Use for loopback addresses or when connectivity must be rechecked.",
+		Description: "Resolve target candidates from the Kali runtime without rewriting the request, returning browser URL and network host formats plus a receipt for the explicitly selected form.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.ResolveTargetRequest) (*mcp.CallToolResult, dto.TargetResolutionResult, error) {
 		result, err := kali.ResolveTarget(ctx, request)
 		if err != nil {
@@ -41,9 +41,27 @@ func formatTargetResolution(result *dto.TargetResolutionResult) string {
 			fmt.Fprintf(&output, " (%s)", strings.Join(candidate.ResolvedAddresses, ", "))
 		}
 		output.WriteByte('\n')
+		if candidate.BrowserTarget != "" {
+			fmt.Fprintf(&output, "  browser target: %s\n", candidate.BrowserTarget)
+		}
+		fmt.Fprintf(&output, "  network target: %s", candidate.NetworkTarget)
+		if candidate.Port > 0 {
+			fmt.Fprintf(&output, " (port %d)", candidate.Port)
+		}
+		output.WriteByte('\n')
 	}
 	if result.RecommendedTarget != "" {
 		fmt.Fprintf(&output, "recommended target: %s\n", result.RecommendedTarget)
+	}
+	if result.RecommendedBrowserTarget != "" {
+		fmt.Fprintf(&output, "recommended browser target: %s\n", result.RecommendedBrowserTarget)
+	}
+	if result.RecommendedNetworkTarget != "" {
+		fmt.Fprintf(&output, "recommended network target: %s", result.RecommendedNetworkTarget)
+		if result.RecommendedNetworkPort > 0 {
+			fmt.Fprintf(&output, " (port %d)", result.RecommendedNetworkPort)
+		}
+		output.WriteByte('\n')
 	}
 	for _, warning := range result.Warnings {
 		fmt.Fprintf(&output, "warning: %s\n", warning)

@@ -41,6 +41,12 @@ func TestResolveTargetReportsReachableRuntimeCandidate(t *testing.T) {
 	if candidate.Target != target || candidate.Scope != dto.TargetScopeKaliRuntime || !candidate.Probed || !candidate.Reachable {
 		t.Fatalf("unexpected runtime candidate: %+v", candidate)
 	}
+	if candidate.BrowserTarget != target || candidate.NetworkTarget != "127.0.0.1" {
+		t.Fatalf("unexpected tool-specific targets: %+v", candidate)
+	}
+	if result.RecommendedBrowserTarget != target || result.RecommendedNetworkTarget != "127.0.0.1" || result.RecommendedNetworkPort != port {
+		t.Fatalf("unexpected recommended tool targets: %+v", result)
+	}
 }
 
 func acceptAndClose(listener net.Listener) {

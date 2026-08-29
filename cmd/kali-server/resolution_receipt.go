@@ -31,11 +31,12 @@ var (
 )
 
 type resolutionReceiptClaims struct {
-	ResolutionID string   `json:"resolution_id"`
-	Original     string   `json:"original"`
-	Candidates   []string `json:"candidates"`
-	Recommended  string   `json:"recommended,omitempty"`
-	ExpiresAt    int64    `json:"expires_at"`
+	ResolutionID       string   `json:"resolution_id"`
+	Original           string   `json:"original"`
+	Candidates         []string `json:"candidates"`
+	Recommended        string   `json:"recommended,omitempty"`
+	RecommendedTargets []string `json:"recommended_targets,omitempty"`
+	ExpiresAt          int64    `json:"expires_at"`
 }
 
 type issuedResolutionReceipt struct {
@@ -56,10 +57,23 @@ func issueResolutionReceipt(secret string, result dto.TargetResolutionResult, no
 		Original:     result.OriginalTarget,
 		Recommended:  result.RecommendedTarget,
 		ExpiresAt:    expiresAt.Unix(),
-		Candidates:   make([]string, 0, len(result.Candidates)),
+		Candidates:   make([]string, 0, len(result.Candidates)*3),
 	}
+	seenCandidates := make(map[string]bool)
 	for _, candidate := range result.Candidates {
-		claims.Candidates = append(claims.Candidates, candidate.Target)
+		for _, target := range []string{candidate.Target, candidate.BrowserTarget, candidate.NetworkTarget} {
+			if target != "" && !seenCandidates[target] {
+				claims.Candidates = append(claims.Candidates, target)
+				seenCandidates[target] = true
+			}
+		}
+	}
+	seenRecommended := make(map[string]bool)
+	for _, target := range []string{result.RecommendedTarget, result.RecommendedBrowserTarget, result.RecommendedNetworkTarget} {
+		if target != "" && !seenRecommended[target] {
+			claims.RecommendedTargets = append(claims.RecommendedTargets, target)
+			seenRecommended[target] = true
+		}
 	}
 	payload, err := json.Marshal(claims)
 	if err != nil {
@@ -108,8 +122,11 @@ func verifyResolutionReceipt(secret, receipt, selected string, now time.Time) (*
 		return nil, errResolutionTargetMismatch
 	}
 	reason := "explicit_candidate"
-	if selected == claims.Recommended && claims.Recommended != "" {
-		reason = "only_reachable_candidate"
+	for _, recommended := range append([]string{claims.Recommended}, claims.RecommendedTargets...) {
+		if selected == recommended && recommended != "" {
+			reason = "only_reachable_candidate"
+			break
+		}
 	}
 	return &dto.TargetProvenance{
 		Original:        claims.Original,

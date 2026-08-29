@@ -49,7 +49,12 @@ func ResolveTarget(ctx context.Context, request dto.ResolveTargetRequest) (*dto.
 	for _, candidate := range candidateHosts(parsed.host, result.Loopback) {
 		result.Candidates = append(result.Candidates, inspectCandidate(ctx, parsed, candidate, timeout))
 	}
-	result.RecommendedTarget = onlyReachableTarget(result.Candidates)
+	if recommended, ok := onlyReachableCandidate(result.Candidates); ok {
+		result.RecommendedTarget = recommended.Target
+		result.RecommendedBrowserTarget = recommended.BrowserTarget
+		result.RecommendedNetworkTarget = recommended.NetworkTarget
+		result.RecommendedNetworkPort = recommended.Port
+	}
 	if result.Loopback {
 		result.Warnings = []string{"scan targets are never rewritten; choose a candidate explicitly for the next tool call"}
 	}
@@ -141,10 +146,14 @@ func dockerHostResolvable() bool {
 
 func inspectCandidate(ctx context.Context, target parsedTarget, candidate candidateHost, timeout time.Duration) dto.TargetCandidate {
 	result := dto.TargetCandidate{
-		Target: target.withHost(candidate.host),
-		Host:   candidate.host,
-		Port:   target.port,
-		Scope:  candidate.scope,
+		Target:        target.withHost(candidate.host),
+		NetworkTarget: candidate.host,
+		Host:          candidate.host,
+		Port:          target.port,
+		Scope:         candidate.scope,
+	}
+	if target.url != nil {
+		result.BrowserTarget = result.Target
 	}
 	lookupCtx, cancel := context.WithTimeout(ctx, timeout)
 	addresses, err := net.DefaultResolver.LookupIPAddr(lookupCtx, candidate.host)
@@ -187,18 +196,20 @@ func (target parsedTarget) withHost(host string) string {
 	return host
 }
 
-func onlyReachableTarget(candidates []dto.TargetCandidate) string {
-	recommended := ""
+func onlyReachableCandidate(candidates []dto.TargetCandidate) (dto.TargetCandidate, bool) {
+	var recommended dto.TargetCandidate
+	found := false
 	for _, candidate := range candidates {
 		if !candidate.Reachable {
 			continue
 		}
-		if recommended != "" {
-			return ""
+		if found {
+			return dto.TargetCandidate{}, false
 		}
-		recommended = candidate.Target
+		recommended = candidate
+		found = true
 	}
-	return recommended
+	return recommended, found
 }
 
 func defaultGateway() string {

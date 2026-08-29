@@ -70,3 +70,39 @@ func TestResolutionReceiptAllowsPathSpecificScanOnResolvedOrigin(t *testing.T) {
 		t.Fatalf("unexpected provenance: %+v", provenance)
 	}
 }
+
+func TestResolutionReceiptAllowsNetworkFormDerivedFromResolvedWebTarget(t *testing.T) {
+	// Given: a resolver candidate with explicit browser and network forms.
+	now := time.Date(2026, time.August, 29, 9, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget:           "http://127.0.0.1:3000/",
+		RecommendedTarget:        "http://host.docker.internal:3000/",
+		RecommendedBrowserTarget: "http://host.docker.internal:3000/",
+		RecommendedNetworkTarget: "host.docker.internal",
+		RecommendedNetworkPort:   3000,
+		Candidates: []dto.TargetCandidate{
+			{
+				Target:        "http://host.docker.internal:3000/",
+				BrowserTarget: "http://host.docker.internal:3000/",
+				NetworkTarget: "host.docker.internal",
+				Port:          3000,
+				Reachable:     true,
+			},
+		},
+	}
+	issued, err := issueResolutionReceipt("secret", result, now)
+	if err != nil {
+		t.Fatalf("issue receipt: %v", err)
+	}
+
+	// When: Nmap selects the resolver-provided network form.
+	provenance, err := verifyResolutionReceipt("secret", issued.Token, "host.docker.internal", now)
+
+	// Then: the derived host is verified as the only reachable candidate.
+	if err != nil {
+		t.Fatalf("verify network target: %v", err)
+	}
+	if !provenance.Verified || provenance.SelectionReason != "only_reachable_candidate" {
+		t.Fatalf("unexpected provenance: %+v", provenance)
+	}
+}

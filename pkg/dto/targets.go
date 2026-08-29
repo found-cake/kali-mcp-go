@@ -18,6 +18,8 @@ type ResolveTargetRequest struct {
 
 type TargetCandidate struct {
 	Target            string      `json:"target"`
+	BrowserTarget     string      `json:"browser_target,omitempty"`
+	NetworkTarget     string      `json:"network_target"`
 	Host              string      `json:"host"`
 	Port              int         `json:"port,omitempty"`
 	Scope             TargetScope `json:"scope"`
@@ -28,15 +30,18 @@ type TargetCandidate struct {
 }
 
 type TargetResolutionResult struct {
-	OriginalTarget      string            `json:"original_target"`
-	Loopback            bool              `json:"loopback"`
-	Candidates          []TargetCandidate `json:"candidates"`
-	RecommendedTarget   string            `json:"recommended_target,omitempty"`
-	ResolutionID        string            `json:"resolution_id,omitempty"`
-	ResolutionReceipt   string            `json:"resolution_receipt,omitempty"`
-	ReceiptExpiresAt    time.Time         `json:"receipt_expires_at,omitempty"`
-	RecommendationBasis string            `json:"recommendation_basis,omitempty"`
-	Warnings            []string          `json:"warnings,omitempty"`
+	OriginalTarget           string            `json:"original_target"`
+	Loopback                 bool              `json:"loopback"`
+	Candidates               []TargetCandidate `json:"candidates"`
+	RecommendedTarget        string            `json:"recommended_target,omitempty"`
+	RecommendedBrowserTarget string            `json:"recommended_browser_target,omitempty"`
+	RecommendedNetworkTarget string            `json:"recommended_network_target,omitempty"`
+	RecommendedNetworkPort   int               `json:"recommended_network_port,omitempty"`
+	ResolutionID             string            `json:"resolution_id,omitempty"`
+	ResolutionReceipt        string            `json:"resolution_receipt,omitempty"`
+	ReceiptExpiresAt         time.Time         `json:"receipt_expires_at,omitempty"`
+	RecommendationBasis      string            `json:"recommendation_basis,omitempty"`
+	Warnings                 []string          `json:"warnings,omitempty"`
 }
 
 type TargetProvenance struct {
