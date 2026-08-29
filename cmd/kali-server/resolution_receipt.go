@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -98,7 +99,7 @@ func verifyResolutionReceipt(secret, receipt, selected string, now time.Time) (*
 	}
 	matched := false
 	for _, candidate := range claims.Candidates {
-		if candidate == selected {
+		if resolutionCandidateMatches(candidate, selected) {
 			matched = true
 			break
 		}
@@ -117,6 +118,35 @@ func verifyResolutionReceipt(secret, receipt, selected string, now time.Time) (*
 		SelectionReason: reason,
 		Verified:        true,
 	}, nil
+}
+
+func resolutionCandidateMatches(candidate, selected string) bool {
+	if candidate == selected {
+		return true
+	}
+	candidateOrigin, candidateOK := webOrigin(candidate)
+	selectedOrigin, selectedOK := webOrigin(selected)
+	return candidateOK && selectedOK && candidateOrigin == selectedOrigin
+}
+
+func webOrigin(target string) (string, bool) {
+	parsed, err := url.Parse(target)
+	if err != nil || parsed.User != nil || parsed.Hostname() == "" {
+		return "", false
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", false
+	}
+	port := parsed.Port()
+	if port == "" {
+		if scheme == "http" {
+			port = "80"
+		} else {
+			port = "443"
+		}
+	}
+	return scheme + "://" + strings.ToLower(parsed.Hostname()) + ":" + port, true
 }
 
 func resolveTargetProvenance(request any, secret string, now time.Time) (*dto.TargetProvenance, error) {

@@ -44,3 +44,29 @@ func TestResolveTargetProvenanceRequiresReceiptForLoopback(t *testing.T) {
 		t.Fatalf("expected resolution required, got %v", err)
 	}
 }
+
+func TestResolutionReceiptAllowsPathSpecificScanOnResolvedOrigin(t *testing.T) {
+	// Given: a receipt that resolved the root path of a web origin.
+	now := time.Date(2026, time.August, 29, 9, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{
+			{Target: "http://172.17.0.1:3000/", Reachable: true},
+		},
+	}
+	issued, err := issueResolutionReceipt("secret", result, now)
+	if err != nil {
+		t.Fatalf("issue receipt: %v", err)
+	}
+
+	// When: FFUF selects a path placeholder on that same origin.
+	provenance, err := verifyResolutionReceipt("secret", issued.Token, "http://172.17.0.1:3000/FUZZ", now)
+
+	// Then: the path-specific scan remains verified against the resolved origin.
+	if err != nil {
+		t.Fatalf("verify same-origin path: %v", err)
+	}
+	if provenance.Selected != "http://172.17.0.1:3000/FUZZ" || !provenance.Verified {
+		t.Fatalf("unexpected provenance: %+v", provenance)
+	}
+}
