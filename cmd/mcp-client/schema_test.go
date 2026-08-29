@@ -35,12 +35,16 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	}
 	foundAssessmentStarter := false
 	foundResolver := false
+	foundCapabilities := false
 	for _, tool := range listed.Tools {
 		if tool.Name == "start_blackbox_assessment" {
 			foundAssessmentStarter = true
 		}
 		if tool.Name == "resolve_target" {
 			foundResolver = true
+		}
+		if tool.Name == "get_scan_capabilities" {
+			foundCapabilities = true
 		}
 		schema, ok := tool.InputSchema.(map[string]any)
 		if !ok {
@@ -61,6 +65,9 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	}
 	if !foundResolver {
 		t.Fatal("resolve_target tool is missing")
+	}
+	if !foundCapabilities {
+		t.Fatal("get_scan_capabilities tool is missing")
 	}
 	if foundAssessmentStarter {
 		t.Fatal("start_blackbox_assessment duplicates dedicated MCP tools")

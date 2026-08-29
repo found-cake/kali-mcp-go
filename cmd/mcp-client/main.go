@@ -61,6 +61,7 @@ func main() {
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	registerTargetResolver(srv, kali)
+	registerScanCapabilities(srv, kali)
 	registerResultArtifacts(srv, kali)
 	addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Discover web content, DNS subdomains, or virtual hosts with Gobuster.", "/api/tools/gobuster/stream")
 	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Run a specified Metasploit module against the authorized target.", "/api/tools/metasploit")

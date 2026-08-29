@@ -2,6 +2,7 @@ package tools
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -54,6 +55,33 @@ func TestValidateScanProfileRejectsToolOutsideProfile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected safe-recon to reject sqlmap")
 	}
+}
+
+func TestScanCapabilitiesExposeMCPToolProfileCompatibility(t *testing.T) {
+	// Given: the server's canonical scan policy definitions.
+	// When: an orchestrator requests scan capabilities.
+	capabilities := ScanCapabilities()
+
+	// Then: MCP-facing tool names expose compatible profiles before execution.
+	nmap := findToolCapability(t, capabilities.Tools, "nmap_scan")
+	if !slices.Contains(nmap.Profiles, dto.ProfileSafeRecon) {
+		t.Fatalf("nmap_scan missing safe-recon compatibility: %+v", nmap)
+	}
+	browser := findToolCapability(t, capabilities.Tools, "browser_check")
+	if !slices.Equal(browser.Profiles, []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm, dto.ProfileExplicitCustom}) {
+		t.Fatalf("unexpected browser_check profiles: %+v", browser.Profiles)
+	}
+}
+
+func findToolCapability(t *testing.T, capabilities []dto.ScanToolCapability, name string) dto.ScanToolCapability {
+	t.Helper()
+	for _, capability := range capabilities {
+		if capability.Tool == name {
+			return capability
+		}
+	}
+	t.Fatalf("tool capability not found: %s", name)
+	return dto.ScanToolCapability{}
 }
 
 func TestNucleiArgsRejectsUnsafeAdditionalArgsByDefault(t *testing.T) {

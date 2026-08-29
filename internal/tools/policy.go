@@ -122,14 +122,8 @@ func profileLimits(profile dto.SafetyProfile) dto.ScanOptions {
 
 func profileTools(profile dto.SafetyProfile) map[string]bool {
 	switch profile {
-	case dto.ProfileSafeRecon:
-		return map[string]bool{"nmap": true, "whatweb": true, "ffuf": true, "feroxbuster": true, "gobuster": true, "dirb": true}
-	case dto.ProfileWebDiscoveryLowRate:
-		return map[string]bool{"ffuf": true, "feroxbuster": true, "gobuster": true, "dirb": true, "whatweb": true, "nikto": true}
-	case dto.ProfileSQLILowRisk:
-		return map[string]bool{"sqlmap": true}
-	case dto.ProfileBrowserXSSConfirm:
-		return map[string]bool{"browser-check": true, "dalfox": true}
+	case dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate, dto.ProfileSQLILowRisk, dto.ProfileBrowserXSSConfirm:
+		return compatibleRuntimeTools(profile)
 	default:
 		return nil
 	}
