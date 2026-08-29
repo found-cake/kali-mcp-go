@@ -25,6 +25,24 @@ func TestApplyScanControlsAddsNucleiRateAndConcurrencyLimits(t *testing.T) {
 	}
 }
 
+func TestApplyScanControlsUsesInstalledDalfoxWorkersFlag(t *testing.T) {
+	// Given: a Dalfox command and an explicit concurrency limit.
+	args := []string{"dalfox", "scan", "https://example.com/?q=FUZZ"}
+	controls := dto.ScanOptions{Concurrency: 2}
+
+	// When: the scan policy is applied.
+	got, err := ApplyScanControls(args, controls)
+	if err != nil {
+		t.Fatalf("apply controls: %v", err)
+	}
+
+	// Then: the installed Dalfox version's plural workers flag is used.
+	want := []string{"dalfox", "scan", "https://example.com/?q=FUZZ", "--workers", "2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, got)
+	}
+}
+
 func TestValidateScanProfileRejectsToolOutsideProfile(t *testing.T) {
 	// Given: SQLmap is requested under the reconnaissance-only profile.
 	controls := dto.ScanOptions{Profile: dto.ProfileSafeRecon}

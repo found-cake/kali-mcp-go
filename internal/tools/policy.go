@@ -99,7 +99,7 @@ func ApplyScanControls(args []string, options dto.ScanOptions) ([]string, error)
 		case "sqlmap":
 			result = append(result, "--threads", concurrency)
 		case "dalfox":
-			result = append(result, "--worker", concurrency)
+			result = append(result, "--workers", concurrency)
 		}
 	}
 	return result, nil

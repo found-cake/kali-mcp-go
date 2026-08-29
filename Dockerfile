@@ -108,6 +108,7 @@ RUN set -eux; \
     printf '#!/usr/bin/env sh\nexec node /usr/local/lib/kali-mcp/browser-check.cjs "$@"\n' > /usr/local/bin/browser-check; \
     chmod 0755 /usr/local/bin/browser-check /usr/local/bin/jwt_tool; \
     dalfox --version; \
+    dalfox scan --help 2>&1 | grep -q -- '--workers'; \
     ffuf -V; \
     feroxbuster --version; \
     jq --version; \
