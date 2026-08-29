@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/kaliclient"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -13,7 +14,7 @@ import (
 func registerTargetResolver(server *mcp.Server, kali *kaliclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "resolve_target",
-		Description: "Resolve target candidates from the Kali runtime without rewriting the request, returning browser URL and network host formats plus a receipt for the explicitly selected form.",
+		Description: "Resolve once per target and environment, explicitly select a candidate, then reuse its signed target_context until context_expires_at. Re-resolve only after expiry, connectivity failure, or an environment change.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.ResolveTargetRequest) (*mcp.CallToolResult, dto.TargetResolutionResult, error) {
 		result, err := kali.ResolveTarget(ctx, request)
 		if err != nil {
@@ -41,6 +42,9 @@ func formatTargetResolution(result *dto.TargetResolutionResult) string {
 			fmt.Fprintf(&output, " (%s)", strings.Join(candidate.ResolvedAddresses, ", "))
 		}
 		output.WriteByte('\n')
+		if candidate.TargetContext != "" {
+			fmt.Fprintf(&output, "  target context valid until: %s\n", candidate.ContextExpiresAt.Format(time.RFC3339))
+		}
 		if candidate.BrowserTarget != "" {
 			fmt.Fprintf(&output, "  browser target: %s\n", candidate.BrowserTarget)
 		}

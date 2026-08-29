@@ -14,6 +14,7 @@ const (
 type ResolveTargetRequest struct {
 	Target                     string `json:"target" jsonschema:"required,target URL, host, or host:port to inspect"`
 	ConnectTimeoutMilliseconds int    `json:"connect_timeout_milliseconds,omitempty" jsonschema:"TCP connect timeout per candidate in milliseconds (default 500, maximum 5000)"`
+	ValidForSeconds            int    `json:"valid_for_seconds,omitempty" jsonschema:"signed context validity in seconds (default 600, maximum 3600)"`
 }
 
 type TargetCandidate struct {
@@ -27,6 +28,8 @@ type TargetCandidate struct {
 	Probed            bool        `json:"probed"`
 	Reachable         bool        `json:"reachable"`
 	ProbeError        string      `json:"probe_error,omitempty"`
+	TargetContext     string      `json:"target_context,omitempty"`
+	ContextExpiresAt  time.Time   `json:"context_expires_at,omitempty"`
 }
 
 type TargetResolutionResult struct {

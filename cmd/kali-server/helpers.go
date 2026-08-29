@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -116,6 +117,11 @@ func parseRequest[T any](c fiber.Ctx, validate func(T) error) (T, error) {
 	if bindErr != nil {
 		return req, fmt.Errorf("invalid request body")
 	}
+	resolved, err := applyRequestTargetContext(apiTokenFromContext(c), req, time.Now().UTC())
+	if err != nil {
+		return req, err
+	}
+	req = resolved
 	if err := validate(req); err != nil {
 		return req, err
 	}

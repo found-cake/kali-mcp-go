@@ -50,6 +50,9 @@ func TestResolveTargetRouteReportsReachableRuntimeCandidate(t *testing.T) {
 	if response.StatusCode != http.StatusOK || len(result.Candidates) == 0 || !result.Candidates[0].Reachable {
 		t.Fatalf("unexpected resolver response: status=%d result=%+v", response.StatusCode, result)
 	}
+	if result.Candidates[0].TargetContext == "" || result.Candidates[0].ContextExpiresAt.IsZero() {
+		t.Fatalf("resolver response is missing reusable target context: %+v", result.Candidates[0])
+	}
 }
 
 func acceptResolverConnections(listener net.Listener) {

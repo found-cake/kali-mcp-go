@@ -21,6 +21,7 @@ import (
 const (
 	apiTokenLocalKey          = "api-token"
 	resolutionReceiptLifetime = 10 * time.Minute
+	maximumResolutionLifetime = time.Hour
 )
 
 var (
@@ -46,11 +47,15 @@ type issuedResolutionReceipt struct {
 }
 
 func issueResolutionReceipt(secret string, result dto.TargetResolutionResult, now time.Time) (issuedResolutionReceipt, error) {
+	return issueResolutionReceiptUntil(secret, result, now.Add(resolutionReceiptLifetime))
+}
+
+func issueResolutionReceiptUntil(secret string, result dto.TargetResolutionResult, expiresAt time.Time) (issuedResolutionReceipt, error) {
 	identifier := make([]byte, 12)
 	if _, err := rand.Read(identifier); err != nil {
 		return issuedResolutionReceipt{}, fmt.Errorf("generate resolution id: %w", err)
 	}
-	expiresAt := now.Add(resolutionReceiptLifetime).UTC()
+	expiresAt = expiresAt.UTC()
 	resolutionID := hex.EncodeToString(identifier)
 	claims := resolutionReceiptClaims{
 		ResolutionID: resolutionID,
@@ -172,6 +177,22 @@ func resolveTargetProvenance(request any, secret string, now time.Time) (*dto.Ta
 		return nil, nil
 	}
 	scanRequest, ok := request.(dto.ScanRequest)
+	if ok && scanRequest.GetScanOptions().TargetContext != "" {
+		claims, err := verifyTargetContext(secret, scanRequest.GetScanOptions().TargetContext, now)
+		if err != nil {
+			return nil, err
+		}
+		if target != claims.NetworkTarget && !sameWebOrigin(target, claims.BrowserTarget) {
+			return nil, errResolutionTargetMismatch
+		}
+		return &dto.TargetProvenance{
+			Original:        claims.Original,
+			Selected:        target,
+			ResolutionID:    claims.ResolutionID,
+			SelectionReason: "target_context",
+			Verified:        true,
+		}, nil
+	}
 	if !ok || scanRequest.GetScanOptions().ResolutionReceipt == "" {
 		if tools.IsLoopbackTarget(target) {
 			return nil, errResolutionRequired
@@ -179,6 +200,12 @@ func resolveTargetProvenance(request any, secret string, now time.Time) (*dto.Ta
 		return &dto.TargetProvenance{Original: target, Selected: target, SelectionReason: "unverified_direct_target"}, nil
 	}
 	return verifyResolutionReceipt(secret, scanRequest.GetScanOptions().ResolutionReceipt, target, now)
+}
+
+func sameWebOrigin(selected, candidate string) bool {
+	selectedOrigin, selectedOK := webOrigin(selected)
+	candidateOrigin, candidateOK := webOrigin(candidate)
+	return selectedOK && candidateOK && selectedOrigin == candidateOrigin
 }
 
 func apiTokenFromContext(c fiber.Ctx) string {
