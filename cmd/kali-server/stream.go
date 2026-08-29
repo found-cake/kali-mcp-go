@@ -153,7 +153,13 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 		return
 	}
 	returnCode := result.ReturnCode
-	doneEvent := dto.StreamEvent{Done: true, ReturnCode: &returnCode, TimedOut: result.TimedOut}
+	doneEvent := dto.StreamEvent{
+		Done:         true,
+		ReturnCode:   &returnCode,
+		TimedOut:     result.TimedOut,
+		HTTPRequests: result.HTTPRequests,
+		Warnings:     result.Warnings,
+	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr
 	}

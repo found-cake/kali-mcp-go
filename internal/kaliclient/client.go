@@ -132,12 +132,14 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 	}
 
 	var (
-		stdoutLines []string
-		stderrLines []string
-		returnCode  int
-		timedOut    bool
-		done        bool
-		finalError  string
+		stdoutLines  []string
+		stderrLines  []string
+		returnCode   int
+		timedOut     bool
+		done         bool
+		finalError   string
+		httpRequests int
+		warnings     []string
 	)
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -165,6 +167,8 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 			returnCode = *ev.ReturnCode
 			timedOut = ev.TimedOut
 			finalError = ev.Error
+			httpRequests = ev.HTTPRequests
+			warnings = append(warnings, ev.Warnings...)
 			done = true
 			break
 		}
@@ -192,14 +196,26 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		return strings.Join(lines, "\n") + "\n"
 	}
 
-	return &dto.ToolResult{
+	result := &dto.ToolResult{
 		Stdout:         join(stdoutLines),
 		Stderr:         join(stderrLines),
 		ReturnCode:     returnCode,
 		Success:        (!timedOut && returnCode == 0) || (timedOut && (len(stdoutLines) > 0 || len(stderrLines) > 0)),
 		TimedOut:       timedOut,
 		PartialResults: timedOut && (len(stdoutLines) > 0 || len(stderrLines) > 0),
-	}, nil
+		HTTPRequests:   httpRequests,
+		Warnings:       warnings,
+		FindingStatus:  dto.FindingsUnknown,
+	}
+	switch {
+	case timedOut:
+		result.ExecutionStatus = dto.ExecutionTimedOut
+	case returnCode != 0:
+		result.ExecutionStatus = dto.ExecutionFailed
+	default:
+		result.ExecutionStatus = dto.ExecutionSucceeded
+	}
+	return result, nil
 }
 
 func (c *Client) Health(ctx context.Context) (*dto.HealthResult, error) {

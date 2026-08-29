@@ -39,13 +39,27 @@ func allEssentialToolsAvailable(status map[string]bool) bool {
 
 func toAPIResult(r *executor.Result) dto.ToolResult {
 	return dto.ToolResult{
-		Stdout:         r.Stdout,
-		Stderr:         r.Stderr,
-		ReturnCode:     r.ReturnCode,
-		Success:        r.Success(),
-		TimedOut:       r.TimedOut,
-		PartialResults: r.TimedOut && (r.Stdout != "" || r.Stderr != ""),
+		Stdout:          r.Stdout,
+		Stderr:          r.Stderr,
+		ReturnCode:      r.ReturnCode,
+		Success:         r.Success(),
+		TimedOut:        r.TimedOut,
+		PartialResults:  r.TimedOut && (r.Stdout != "" || r.Stderr != ""),
+		ExecutionStatus: executionStatus(r),
+		FindingStatus:   dto.FindingsUnknown,
+		HTTPRequests:    r.HTTPRequests,
+		Warnings:        r.Warnings,
 	}
+}
+
+func executionStatus(r *executor.Result) dto.ExecutionStatus {
+	if r.TimedOut {
+		return dto.ExecutionTimedOut
+	}
+	if r.ReturnCode != 0 {
+		return dto.ExecutionFailed
+	}
+	return dto.ExecutionSucceeded
 }
 
 func badRequest(c fiber.Ctx, msg string) error {

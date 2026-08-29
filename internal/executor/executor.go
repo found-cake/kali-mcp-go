@@ -5,20 +5,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 type Result struct {
-	Stdout     string
-	Stderr     string
-	ReturnCode int
-	TimedOut   bool
+	Stdout       string
+	Stderr       string
+	ReturnCode   int
+	TimedOut     bool
+	HTTPRequests int
+	Warnings     []string
 }
 
 func (r *Result) Success() bool {
