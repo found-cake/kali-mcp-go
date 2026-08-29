@@ -18,7 +18,7 @@ func toolVersion(ctx context.Context, name string) string {
 	}
 	versionCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(versionCtx, name, "--version").CombinedOutput()
+	output, err := exec.CommandContext(versionCtx, name, versionArguments(name)...).CombinedOutput()
 	version := "unknown"
 	trimmed := strings.TrimSpace(string(output))
 	if err == nil && trimmed != "" {
@@ -26,6 +26,21 @@ func toolVersion(ctx context.Context, name string) string {
 	}
 	versionCache.Store(name, version)
 	return version
+}
+
+func versionArguments(name string) []string {
+	switch name {
+	case "ffuf":
+		return []string{"-V"}
+	case "nuclei":
+		return []string{"-version"}
+	case "gobuster":
+		return []string{"version"}
+	case "nikto":
+		return []string{"-Version"}
+	default:
+		return []string{"--version"}
+	}
 }
 
 func redactArgs(name string, args []string) []string {
