@@ -118,7 +118,11 @@ func (r *ToolResult) Format() string {
 		sb.WriteString(r.Stderr)
 	}
 	if r.TimedOut {
-		sb.WriteString("\n\n[WARNING: timed out — partial results above]")
+		if r.PartialResults || r.Stdout != "" || r.Stderr != "" {
+			sb.WriteString("\n\n[WARNING: timed out — partial results above]")
+		} else {
+			sb.WriteString("[WARNING: timed out with no output]")
+		}
 	}
 	if sb.Len() == 0 {
 		sb.WriteString("(no output)")

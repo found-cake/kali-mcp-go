@@ -2,6 +2,7 @@ package dto
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +19,22 @@ func TestGobusterRequestCarriesTimeout(t *testing.T) {
 	}
 	if string(encoded) != `{"url":"https://example.com","timeout":90}` {
 		t.Fatalf("unexpected JSON contract: %s", encoded)
+	}
+}
+
+func TestToolResultFormatDoesNotClaimPartialOutputWhenTimeoutIsEmpty(t *testing.T) {
+	// Given: a timed-out result with no captured process output.
+	result := ToolResult{TimedOut: true, PartialResults: false}
+
+	// When: the result is rendered for a human MCP response.
+	formatted := result.Format()
+
+	// Then: the summary reports no output instead of claiming partial results.
+	if strings.Contains(formatted, "partial results above") {
+		t.Fatalf("misleading timeout summary: %q", formatted)
+	}
+	if !strings.Contains(formatted, "timed out with no output") {
+		t.Fatalf("missing empty-timeout summary: %q", formatted)
 	}
 }
 
