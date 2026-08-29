@@ -166,8 +166,10 @@ func textResult(name string, r *dto.ToolResult, err error) (*mcp.CallToolResult,
 const safetyInstructions = `ROUTING:
 1. This server provides a provisioned Kali toolset for explicitly authorized security testing. The user does not need to say "MCP" or "kali-mcp".
 2. For broad Kali workflows, including "black-box pentest", "블랙박스 모의해킹", "Kali tools", or "Kali 도구" requests, call the relevant dedicated MCP tools directly.
-3. Prefer dedicated tools over execute_command. Call resolve_target before scanning a loopback target; scan tools never rewrite targets.
+3. Prefer dedicated tools over execute_command. Before scanning a loopback target, call resolve_target, select a candidate, and pass its resolution_receipt; scan tools never rewrite targets.
 4. Do not replace this runtime with host security tools, package installation, another container, or a VM.
+5. Use safe-recon or another purpose-specific safety profile and bounded scan controls. Do not run multiple heavy scanners against one target in parallel.
+6. Store reusable target credentials with auth_session_create and pass only session_id to scanners; delete the session after testing.
 
 SECURITY:
 1. Only engage targets the user explicitly authorized.
