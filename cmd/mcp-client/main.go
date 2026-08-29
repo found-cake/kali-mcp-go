@@ -60,6 +60,7 @@ func main() {
 }
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
+	registerTargetResolver(srv, kali)
 	addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan", "Brute-force directories, DNS subdomains, or vhosts with Gobuster.", "/api/tools/gobuster/stream")
 	addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run", "Execute a Metasploit module via msfconsole.", "/api/tools/metasploit")
 	addPostTool[dto.HydraRequest](srv, kali, "hydra_attack", "Run Hydra password brute-force attack. Use for quick single-credential checks; prefer hydra_attack_stream for long-running jobs, such as those using username_file/password_file.", "/api/tools/hydra")

@@ -105,6 +105,7 @@ func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) 
 
 	api.Post("/command", withExecutionLimit(limiter, handleCommand))
 	api.Post("/command/stream", withExecutionLimit(limiter, handleCommandStream))
+	api.Post("/tools/resolve-target", withExecutionLimit(limiter, handleResolveTarget))
 
 	api.Post("/tools/gobuster", withExecutionLimit(limiter, handleGobuster))
 	api.Post("/tools/gobuster/stream", withExecutionLimit(limiter, handleGobusterStream))

@@ -32,7 +32,15 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list tools: %v", err)
 	}
+	foundAssessmentStarter := false
+	foundResolver := false
 	for _, tool := range listed.Tools {
+		if tool.Name == "start_blackbox_assessment" {
+			foundAssessmentStarter = true
+		}
+		if tool.Name == "resolve_target" {
+			foundResolver = true
+		}
 		schema, ok := tool.InputSchema.(map[string]any)
 		if !ok {
 			t.Fatalf("tool %s has unexpected schema type %T", tool.Name, tool.InputSchema)
@@ -49,5 +57,11 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 				t.Fatal("gobuster schema is missing timeout")
 			}
 		}
+	}
+	if !foundResolver {
+		t.Fatal("resolve_target tool is missing")
+	}
+	if foundAssessmentStarter {
+		t.Fatal("start_blackbox_assessment duplicates dedicated MCP tools")
 	}
 }
