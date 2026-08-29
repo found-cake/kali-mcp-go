@@ -31,6 +31,14 @@ func (c *Client) DeleteAuthSession(ctx context.Context, sessionID string) error 
 	return c.sessionRequest(ctx, http.MethodDelete, "/api/sessions/"+url.PathEscape(sessionID), nil, nil)
 }
 
+func (c *Client) ReadArtifact(ctx context.Context, artifactID string) (*dto.ArtifactReadResult, error) {
+	var content json.RawMessage
+	if err := c.sessionRequest(ctx, http.MethodGet, "/api/artifacts/"+url.PathEscape(artifactID), nil, &content); err != nil {
+		return nil, err
+	}
+	return &dto.ArtifactReadResult{ArtifactID: artifactID, Content: string(content)}, nil
+}
+
 func (c *Client) sessionRequest(ctx context.Context, method, endpoint string, body, output any) error {
 	requestContext, cancel := c.requestContext(ctx, body)
 	defer cancel()
