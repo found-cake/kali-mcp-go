@@ -177,19 +177,22 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 		SPABaseline:       result.SPABaseline,
 		FalsePositiveRisk: result.FalsePositiveRisk,
 		Warnings:          result.Warnings,
+		Artifacts:         result.Artifacts,
 	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr
 		doneEvent.Failure = &dto.FailureInfo{
-			Code:      result.FailureCode,
-			Message:   terminalErr,
-			Retryable: result.TimedOut || result.Cancelled,
+			Code:          result.FailureCode,
+			Message:       terminalErr,
+			Retryable:     result.TimedOut || result.Cancelled,
+			RetryEstimate: &dto.RetryEstimate{MaximumRequests: result.Policy.MaxRequests, TimeoutMS: result.Timeout.Milliseconds()},
 		}
 	} else if result.FailureCode != "" {
 		doneEvent.Failure = &dto.FailureInfo{
-			Code:      result.FailureCode,
-			Message:   result.FailureCode,
-			Retryable: result.TimedOut || result.Cancelled,
+			Code:          result.FailureCode,
+			Message:       result.FailureCode,
+			Retryable:     result.TimedOut || result.Cancelled,
+			RetryEstimate: &dto.RetryEstimate{MaximumRequests: result.Policy.MaxRequests, TimeoutMS: result.Timeout.Milliseconds()},
 		}
 	}
 	payload, err := json.Marshal(doneEvent)

@@ -44,6 +44,7 @@ type scanExecutionPlan struct {
 	spaBaseline       *dto.SPABaseline
 	falsePositiveRisk string
 	extraWarnings     []string
+	artifactStore     *artifactStore
 }
 
 func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanExecutionPlan, error) {
@@ -101,6 +102,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	return &scanExecutionPlan{
 		args: controlledArgs, options: effective, target: provenance, timeout: timeout,
 		release: release, healthURL: effective.HealthURL, request: request, context: c.Context(),
+		artifactStore: artifactStoreFromContext(c),
 	}, nil
 }
 
@@ -116,6 +118,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())
 		}
 	}
+	attachResultArtifact(p.artifactStore, result)
 }
 
 func probeTargetHealth(ctx context.Context, target string) error {

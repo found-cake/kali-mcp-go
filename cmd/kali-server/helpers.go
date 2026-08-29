@@ -67,12 +67,14 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 		SPABaseline:       r.SPABaseline,
 		FalsePositiveRisk: r.FalsePositiveRisk,
 		Warnings:          r.Warnings,
+		Artifacts:         r.Artifacts,
 	}
 	if result.ExecutionStatus != dto.ExecutionSucceeded {
 		result.Failure = &dto.FailureInfo{
-			Code:      r.FailureCode,
-			Message:   strings.TrimSpace(r.Stderr),
-			Retryable: r.TimedOut || r.Cancelled,
+			Code:          r.FailureCode,
+			Message:       strings.TrimSpace(r.Stderr),
+			Retryable:     r.TimedOut || r.Cancelled,
+			RetryEstimate: &dto.RetryEstimate{MaximumRequests: r.Policy.MaxRequests, TimeoutMS: r.Timeout.Milliseconds()},
 		}
 	}
 	result.Finalize()

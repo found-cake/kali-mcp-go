@@ -34,6 +34,7 @@ type Result struct {
 	Policy            dto.ScanOptions
 	SPABaseline       *dto.SPABaseline
 	FalsePositiveRisk string
+	Artifacts         []dto.ArtifactRef
 }
 
 func (r *Result) Success() bool {

@@ -22,11 +22,33 @@ const (
 	FindingsUnknown     FindingStatus = "unknown"
 )
 
+type RunStatus string
+
+const (
+	RunCompleted RunStatus = "completed"
+	RunFailed    RunStatus = "failed"
+	RunTimeout   RunStatus = "timeout"
+	RunCancelled RunStatus = "cancelled"
+)
+
+type RetryEstimate struct {
+	MaximumRequests int   `json:"maximum_requests"`
+	TimeoutMS       int64 `json:"timeout_ms"`
+}
+
 type FailureInfo struct {
-	Code            string `json:"code"`
-	Message         string `json:"message"`
-	Retryable       bool   `json:"retryable"`
-	ResumeSupported bool   `json:"resume_supported"`
+	Code            string         `json:"code"`
+	Message         string         `json:"message"`
+	Retryable       bool           `json:"retryable"`
+	ResumeSupported bool           `json:"resume_supported"`
+	RetryEstimate   *RetryEstimate `json:"retry_estimate,omitempty"`
+}
+
+type ArtifactRef struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Location  string    `json:"location"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 type ExecutionMetadata struct {
@@ -51,6 +73,7 @@ type ToolResult struct {
 	TimedOut          bool              `json:"timed_out"`
 	Cancelled         bool              `json:"cancelled"`
 	PartialResults    bool              `json:"partial_results"`
+	Status            RunStatus         `json:"status"`
 	ExecutionStatus   ExecutionStatus   `json:"execution_status"`
 	FindingStatus     FindingStatus     `json:"finding_status"`
 	HTTPRequests      *int              `json:"http_requests"`
@@ -61,12 +84,23 @@ type ToolResult struct {
 	SPABaseline       *SPABaseline      `json:"spa_baseline"`
 	FalsePositiveRisk string            `json:"false_positive_risk"`
 	Warnings          []string          `json:"warnings,omitempty"`
+	Artifacts         []ArtifactRef     `json:"artifacts"`
 }
 
 func (r *ToolResult) Finalize() {
 	r.Success = r.ExecutionStatus == ExecutionSucceeded
 	r.TimedOut = r.ExecutionStatus == ExecutionTimedOut
 	r.Cancelled = r.ExecutionStatus == ExecutionCancelled
+	switch r.ExecutionStatus {
+	case ExecutionSucceeded:
+		r.Status = RunCompleted
+	case ExecutionTimedOut:
+		r.Status = RunTimeout
+	case ExecutionCancelled:
+		r.Status = RunCancelled
+	default:
+		r.Status = RunFailed
+	}
 	if r.Success {
 		r.Failure = nil
 	}

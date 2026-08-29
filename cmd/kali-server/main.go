@@ -90,6 +90,10 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	weightedCapacity := max(maxConcurrentExecutions, 3)
 	scheduler := newTargetScheduler(weightedCapacity, 3)
 	authSessions := newAuthSessionStore()
+	artifacts, err := newArtifactStore()
+	if err != nil {
+		panic(err)
+	}
 	app := fiber.New(fiber.Config{
 		ReadTimeout:  readTimeout,
 		WriteTimeout: 0,
@@ -100,6 +104,8 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	}
 	app.Use(targetSchedulerMiddleware(scheduler))
 	app.Use(authSessionStoreMiddleware(authSessions))
+	app.Use(artifactStoreMiddleware(artifacts))
+	app.Hooks().OnPostShutdown(func(error) error { return artifacts.close() })
 
 	registerRoutes(app, apiToken, limiter)
 	return app
@@ -114,6 +120,7 @@ func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) 
 	api.Post("/sessions", handleCreateAuthSession)
 	api.Get("/sessions", handleListAuthSessions)
 	api.Delete("/sessions/:id", handleDeleteAuthSession)
+	api.Get("/artifacts/:id", handleGetArtifact)
 
 	api.Post("/tools/gobuster", withExecutionLimit(limiter, handleGobuster))
 	api.Post("/tools/gobuster/stream", withExecutionLimit(limiter, handleGobusterStream))

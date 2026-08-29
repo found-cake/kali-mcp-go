@@ -17,4 +17,5 @@ type StreamEvent struct {
 	SPABaseline       *SPABaseline      `json:"spa_baseline,omitempty"`
 	FalsePositiveRisk string            `json:"false_positive_risk,omitempty"`
 	Warnings          []string          `json:"warnings,omitempty"`
+	Artifacts         []ArtifactRef     `json:"artifacts,omitempty"`
 }

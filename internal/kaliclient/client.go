@@ -147,6 +147,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		spaBaseline       *dto.SPABaseline
 		falsePositiveRisk string
 		warnings          []string
+		artifacts         []dto.ArtifactRef
 	)
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -183,6 +184,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 			spaBaseline = ev.SPABaseline
 			falsePositiveRisk = ev.FalsePositiveRisk
 			warnings = append(warnings, ev.Warnings...)
+			artifacts = append(artifacts, ev.Artifacts...)
 			done = true
 			break
 		}
@@ -225,6 +227,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		SPABaseline:       spaBaseline,
 		FalsePositiveRisk: falsePositiveRisk,
 		Warnings:          warnings,
+		Artifacts:         artifacts,
 		FindingStatus:     dto.FindingsUnknown,
 	}
 	switch {
