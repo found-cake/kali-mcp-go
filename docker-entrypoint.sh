@@ -31,6 +31,20 @@ forward_signal() {
 trap forward_signal INT TERM
 trap cleanup EXIT
 
+if [[ -n "${KALI_MCP_LOOPBACK_HOST:-}" ]] && ! getent hosts "$KALI_MCP_LOOPBACK_HOST" >/dev/null 2>&1; then
+    docker_gateway="$(ip route show default 2>/dev/null | awk 'NR == 1 { print $3 }')"
+    if [[ -n "$docker_gateway" ]]; then
+        KALI_MCP_LOOPBACK_HOST="$docker_gateway"
+        export KALI_MCP_LOOPBACK_HOST
+    fi
+fi
+
+loopback_ipv4="$(getent ahostsv4 "${KALI_MCP_LOOPBACK_HOST:-}" 2>/dev/null | awk 'NR == 1 { print $1 }')"
+if [[ -n "$loopback_ipv4" ]]; then
+    KALI_MCP_LOOPBACK_HOST="$loopback_ipv4"
+    export KALI_MCP_LOOPBACK_HOST
+fi
+
 if [[ -z "${KALI_MCP_API_TOKEN:-}" ]]; then
     KALI_MCP_API_TOKEN="$(openssl rand -hex 32)"
     export KALI_MCP_API_TOKEN
