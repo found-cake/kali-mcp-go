@@ -159,7 +159,7 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 				return
 			}
 		}
-		if err := sc.Err(); err != nil {
+		if err := sc.Err(); err != nil && !(ctx.Err() != nil && errors.Is(err, os.ErrClosed)) {
 			scanErrCh <- fmt.Errorf("%s scan: %w", stream, err)
 		}
 	}

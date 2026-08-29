@@ -138,6 +138,21 @@ func TestStreamShellStopsPromptlyAfterCancel(t *testing.T) {
 	}
 }
 
+func TestRunTimeoutDoesNotReportExpectedPipeClosureAsOutputFailure(t *testing.T) {
+	// Given: a quiet process that exceeds its execution budget.
+
+	// When: the executor terminates the process and closes its output pipes.
+	result := RunShell(context.Background(), 20*time.Millisecond, "sleep 1")
+
+	// Then: only the timeout is reported, without synthetic pipe read errors.
+	if !result.TimedOut {
+		t.Fatalf("expected timeout, got %+v", result)
+	}
+	if strings.Contains(result.Stderr, "scan:") {
+		t.Fatalf("unexpected pipe closure error: %q", result.Stderr)
+	}
+}
+
 func TestStreamExecSupportsConcurrentSessions(t *testing.T) {
 	t.Parallel()
 
