@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -82,40 +81,6 @@ func handleEnum4linuxStream(c fiber.Ctx) error {
 
 func handleTsharkStream(c fiber.Ctx) error {
 	return runToolStream(c, validateTsharkRequest, tools.TsharkArgs)
-}
-
-func handleMetasploit(c fiber.Ctx) error {
-	req, err := parseRequest(c, func(r dto.MetasploitRequest) error {
-		if r.Module == "" {
-			return fmt.Errorf("module is required")
-		}
-		if containsLineBreak(r.Module) {
-			return fmt.Errorf("module must not contain line breaks")
-		}
-		for k, v := range r.Options {
-			if k == "" {
-				return fmt.Errorf("options keys must be non-empty")
-			}
-			if containsLineBreak(k) || containsLineBreak(v) {
-				return fmt.Errorf("options must not contain line breaks")
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	script := tools.MetasploitScript(req)
-	rcFile, err := executor.WriteTemp("msf", script)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	defer os.Remove(rcFile)
-	args := tools.MetasploitArgs(rcFile)
-	result := executor.RunExec(c.Context(), 0, args[0], args[1:]...)
-	result.CallID = callIDFromContext(c)
-	protectResult(artifactStoreFromContext(c), result, req)
-	return c.JSON(toAPIResult(result))
 }
 
 func handleHydra(c fiber.Ctx) error {

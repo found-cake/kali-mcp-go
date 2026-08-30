@@ -73,6 +73,8 @@ func sensitiveFlag(name, flag string) bool {
 		return name == "ffuf" || name == "gobuster" || name == "nuclei"
 	case "-p":
 		return name == "hydra"
+	case "-r":
+		return name == "msfconsole"
 	default:
 		return false
 	}

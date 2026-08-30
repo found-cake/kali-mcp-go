@@ -7,7 +7,7 @@ const mcpSchemaSource = "mcp_tools_list"
 var scanToolCapabilities = []dto.ScanToolCapability{
 	toolCapability("gobuster_scan", "gobuster", "/api/tools/gobuster/stream", "Discover web content, DNS subdomains, or virtual hosts with Gobuster.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, true, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, nativeControls(dto.ScanControlConcurrency)),
 	toolCapability("metasploit_run", "msfconsole", "/api/tools/metasploit", "Run a specified Metasploit module against the authorized target.", dto.TargetInputModule, dto.ImpactExploit, dto.ToolExecutionPost, false, nil, nil),
-	toolCapability("hydra_attack", "hydra", "/api/tools/hydra", "Run a short credential audit with Hydra. Use hydra_attack_stream for file-based or long-running attempts.", dto.TargetInputNetworkHost, dto.ImpactCredential, dto.ToolExecutionPost, false, nil, nil),
+	toolCapability("hydra_attack", "hydra", "/api/tools/hydra", "Run a short credential audit with Hydra. Use hydra_attack_stream for file-based or long-running attempts.", dto.TargetInputNetworkHost, dto.ImpactCredential, dto.ToolExecutionPost, false, nil, nativeControls(dto.ScanControlConcurrency)),
 	toolCapability("john_crack", "john", "/api/tools/john", "Audit a supplied password hash with John the Ripper and optionally mask recovered plaintext.", dto.TargetInputOfflinePath, dto.ImpactCredential, dto.ToolExecutionPost, false, nil, nil),
 	toolCapability("execute_command", "sh", "/api/command/stream", "Run a command in the Kali runtime when no dedicated MCP tool covers the authorized check.", dto.TargetInputCommand, dto.ImpactArbitraryExecution, dto.ToolExecutionStream, false, nil, nil),
 	toolCapability("nmap_scan", "nmap", "/api/tools/nmap/stream", "Discover ports, services, and network exposure with Nmap.", dto.TargetInputNetworkHost, dto.ImpactActive, dto.ToolExecutionStream, true, []dto.SafetyProfile{dto.ProfileSafeRecon}, rateControls(false)),
@@ -15,7 +15,7 @@ var scanToolCapabilities = []dto.ScanToolCapability{
 	toolCapability("nikto_scan", "nikto", "/api/tools/nikto/stream", "Check a web server for common misconfigurations and known vulnerability patterns with Nikto.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, true, []dto.SafetyProfile{dto.ProfileWebDiscoveryLowRate}, nil),
 	toolCapability("sqlmap_scan", "sqlmap", "/api/tools/sqlmap/stream", "Verify a SQL-injection hypothesis from a URL, JSON body, or raw HTTP request with SQLmap.", dto.TargetInputURLOrFile, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSQLILowRisk}, rateAndConcurrencyControls(false)),
 	toolCapability("tshark_capture", "tshark", "/api/tools/tshark/stream", "Capture packets or analyze a PCAP with Tshark using explicit filters and limits.", dto.TargetInputCapture, dto.ImpactPassive, dto.ToolExecutionStream, true, nil, nil),
-	toolCapability("hydra_attack_stream", "hydra", "/api/tools/hydra/stream", "Stream a long-running or file-based credential audit with Hydra.", dto.TargetInputNetworkHost, dto.ImpactCredential, dto.ToolExecutionStream, false, nil, nil),
+	toolCapability("hydra_attack_stream", "hydra", "/api/tools/hydra/stream", "Stream a long-running or file-based credential audit with Hydra.", dto.TargetInputNetworkHost, dto.ImpactCredential, dto.ToolExecutionStream, false, nil, nativeControls(dto.ScanControlConcurrency)),
 	toolCapability("wpscan_analyze", "wpscan", "/api/tools/wpscan/stream", "Fingerprint and assess a WordPress target with WPScan.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, nil, nil),
 	toolCapability("enum4linux_scan", "enum4linux", "/api/tools/enum4linux/stream", "Enumerate Windows and Samba services with Enum4linux.", dto.TargetInputNetworkHost, dto.ImpactActive, dto.ToolExecutionStream, false, nil, nil),
 	toolCapability("ffuf_scan", "ffuf", "/api/tools/ffuf/stream", "Discover web content with FFUF, including SPA fallback calibration and recursion.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, rateAndConcurrencyControls(true)),
@@ -31,15 +31,29 @@ var scanToolCapabilities = []dto.ScanToolCapability{
 }
 
 func toolCapability(name, runtime, endpoint, description string, target dto.TargetInputFormat, impact dto.ImpactLevel, mode dto.ToolExecutionMode, essential bool, profiles []dto.SafetyProfile, controls []dto.ScanControlCapability) dto.ScanToolCapability {
+	requiresTargetContext := impact == dto.ImpactExploit || impact == dto.ImpactCredential && target == dto.TargetInputNetworkHost
+	if requiresTargetContext {
+		controls = append(controls, dto.ScanControlCapability{Control: dto.ScanControlDryRun, Enforcement: dto.ControlServerPreview})
+	}
 	return dto.ScanToolCapability{
 		Tool: name, RuntimeTool: runtime, Endpoint: endpoint, Description: description,
 		TargetInputFormat: target, ImpactLevel: impact, ExecutionMode: mode,
 		InputSchemaSource: mcpSchemaSource, Essential: essential, BuiltIn: runtime == "http-request",
-		Profiles: profiles,
+		RequiresTargetContext: requiresTargetContext,
+		Profiles:              profiles,
 		Controls: append([]dto.ScanControlCapability{{
 			Control: dto.ScanControlTimeout, Enforcement: dto.ControlRequestTimeout,
 		}}, controls...),
 	}
+}
+
+func RuntimeRequiresTargetContext(runtimeTool string) bool {
+	for _, capability := range scanToolCapabilities {
+		if capability.RuntimeTool == runtimeTool && capability.RequiresTargetContext {
+			return true
+		}
+	}
+	return false
 }
 
 func nativeControls(controls ...dto.ScanControl) []dto.ScanControlCapability {

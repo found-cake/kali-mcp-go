@@ -1,11 +1,40 @@
 package main
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
+	"github.com/gofiber/fiber/v3"
 )
+
+func TestPrepareScanExecutionRequiresVerifiedContextForCredentialAttack(t *testing.T) {
+	app := fiber.New()
+	app.Get("/prepare", func(c fiber.Ctx) error {
+		plan, err := prepareScanExecution(c, dto.HydraRequest{
+			Target: "192.0.2.10", Service: "ssh", Username: "root", Password: "test",
+		}, []string{"hydra", "192.0.2.10", "ssh"})
+		if err != nil {
+			return badRequest(c, err.Error())
+		}
+		defer plan.release()
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	request, err := http.NewRequest(http.MethodGet, "/prepare", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("prepare request: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("credential attack accepted an unverified direct target: status=%d", response.StatusCode)
+	}
+}
 
 func TestTargetContextSelectsNetworkFormWithoutServerState(t *testing.T) {
 	// Given: an explicitly resolved Docker-host candidate and a signed context.

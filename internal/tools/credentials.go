@@ -14,6 +14,7 @@ import (
 func MetasploitScript(r dto.MetasploitRequest) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "use %s\n", r.Module)
+	fmt.Fprintf(&sb, "set RHOSTS %s\n", r.Target)
 	optionKeys := make([]string, 0, len(r.Options))
 	for k := range r.Options {
 		optionKeys = append(optionKeys, k)

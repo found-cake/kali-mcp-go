@@ -12,7 +12,7 @@ import (
 func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
 	return withPreparedTool(c, toolExecutionSpec[T]{validate: validate, argsFor: argsFor}, func(plan *scanExecutionPlan) error {
 		defer plan.release()
-		result := executor.RunExec(c.Context(), plan.timeout, plan.args[0], plan.args[1:]...)
+		result := executeOrPreview(c.Context(), plan)
 		plan.annotate(result)
 		return c.JSON(toAPIResult(result))
 	})
@@ -53,6 +53,17 @@ func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute fun
 }
 
 func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
+	if plan.dryRun {
+		result := executeOrPreview(c.Context(), plan)
+		plan.annotate(result)
+		lines := make(chan executor.Line)
+		close(lines)
+		done := make(chan *executor.Result, 1)
+		done <- result
+		close(done)
+		release := retainExecutionLease(c)
+		return sendToolStreamWithCancel(c, lines, done, func() {}, release, plan.release)
+	}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, plan.timeout, plan.args[0], plan.args[1:]...)
 	lines = protectStream(execCtx, lines, plan.request)
@@ -70,4 +81,11 @@ func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 	})
 	release := retainExecutionLease(c)
 	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.release)
+}
+
+func executeOrPreview(ctx context.Context, plan *scanExecutionPlan) *executor.Result {
+	if plan.dryRun {
+		return executor.PreviewExec(ctx, plan.timeout, plan.args[0], plan.args[1:]...)
+	}
+	return executor.RunExec(ctx, plan.timeout, plan.args[0], plan.args[1:]...)
 }

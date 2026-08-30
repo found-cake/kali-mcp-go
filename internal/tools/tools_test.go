@@ -171,7 +171,7 @@ func TestNmapArgsRejectsMalformedAdditionalArgs(t *testing.T) {
 func TestMetasploitScriptUsesRunForAuxiliaryAndExit(t *testing.T) {
 	t.Parallel()
 
-	script := MetasploitScript(dto.MetasploitRequest{Module: "auxiliary/scanner/http/title"})
+	script := MetasploitScript(dto.MetasploitRequest{Module: "auxiliary/scanner/http/title", Target: "192.0.2.10"})
 	if !strings.Contains(script, "\nrun\nexit -y\n") {
 		t.Fatalf("expected run + exit in script, got %q", script)
 	}
@@ -180,7 +180,7 @@ func TestMetasploitScriptUsesRunForAuxiliaryAndExit(t *testing.T) {
 func TestMetasploitScriptUsesExploitForExploitModules(t *testing.T) {
 	t.Parallel()
 
-	script := MetasploitScript(dto.MetasploitRequest{Module: "exploit/multi/handler"})
+	script := MetasploitScript(dto.MetasploitRequest{Module: "exploit/multi/handler", Target: "192.0.2.10"})
 	if !strings.Contains(script, "\nexploit\nexit -y\n") {
 		t.Fatalf("expected exploit + exit in script, got %q", script)
 	}
@@ -191,10 +191,10 @@ func TestMetasploitScriptSortsOptionsDeterministically(t *testing.T) {
 
 	script := MetasploitScript(dto.MetasploitRequest{
 		Module: "auxiliary/scanner/http/title",
+		Target: "10.0.0.1",
 		Options: map[string]string{
-			"RPORT":  "8080",
-			"RHOSTS": "10.0.0.1",
-			"SSL":    "true",
+			"RPORT": "8080",
+			"SSL":   "true",
 		},
 	})
 

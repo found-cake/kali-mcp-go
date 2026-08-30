@@ -49,6 +49,7 @@ type scanExecutionPlan struct {
 	artifactStore         *artifactStore
 	jwtAnalysis           *dto.JWTAnalysisMetadata
 	browserScreenshotPath string
+	dryRun                bool
 }
 
 func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanExecutionPlan, error) {
@@ -71,6 +72,9 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if err != nil {
 		return nil, err
 	}
+	if tools.RuntimeRequiresTargetContext(args[0]) && (provenance == nil || !provenance.Verified) {
+		return nil, fmt.Errorf("%s requires a verified target_context from resolve_target", args[0])
+	}
 	if effective.HealthURL != "" {
 		if err := probeTargetHealth(c.Context(), effective.HealthURL); err != nil {
 			return nil, fmt.Errorf("pre-scan health check: %w", err)
@@ -91,6 +95,10 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if timeoutRequest, ok := any(request).(dto.TimeoutRequest); ok {
 		requestedTimeout = timeoutRequest.GetRequestTimeout()
 	}
+	dryRun := false
+	if request, ok := any(request).(dto.DryRunRequest); ok {
+		dryRun = request.GetDryRun()
+	}
 	timeout := commandTimeout(requestedTimeout)
 	if effective.MaxRequests > 0 && effective.RateLimit > 0 {
 		budgetSeconds := (effective.MaxRequests + effective.RateLimit - 1) / effective.RateLimit
@@ -105,6 +113,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		controls: tools.ScanControlApplication(args[0], options, effective),
 		release:  release, healthURL: effective.HealthURL, request: request, context: c.Context(),
 		artifactStore: artifactStoreFromContext(c),
+		dryRun:        dryRun,
 	}, nil
 }
 

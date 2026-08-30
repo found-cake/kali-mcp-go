@@ -32,6 +32,8 @@ func applyRequestTargetContext[T any](secret string, request T, now time.Time) (
 
 func applyContextTarget(request any, claims targetContextClaims) error {
 	switch value := request.(type) {
+	case *dto.MetasploitRequest:
+		return setNetworkTarget(&value.Target, claims.NetworkTarget)
 	case *dto.NmapRequest:
 		return setNetworkTarget(&value.Target, claims.NetworkTarget)
 	case *dto.GobusterRequest:

@@ -32,6 +32,7 @@ const (
 	ControlDerivedTimeout ControlEnforcement = "derived_timeout"
 	ControlOutputObserver ControlEnforcement = "output_observer"
 	ControlRequestTimeout ControlEnforcement = "request_timeout"
+	ControlServerPreview  ControlEnforcement = "server_preview"
 )
 
 type ScanControlCapability struct {

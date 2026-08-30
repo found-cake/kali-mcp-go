@@ -22,6 +22,7 @@ type Result struct {
 	ReturnCode            int
 	TimedOut              bool
 	Cancelled             bool
+	DryRun                bool
 	HTTPRequests          *int
 	RequestCountSource    dto.RequestCountSource
 	Warnings              []string
@@ -43,10 +44,6 @@ type Result struct {
 	Progress              *dto.ProgressMetadata
 	JWTAnalysis           *dto.JWTAnalysisMetadata
 	BrowserScreenshotPath string
-}
-
-func (r *Result) Success() bool {
-	return !r.TimedOut && !r.Cancelled && r.ReturnCode == 0
 }
 
 type Line struct {

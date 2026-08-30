@@ -104,6 +104,14 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 				t.Fatal("gobuster schema is missing timeout")
 			}
 		}
+		if tool.Name == "hydra_attack" || tool.Name == "metasploit_run" {
+			properties, _ := schema["properties"].(map[string]any)
+			for _, field := range []string{"target_context", "dry_run", "timeout"} {
+				if _, ok := properties[field]; !ok {
+					t.Fatalf("tool %s is missing high-impact safety field %s", tool.Name, field)
+				}
+			}
+		}
 	}
 	if !foundResolver {
 		t.Fatal("resolve_target tool is missing")

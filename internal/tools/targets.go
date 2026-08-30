@@ -31,6 +31,8 @@ func TargetWarnings(request any) []string {
 
 func RequestTarget(request any) string {
 	switch value := request.(type) {
+	case dto.MetasploitRequest:
+		return value.Target
 	case dto.NmapRequest:
 		return value.Target
 	case dto.GobusterRequest:
