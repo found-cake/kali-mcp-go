@@ -93,8 +93,8 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) {
 	addStreamTool[dto.JWTRequest](srv, kali, "jwt_analyze", "Decode and assess JWTs for alg=none, forced-error, playbook, or key-confusion cases with jwt_tool.", "/api/tools/jwt/stream")
 	addStreamTool[dto.DalfoxRequest](srv, kali, "dalfox_scan", "Collect and verify XSS candidates with Dalfox.", "/api/tools/dalfox/stream")
 	addStreamTool[dto.BrowserRequest](srv, kali, "browser_check", "Verify DOM-XSS execution and inspect browser dialogs, console output, page errors, and rendered DOM with Chromium.", "/api/tools/browser/stream")
-	addStreamTool[dto.RetireRequest](srv, kali, "retirejs_scan", "Identify vulnerable JavaScript dependencies on a page or mounted bundle path with Retire.js.", "/api/tools/retire/stream")
-	addStreamTool[dto.OSVRequest](srv, kali, "osv_scan", "Identify known vulnerable dependencies in a mounted source tree with OSV-Scanner.", "/api/tools/osv/stream")
+	addStreamTool[dto.RetireRequest](srv, kali, "retirejs_scan", "When reconnaissance exposes public JavaScript bundles or client-side package versions, call Retire.js with the page URL or an accessible bundle path to verify known vulnerable browser dependencies.", "/api/tools/retire/stream")
+	addStreamTool[dto.OSVRequest](srv, kali, "osv_scan", "When dependency manifests, lockfiles, or a source tree become available inside the Kali runtime, call OSV-Scanner on that path to verify known vulnerable dependencies. Use retirejs_scan instead when only public web bundles are available.", "/api/tools/osv/stream")
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",

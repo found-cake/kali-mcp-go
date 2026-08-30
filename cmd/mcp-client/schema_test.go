@@ -119,6 +119,25 @@ func TestRegisteredMCPToolNamesRemainStable(t *testing.T) {
 	}
 }
 
+func TestDependencyToolDescriptionsRouteAvailableEvidence(t *testing.T) {
+	t.Parallel()
+
+	descriptions := make(map[string]string)
+	for _, tool := range listedTestTools(t) {
+		descriptions[tool.Name] = tool.Description
+	}
+	for _, phrase := range []string{"public JavaScript bundles", "page URL"} {
+		if !strings.Contains(descriptions["retirejs_scan"], phrase) {
+			t.Fatalf("retirejs_scan description is missing routing phrase %q", phrase)
+		}
+	}
+	for _, phrase := range []string{"manifests", "lockfiles", "inside the Kali runtime", "retirejs_scan"} {
+		if !strings.Contains(descriptions["osv_scan"], phrase) {
+			t.Fatalf("osv_scan description is missing routing phrase %q", phrase)
+		}
+	}
+}
+
 func schemaProperties(schema any) (map[string]any, bool) {
 	object, ok := schema.(map[string]any)
 	if !ok {
