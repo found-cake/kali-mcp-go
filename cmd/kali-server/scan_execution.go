@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -47,7 +48,7 @@ type scanExecutionPlan struct {
 	spaBaseline           *dto.SPABaseline
 	falsePositiveRisk     string
 	extraWarnings         []string
-	artifactStore         *artifactStore
+	artifactStore         *artifactstore.Store
 	jwtAnalysis           *dto.JWTAnalysisMetadata
 	browserScreenshotPath string
 	dryRun                bool

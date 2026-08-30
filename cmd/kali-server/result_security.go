@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 
+	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func protectResult(store *artifactStore, result *executor.Result, request any) {
+func protectResult(store *artifactstore.Store, result *executor.Result, request any) {
 	if result == nil {
 		return
 	}

@@ -5,17 +5,18 @@ import (
 	"testing"
 	"time"
 
+	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 func TestProtectResultRedactsBeforeArtifactStorage(t *testing.T) {
 	// Given: command output and metadata containing a caller-designated secret.
-	store, err := newArtifactStore()
+	store, err := artifactstore.New()
 	if err != nil {
 		t.Fatalf("create artifact store: %v", err)
 	}
-	t.Cleanup(func() { _ = store.close() })
+	t.Cleanup(func() { _ = store.Close() })
 	result := &executor.Result{
 		Stdout:       "token=private-value\n",
 		ArgvRedacted: []string{"-c", "printf private-value"},
@@ -31,7 +32,7 @@ func TestProtectResultRedactsBeforeArtifactStorage(t *testing.T) {
 	if result.Artifacts[0].RedactionState != dto.ArtifactRedacted {
 		t.Fatalf("explicit redaction state was not declared: %+v", result.Artifacts[0])
 	}
-	_, payload, err := store.read(result.Artifacts[0].ID, time.Now().UTC())
+	_, payload, err := store.Read(result.Artifacts[0].ID, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("read artifact: %v", err)
 	}

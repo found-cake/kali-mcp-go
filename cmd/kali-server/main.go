@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
@@ -82,7 +83,7 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	limiter := newExecutionLimiter(maxConcurrentExecutions)
 	weightedCapacity := max(maxConcurrentExecutions, 3)
 	scheduler := newTargetScheduler(weightedCapacity, 3)
-	artifacts, err := newArtifactStore()
+	artifacts, err := artifactstore.New()
 	if err != nil {
 		panic(err)
 	}
@@ -97,7 +98,7 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	app.Use(callTelemetryMiddleware(print))
 	app.Use(targetSchedulerMiddleware(scheduler))
 	app.Use(artifactStoreMiddleware(artifacts))
-	app.Hooks().OnPostShutdown(func(error) error { return artifacts.close() })
+	app.Hooks().OnPostShutdown(func(error) error { return artifacts.Close() })
 
 	registerRoutes(app, apiToken, limiter)
 	return app

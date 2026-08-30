@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -61,7 +62,7 @@ type browserNetworkEvidence struct {
 	Truncated bool                  `json:"truncated"`
 }
 
-func protectBrowserEvidence(store *artifactStore, result *executor.Result, request dto.BrowserRequest) {
+func protectBrowserEvidence(store *artifactstore.Store, result *executor.Result, request dto.BrowserRequest) {
 	if store == nil || result == nil || (!request.IncludeDOM && !request.CaptureNetwork && !request.CaptureScreenshot) {
 		return
 	}
@@ -79,10 +80,10 @@ func protectBrowserEvidence(store *artifactStore, result *executor.Result, reque
 			report.Network[index].URL = tools.RedactText(report.Network[index].URL, secrets)
 			report.Network[index].Failure = tools.RedactText(report.Network[index].Failure, secrets)
 		}
-		store.protectBrowserNetwork(result, &report, secrets)
+		protectBrowserNetwork(store, result, &report, secrets)
 	}
 	if request.IncludeDOM {
-		store.protectBrowserDOM(result, &report, tools.RequestSecrets(request))
+		protectBrowserDOM(store, result, &report, tools.RequestSecrets(request))
 	}
 	encoded, err := json.Marshal(report)
 	if err != nil {
@@ -118,13 +119,13 @@ func protectBrowserStreamLine(line executor.Line, request dto.BrowserRequest) ex
 	return line
 }
 
-func (s *artifactStore) protectBrowserDOM(result *executor.Result, report *browserReport, secrets []string) {
+func protectBrowserDOM(store *artifactstore.Store, result *executor.Result, report *browserReport, secrets []string) {
 	if report.DOM == "" {
 		result.Warnings = append(result.Warnings, "browser DOM was requested but not captured")
 		return
 	}
 	redactedDOM := tools.RedactText(report.DOM, secrets)
-	reference, err := s.saveContent(artifactContent{
+	reference, err := store.Save(artifactstore.Content{
 		Kind: "browser-dom-html", MediaType: fiber.MIMETextHTML, Encoding: dto.ArtifactEncodingUTF8,
 		RedactionState: artifactRedactionState(secrets), SourceCallID: result.CallID,
 		Relation: dto.ArtifactRelationBrowserDOM, Payload: []byte(redactedDOM),
@@ -139,7 +140,7 @@ func (s *artifactStore) protectBrowserDOM(result *executor.Result, report *brows
 	report.DOM = ""
 }
 
-func protectBrowserScreenshot(store *artifactStore, result *executor.Result, report *browserReport) {
+func protectBrowserScreenshot(store *artifactstore.Store, result *executor.Result, report *browserReport) {
 	if !report.ScreenshotCaptured || result.BrowserScreenshotPath == "" {
 		warning := "browser screenshot was requested but not captured"
 		if report.ScreenshotError != "" {
@@ -157,7 +158,7 @@ func protectBrowserScreenshot(store *artifactStore, result *executor.Result, rep
 	if mediaType == "" {
 		mediaType = "image/png"
 	}
-	reference, err := store.saveContent(artifactContent{
+	reference, err := store.Save(artifactstore.Content{
 		Kind: "browser-screenshot", MediaType: mediaType, Encoding: dto.ArtifactEncodingBase64,
 		RedactionState: dto.ArtifactSensitiveUnredacted, SourceCallID: result.CallID,
 		Relation: dto.ArtifactRelationBrowserScreenshot, Payload: payload,
@@ -170,14 +171,14 @@ func protectBrowserScreenshot(store *artifactStore, result *executor.Result, rep
 	report.ScreenshotArtifactID = reference.ID
 }
 
-func (s *artifactStore) protectBrowserNetwork(result *executor.Result, report *browserReport, secrets []string) {
+func protectBrowserNetwork(store *artifactstore.Store, result *executor.Result, report *browserReport, secrets []string) {
 	report.NetworkEventCount = len(report.Network)
 	payload, err := json.Marshal(browserNetworkEvidence{Events: report.Network, Truncated: report.NetworkTruncated})
 	if err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("browser network artifact unavailable: %v", err))
 		return
 	}
-	reference, err := s.saveContent(artifactContent{
+	reference, err := store.Save(artifactstore.Content{
 		Kind: "browser-network-json", MediaType: fiber.MIMEApplicationJSON, Encoding: dto.ArtifactEncodingUTF8,
 		RedactionState: artifactRedactionState(secrets), SourceCallID: result.CallID,
 		Relation: dto.ArtifactRelationBrowserNetwork, Payload: payload,
