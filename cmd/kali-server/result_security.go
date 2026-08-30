@@ -31,12 +31,16 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 	}
 	if result.HTTPRequest != nil {
 		result.HTTPRequest.Headers = tools.RedactHeaders(result.HTTPRequest.Headers, secrets)
-		result.HTTPRequest.URL = tools.RedactText(result.HTTPRequest.URL, secrets)
+		result.HTTPRequest.URL = tools.RedactURL(result.HTTPRequest.URL, secrets)
 		result.HTTPRequest.Host = tools.RedactText(result.HTTPRequest.Host, secrets)
 	}
 	if result.HTTPResponse != nil {
 		result.HTTPResponse.Headers = tools.RedactHeaders(result.HTTPResponse.Headers, secrets)
-		result.HTTPResponse.FinalURL = tools.RedactText(result.HTTPResponse.FinalURL, secrets)
+		result.HTTPResponse.FinalURL = tools.RedactURL(result.HTTPResponse.FinalURL, secrets)
+		if result.HTTPResponse.Summary != nil {
+			result.HTTPResponse.Summary.Location = tools.RedactURL(result.HTTPResponse.Summary.Location, secrets)
+			result.HTTPResponse.Summary.BodyExcerpt = tools.RedactText(result.HTTPResponse.Summary.BodyExcerpt, secrets)
+		}
 	}
 	if result.SQLMapAnalysis != nil {
 		for index := range result.SQLMapAnalysis.Parameters {

@@ -120,13 +120,24 @@ type AppliedScanControl struct {
 }
 
 type HTTPResponseMetadata struct {
-	StatusCode    int         `json:"status_code"`
-	Headers       http.Header `json:"headers"`
-	FinalURL      string      `json:"final_url"`
-	ContentLength int64       `json:"content_length"`
-	BodyBytes     int         `json:"body_bytes"`
-	BodyEncoding  string      `json:"body_encoding"`
-	BodyTruncated bool        `json:"body_truncated"`
+	StatusCode    int              `json:"status_code"`
+	Headers       http.Header      `json:"headers"`
+	FinalURL      string           `json:"final_url"`
+	ContentLength int64            `json:"content_length"`
+	BodyBytes     int              `json:"body_bytes"`
+	BodyEncoding  string           `json:"body_encoding"`
+	BodyTruncated bool             `json:"body_truncated"`
+	Summary       *HTTPBodySummary `json:"summary,omitempty"`
+}
+
+type HTTPBodySummary struct {
+	BodySHA256             string   `json:"body_sha256"`
+	BodyExcerpt            string   `json:"body_excerpt,omitempty"`
+	BodyExcerptTruncated   bool     `json:"body_excerpt_truncated"`
+	JSONKeys               []string `json:"json_keys,omitempty"`
+	Location               string   `json:"location,omitempty"`
+	StackTraceSuspected    bool     `json:"stack_trace_suspected"`
+	SensitiveDataSuspected bool     `json:"sensitive_data_suspected"`
 }
 
 type HTTPRequestMetadata struct {

@@ -108,8 +108,18 @@ func handleHTTPRequest(c fiber.Ctx) error {
 		result.FailureCode = "http_response_read_failed"
 		return sendHTTPRequestResult(c, result, request)
 	}
-	if utf8.Valid(retained) {
-		result.Stdout = string(retained)
+	isUTF8 := utf8.Valid(retained)
+	safeBody := retained
+	sensitiveJSON := false
+	if isUTF8 {
+		safeBody, sensitiveJSON = tools.RedactSensitiveJSON(retained)
+	}
+	result.HTTPResponse.Summary = summarizeHTTPResponse(httpResponseSummaryInput{
+		RetainedBody: retained, SafeBody: safeBody, Headers: response.Header,
+		Secrets: tools.RequestSecrets(request), UTF8: isUTF8, SensitiveJSON: sensitiveJSON,
+	})
+	if isUTF8 {
+		result.Stdout = string(safeBody)
 		result.HTTPResponse.BodyEncoding = "utf-8"
 	} else {
 		result.Stdout = base64.StdEncoding.EncodeToString(retained)

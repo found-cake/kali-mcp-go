@@ -70,10 +70,30 @@ func RedactHeaders(headers http.Header, secrets []string) http.Header {
 			continue
 		}
 		for index := range values {
-			values[index] = RedactText(values[index], secrets)
+			if strings.EqualFold(name, "Location") {
+				values[index] = RedactURL(values[index], secrets)
+			} else {
+				values[index] = RedactText(values[index], secrets)
+			}
 		}
 	}
 	return redacted
+}
+
+func RedactURL(value string, secrets []string) string {
+	redacted := RedactText(value, secrets)
+	parsed, err := url.Parse(redacted)
+	if err != nil {
+		return redacted
+	}
+	query := parsed.Query()
+	for name := range query {
+		if sensitiveName(name) {
+			query.Set(name, "[REDACTED]")
+		}
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 func RedactText(value string, secrets []string) string {
