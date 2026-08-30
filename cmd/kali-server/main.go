@@ -16,13 +16,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-var essentialToolBinaries = []string{"nmap", "gobuster", "dirb", "nikto", "tshark"}
-
-var exposedToolBinaries = []string{
-	"nmap", "gobuster", "dirb", "nikto", "tshark", "sqlmap", "msfconsole", "hydra", "john", "wpscan", "enum4linux",
-	"ffuf", "feroxbuster", "nuclei", "whatweb", "jwt_tool", "dalfox", "browser-check", "retire", "osv-scanner",
-}
-
 const shutdownTimeout = 10 * time.Second
 
 const streamHeartbeatInterval = 15 * time.Second

@@ -12,11 +12,12 @@ import (
 )
 
 func toolStatus(lookup func(string) bool) map[string]bool {
-	status := make(map[string]bool, len(exposedToolBinaries))
+	runtimeTools := tools.RuntimeToolNames()
+	status := make(map[string]bool, len(runtimeTools))
 	dirWordlistReady := tools.WordlistExists(tools.DefaultDirWordlistPath())
 	johnWordlistReady := tools.WordlistExists(tools.DefaultJohnWordlistPath())
 
-	for _, toolName := range exposedToolBinaries {
+	for _, toolName := range runtimeTools {
 		ready := lookup(toolName)
 		switch toolName {
 		case "gobuster", "dirb":
@@ -31,7 +32,7 @@ func toolStatus(lookup func(string) bool) map[string]bool {
 }
 
 func allEssentialToolsAvailable(status map[string]bool) bool {
-	for _, toolName := range essentialToolBinaries {
+	for _, toolName := range tools.EssentialRuntimeToolNames() {
 		if !status[toolName] {
 			return false
 		}

@@ -7,26 +7,6 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-var scanToolCapabilities = []dto.ScanToolCapability{
-	{Tool: "nmap_scan", RuntimeTool: "nmap", TargetInputFormat: dto.TargetInputNetworkHost, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon}, SupportedControls: []dto.ScanControl{dto.ScanControlRateLimit}},
-	{Tool: "gobuster_scan", RuntimeTool: "gobuster", TargetInputFormat: dto.TargetInputURLOrHost, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, SupportedControls: []dto.ScanControl{dto.ScanControlConcurrency}},
-	{Tool: "dirb_scan", RuntimeTool: "dirb", TargetInputFormat: dto.TargetInputWebURL, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}},
-	{Tool: "nikto_scan", RuntimeTool: "nikto", TargetInputFormat: dto.TargetInputURLOrHost, Profiles: []dto.SafetyProfile{dto.ProfileWebDiscoveryLowRate}},
-	{Tool: "sqlmap_scan", RuntimeTool: "sqlmap", TargetInputFormat: dto.TargetInputURLOrFile, Profiles: []dto.SafetyProfile{dto.ProfileSQLILowRisk}, SupportedControls: []dto.ScanControl{dto.ScanControlRateLimit, dto.ScanControlConcurrency}},
-	{Tool: "hydra_attack", RuntimeTool: "hydra", TargetInputFormat: dto.TargetInputNetworkHost},
-	{Tool: "wpscan_analyze", RuntimeTool: "wpscan", TargetInputFormat: dto.TargetInputWebURL},
-	{Tool: "enum4linux_scan", RuntimeTool: "enum4linux", TargetInputFormat: dto.TargetInputNetworkHost},
-	{Tool: "ffuf_scan", RuntimeTool: "ffuf", TargetInputFormat: dto.TargetInputWebURL, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, SupportedControls: []dto.ScanControl{dto.ScanControlRateLimit, dto.ScanControlConcurrency}},
-	{Tool: "feroxbuster_scan", RuntimeTool: "feroxbuster", TargetInputFormat: dto.TargetInputWebURL, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, SupportedControls: []dto.ScanControl{dto.ScanControlRateLimit, dto.ScanControlConcurrency}},
-	{Tool: "nuclei_scan", RuntimeTool: "nuclei", TargetInputFormat: dto.TargetInputURLOrHost, SupportedControls: []dto.ScanControl{dto.ScanControlRateLimit, dto.ScanControlConcurrency}},
-	{Tool: "whatweb_scan", RuntimeTool: "whatweb", TargetInputFormat: dto.TargetInputURLOrHost, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}},
-	{Tool: "jwt_analyze", RuntimeTool: "jwt_tool", TargetInputFormat: dto.TargetInputToken},
-	{Tool: "dalfox_scan", RuntimeTool: "dalfox", TargetInputFormat: dto.TargetInputURLOrFile, Profiles: []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm}, SupportedControls: []dto.ScanControl{dto.ScanControlConcurrency}},
-	{Tool: "browser_check", RuntimeTool: "browser-check", TargetInputFormat: dto.TargetInputWebURL, Profiles: []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm}},
-	{Tool: "retirejs_scan", RuntimeTool: "retire", TargetInputFormat: dto.TargetInputURLOrFile},
-	{Tool: "http_request", RuntimeTool: "http-request", TargetInputFormat: dto.TargetInputWebURL, Profiles: []dto.SafetyProfile{dto.ProfileSafeRecon}},
-}
-
 var orderedProfiles = []dto.SafetyProfile{
 	dto.ProfileSafeRecon,
 	dto.ProfileWebDiscoveryLowRate,
@@ -42,12 +22,19 @@ type wordlistDefinition struct {
 	defaultFor []string
 }
 
-func ScanCapabilities() dto.ScanCapabilitiesResult {
+func ScanCapabilities(availability ...func(string) bool) dto.ScanCapabilitiesResult {
 	tools := make([]dto.ScanToolCapability, 0, len(scanToolCapabilities))
 	for _, capability := range scanToolCapabilities {
-		copy := capability
-		copy.Profiles = append(slices.Clone(capability.Profiles), dto.ProfileExplicitCustom)
-		copy.SupportedControls = slices.Clone(capability.SupportedControls)
+		copy := cloneToolCapability(capability)
+		copy.Profiles = append(copy.Profiles, dto.ProfileExplicitCustom)
+		copy.SupportedControls = make([]dto.ScanControl, 0, len(copy.Controls))
+		for _, control := range copy.Controls {
+			copy.SupportedControls = append(copy.SupportedControls, control.Control)
+		}
+		if len(availability) > 0 && availability[0] != nil {
+			copy.AvailabilityChecked = true
+			copy.Available = copy.BuiltIn || availability[0](copy.RuntimeTool)
+		}
 		tools = append(tools, copy)
 	}
 
@@ -66,6 +53,39 @@ func ScanCapabilities() dto.ScanCapabilitiesResult {
 		})
 	}
 	return dto.ScanCapabilitiesResult{Profiles: profiles, Tools: tools, Wordlists: wordlistCapabilities()}
+}
+
+func cloneToolCapability(capability dto.ScanToolCapability) dto.ScanToolCapability {
+	copy := capability
+	copy.Profiles = slices.Clone(capability.Profiles)
+	copy.Controls = slices.Clone(capability.Controls)
+	copy.SupportedControls = slices.Clone(capability.SupportedControls)
+	return copy
+}
+
+func RuntimeToolNames() []string {
+	names := make([]string, 0, len(scanToolCapabilities))
+	seen := make(map[string]bool)
+	for _, capability := range scanToolCapabilities {
+		if capability.BuiltIn || seen[capability.RuntimeTool] {
+			continue
+		}
+		seen[capability.RuntimeTool] = true
+		names = append(names, capability.RuntimeTool)
+	}
+	slices.Sort(names)
+	return names
+}
+
+func EssentialRuntimeToolNames() []string {
+	names := make([]string, 0)
+	for _, capability := range scanToolCapabilities {
+		if capability.Essential {
+			names = append(names, capability.RuntimeTool)
+		}
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
 }
 
 func wordlistCapabilities() []dto.WordlistCapability {

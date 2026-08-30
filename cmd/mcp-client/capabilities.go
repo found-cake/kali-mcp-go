@@ -37,11 +37,15 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 		for _, profile := range tool.Profiles {
 			profiles = append(profiles, string(profile))
 		}
-		controls := make([]string, 0, len(tool.SupportedControls))
-		for _, control := range tool.SupportedControls {
-			controls = append(controls, string(control))
+		controls := make([]string, 0, len(tool.Controls))
+		for _, control := range tool.Controls {
+			controls = append(controls, string(control.Control)+":"+string(control.Enforcement))
 		}
-		fmt.Fprintf(&output, "- %s: target=%s profiles=%s", tool.Tool, tool.TargetInputFormat, strings.Join(profiles, ","))
+		available := "unknown"
+		if tool.AvailabilityChecked {
+			available = fmt.Sprintf("%t", tool.Available)
+		}
+		fmt.Fprintf(&output, "- %s: available=%s target=%s profiles=%s impact=%s mode=%s target_context=%t resume=%t", tool.Tool, available, tool.TargetInputFormat, strings.Join(profiles, ","), tool.ImpactLevel, tool.ExecutionMode, tool.RequiresTargetContext, tool.ResumeSupported)
 		if len(controls) > 0 {
 			fmt.Fprintf(&output, " controls=%s", strings.Join(controls, ","))
 		}

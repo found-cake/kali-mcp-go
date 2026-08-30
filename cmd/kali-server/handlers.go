@@ -220,7 +220,7 @@ func annotateResult(done <-chan *executor.Result, annotate func(*executor.Result
 }
 
 func handleScanCapabilities(c fiber.Ctx) error {
-	result := tools.ScanCapabilities()
+	result := tools.ScanCapabilities(executor.Which)
 	result.CallID = callIDFromContext(c)
 	return c.JSON(result)
 }

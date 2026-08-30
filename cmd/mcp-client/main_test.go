@@ -7,6 +7,23 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
+func TestFormatScanCapabilitiesExplainsExecutionContract(t *testing.T) {
+	result := &dto.ScanCapabilitiesResult{Tools: []dto.ScanToolCapability{{
+		Tool: "ffuf_scan", TargetInputFormat: dto.TargetInputWebURL,
+		Profiles:    []dto.SafetyProfile{dto.ProfileSafeRecon},
+		Controls:    []dto.ScanControlCapability{{Control: dto.ScanControlRateLimit, Enforcement: dto.ControlNativeCLI}},
+		ImpactLevel: dto.ImpactActive, ExecutionMode: dto.ToolExecutionStream,
+		AvailabilityChecked: true, Available: true,
+	}}}
+
+	formatted := formatScanCapabilities(result)
+	for _, value := range []string{"available=true", "impact=active", "mode=stream", "rate_limit:native_cli"} {
+		if !strings.Contains(formatted, value) {
+			t.Fatalf("capability summary is missing %q: %s", value, formatted)
+		}
+	}
+}
+
 func TestImplementationVersionDefaultsToDev(t *testing.T) {
 	original := version
 	version = ""

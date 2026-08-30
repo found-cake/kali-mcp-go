@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/kaliclient"
+	toolmeta "github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -15,7 +16,9 @@ func listedTestTools(t *testing.T) []*mcp.Tool {
 	t.Helper()
 	ctx := context.Background()
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	registerTools(server, kaliclient.New("http://unused", time.Second, ""))
+	if err := registerTools(server, kaliclient.New("http://unused", time.Second, "")); err != nil {
+		t.Fatalf("register tools: %v", err)
+	}
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	if err != nil {
@@ -33,6 +36,30 @@ func listedTestTools(t *testing.T) []*mcp.Tool {
 		t.Fatalf("list tools: %v", err)
 	}
 	return listed.Tools
+}
+
+func TestCapabilityRegistryMatchesExecutableMCPTools(t *testing.T) {
+	t.Parallel()
+	metaTools := map[string]bool{
+		"get_scan_capabilities": true, "resolve_target": true,
+		"result_artifact_read": true, "server_health": true,
+	}
+	registered := make([]string, 0)
+	for _, tool := range listedTestTools(t) {
+		if !metaTools[tool.Name] {
+			registered = append(registered, tool.Name)
+		}
+	}
+	capabilities := toolmeta.ScanCapabilities()
+	declared := make([]string, 0, len(capabilities.Tools))
+	for _, capability := range capabilities.Tools {
+		declared = append(declared, capability.Tool)
+	}
+	slices.Sort(registered)
+	slices.Sort(declared)
+	if !slices.Equal(registered, declared) {
+		t.Fatalf("MCP registrations and capability registry differ:\nregistered: %v\n  declared: %v", registered, declared)
+	}
 }
 
 func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {

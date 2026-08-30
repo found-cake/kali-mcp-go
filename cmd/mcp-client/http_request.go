@@ -10,15 +10,20 @@ import (
 
 const maximumMCPHTTPResponseBytes = 4 * 1024 * 1024
 
-func registerHTTPRequest(server *mcp.Server, kali *kaliclient.Client) {
+func registerHTTPRequest(server *mcp.Server, kali *kaliclient.Client) error {
+	definition, err := executableToolDefinition("http_request")
+	if err != nil {
+		return err
+	}
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "http_request",
-		Description: "Send one bounded HTTP request to an explicitly selected target. Use for manual validation instead of execute_command with curl.",
+		Name:        definition.Tool,
+		Description: definition.Description,
 		InputSchema: httpRequestInputSchema(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.HTTPRequest) (*mcp.CallToolResult, dto.ToolResult, error) {
-		result, err := kali.Post(ctx, "/api/tools/http-request", request)
-		return textResult("http_request", result, err)
+		result, err := kali.Post(ctx, definition.Endpoint, request)
+		return textResult(definition.Tool, result, err)
 	})
+	return nil
 }
 
 func httpRequestInputSchema() map[string]any {
