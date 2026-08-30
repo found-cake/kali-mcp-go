@@ -1,17 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 
+	"github.com/found-cake/kali-mcp-go/internal/admission"
 	"github.com/gofiber/fiber/v3"
 )
 
 const defaultMaxConcurrentExecutions = 10
-
-type executionLimiter struct {
-	sem chan struct{}
-}
 
 type executionLease struct {
 	release  func()
@@ -20,47 +16,24 @@ type executionLease struct {
 
 const executionLeaseKey = "execution-lease"
 
-func newExecutionLimiter(maxConcurrent int) *executionLimiter {
+func newExecutionLimiter(maxConcurrent int) *admission.Limiter {
 	if maxConcurrent <= 0 {
 		maxConcurrent = defaultMaxConcurrentExecutions
 	}
-	return &executionLimiter{sem: make(chan struct{}, maxConcurrent)}
+	return admission.NewLimiter(maxConcurrent)
 }
 
-func (l *executionLimiter) tryAcquire() bool {
-	if l == nil {
-		return true
-	}
-	select {
-	case l.sem <- struct{}{}:
-		return true
-	default:
-		return false
-	}
-}
-
-func (l *executionLimiter) release() {
-	if l == nil {
-		return
-	}
-	select {
-	case <-l.sem:
-	default:
-		panic(fmt.Sprintf("execution limiter release invariant violated: no slot to release (capacity=%d)", cap(l.sem)))
-	}
-}
-
-func withExecutionLimit(limiter *executionLimiter, next fiber.Handler) fiber.Handler {
+func withExecutionLimit(limiter *admission.Limiter, next fiber.Handler) fiber.Handler {
 	if limiter == nil {
 		return next
 	}
 
 	return func(c fiber.Ctx) error {
-		if !limiter.tryAcquire() {
+		if !limiter.TryAcquire() {
 			return serviceUnavailable(c, "server busy: too many concurrent executions")
 		}
 
-		lease := &executionLease{release: limiter.release}
+		lease := &executionLease{release: limiter.Release}
 		c.Locals(executionLeaseKey, lease)
 		defer func() {
 			if !lease.retained {

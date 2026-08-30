@@ -52,7 +52,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	}
 	release := func() {}
 	if scheduler := schedulerFromContext(c); scheduler != nil {
-		release, err = scheduler.acquire(request.URL, 1)
+		release, err = scheduler.Acquire(request.URL, 1)
 		if err != nil {
 			return scanPreparationError(c, err)
 		}

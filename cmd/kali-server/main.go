@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/admission"
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -82,7 +83,7 @@ func main() {
 func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logPrinter) *fiber.App {
 	limiter := newExecutionLimiter(maxConcurrentExecutions)
 	weightedCapacity := max(maxConcurrentExecutions, 3)
-	scheduler := newTargetScheduler(weightedCapacity, 3)
+	scheduler := admission.NewScheduler(weightedCapacity, 3)
 	artifacts, err := artifactstore.New()
 	if err != nil {
 		panic(err)
@@ -104,7 +105,7 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print logP
 	return app
 }
 
-func registerRoutes(app *fiber.App, apiToken string, limiter *executionLimiter) {
+func registerRoutes(app *fiber.App, apiToken string, limiter *admission.Limiter) {
 	api := app.Group("/api", bearerAuthMiddleware(apiToken))
 
 	api.Post("/command", withExecutionLimit(limiter, handleCommand))

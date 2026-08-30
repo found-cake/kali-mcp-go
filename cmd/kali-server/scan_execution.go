@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/admission"
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -27,7 +28,7 @@ var healthHTTPClient = &http.Client{
 }
 
 func scanPreparationError(c fiber.Ctx, err error) error {
-	if errors.Is(err, errGlobalCapacityExceeded) || errors.Is(err, errTargetCapacityExceeded) {
+	if errors.Is(err, admission.ErrGlobalCapacityExceeded) || errors.Is(err, admission.ErrTargetCapacityExceeded) {
 		return serviceUnavailable(c, err.Error())
 	}
 	return badRequest(c, err.Error())
@@ -88,7 +89,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	}
 	release := func() {}
 	if scheduler := schedulerFromContext(c); scheduler != nil {
-		release, err = scheduler.acquire(target, scanWeight(controlledArgs[0]))
+		release, err = scheduler.Acquire(target, scanWeight(controlledArgs[0]))
 		if err != nil {
 			return nil, err
 		}
