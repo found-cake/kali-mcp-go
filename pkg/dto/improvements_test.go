@@ -114,3 +114,40 @@ func TestToolResultCompactLimitsInlineOutputAndReportsOriginalSize(t *testing.T)
 		t.Fatal("compacted output is not valid UTF-8")
 	}
 }
+
+func TestToolResultFinalizeMapsExecutionStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		execution ExecutionStatus
+		status    RunStatus
+		success   bool
+		timedOut  bool
+		cancelled bool
+		failure   bool
+	}{
+		{name: "succeeded clears failure", execution: ExecutionSucceeded, status: RunCompleted, success: true},
+		{name: "failed keeps failure", execution: ExecutionFailed, status: RunFailed, failure: true},
+		{name: "timed out keeps failure", execution: ExecutionTimedOut, status: RunTimeout, timedOut: true, failure: true},
+		{name: "cancelled keeps failure", execution: ExecutionCancelled, status: RunCancelled, cancelled: true, failure: true},
+		{name: "unknown is failed", execution: ExecutionStatus("future"), status: RunFailed, failure: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Given: an execution state and an existing failure record.
+			result := ToolResult{ExecutionStatus: test.execution, Failure: &FailureInfo{Code: "failure"}}
+
+			// When: the wire result is finalized.
+			result.Finalize()
+
+			// Then: the public status flags retain their established mapping.
+			if result.Status != test.status || result.Success != test.success || result.TimedOut != test.timedOut || result.Cancelled != test.cancelled {
+				t.Fatalf("unexpected finalized result: %+v", result)
+			}
+			if (result.Failure != nil) != test.failure {
+				t.Fatalf("unexpected failure retention: %+v", result.Failure)
+			}
+		})
+	}
+}

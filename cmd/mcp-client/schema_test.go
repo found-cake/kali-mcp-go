@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,9 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
-	t.Parallel()
-
+func listedTestTools(t *testing.T) []*mcp.Tool {
+	t.Helper()
 	ctx := context.Background()
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	registerTools(server, kaliclient.New("http://unused", time.Second, ""))
@@ -28,16 +28,22 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 		t.Fatalf("connect client: %v", err)
 	}
 	defer clientSession.Close()
-
 	listed, err := clientSession.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf("list tools: %v", err)
 	}
+	return listed.Tools
+}
+
+func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
+	t.Parallel()
+
+	tools := listedTestTools(t)
 	foundAssessmentStarter := false
 	foundResolver := false
 	foundCapabilities := false
 	foundHTTPRequest := false
-	for _, tool := range listed.Tools {
+	for _, tool := range tools {
 		if tool.Name == "start_blackbox_assessment" {
 			foundAssessmentStarter = true
 		}
@@ -86,6 +92,33 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	}
 }
 
+func TestRegisteredMCPToolNamesRemainStable(t *testing.T) {
+	t.Parallel()
+
+	// Given: the complete MCP registry exposed to an orchestrator.
+	tools := listedTestTools(t)
+	want := []string{
+		"browser_check", "dalfox_scan", "dirb_scan", "enum4linux_scan", "execute_command",
+		"feroxbuster_scan", "ffuf_scan", "get_scan_capabilities", "gobuster_scan", "http_request",
+		"hydra_attack", "hydra_attack_stream", "john_crack", "jwt_analyze", "metasploit_run",
+		"nikto_scan", "nmap_scan", "nuclei_scan", "osv_scan", "resolve_target",
+		"result_artifact_read", "retirejs_scan", "server_health", "sqlmap_scan", "tshark_capture",
+		"whatweb_scan", "wpscan_analyze",
+	}
+
+	// When: the registry is reduced to its machine-routed names.
+	got := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		got = append(got, tool.Name)
+	}
+	slices.Sort(got)
+
+	// Then: no tool is silently added, removed, or renamed by refactoring.
+	if !slices.Equal(got, want) {
+		t.Fatalf("unexpected MCP tool names:\n got: %v\nwant: %v", got, want)
+	}
+}
+
 func schemaProperties(schema any) (map[string]any, bool) {
 	object, ok := schema.(map[string]any)
 	if !ok {
@@ -97,30 +130,11 @@ func schemaProperties(schema any) (map[string]any, bool) {
 
 func TestMCPToolsDoNotExposeServerSideCredentialSessions(t *testing.T) {
 	// Given: the complete MCP tool registry.
-	ctx := context.Background()
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	registerTools(server, kaliclient.New("http://unused", time.Second, ""))
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("connect server: %v", err)
-	}
-	defer serverSession.Close()
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("connect client: %v", err)
-	}
-	defer clientSession.Close()
-
 	// When: an orchestrator inspects available tools and scan inputs.
-	listed, err := clientSession.ListTools(ctx, nil)
-	if err != nil {
-		t.Fatalf("list tools: %v", err)
-	}
+	tools := listedTestTools(t)
 
 	// Then: no server-side credential session operation or handle is exposed.
-	for _, tool := range listed.Tools {
+	for _, tool := range tools {
 		if strings.HasPrefix(tool.Name, "auth_session_") {
 			t.Fatalf("server-side credential tool remains exposed: %s", tool.Name)
 		}
