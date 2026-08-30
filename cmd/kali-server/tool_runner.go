@@ -10,44 +10,42 @@ import (
 )
 
 func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
-	req, err := parseRequest(c, validate)
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	args, err := argsFor(req)
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	if len(args) == 0 {
-		return internalServerError(c, "internal error: no command generated")
-	}
-	plan, err := prepareScanExecution(c, req, args)
-	if err != nil {
-		return scanPreparationError(c, err)
-	}
-	defer plan.release()
-	result := executor.RunExec(c.Context(), plan.timeout, plan.args[0], plan.args[1:]...)
-	plan.annotate(result)
-	return c.JSON(toAPIResult(result))
+	return withPreparedTool(c, toolExecutionSpec[T]{validate: validate, argsFor: argsFor}, func(plan *scanExecutionPlan) error {
+		defer plan.release()
+		result := executor.RunExec(c.Context(), plan.timeout, plan.args[0], plan.args[1:]...)
+		plan.annotate(result)
+		return c.JSON(toAPIResult(result))
+	})
 }
 
 func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
-	req, err := parseRequest(c, validate)
+	return withPreparedTool(c, toolExecutionSpec[T]{validate: validate, argsFor: argsFor}, func(plan *scanExecutionPlan) error {
+		return executeStreamPlan(c, plan)
+	})
+}
+
+type toolExecutionSpec[T any] struct {
+	validate func(T) error
+	argsFor  func(T) ([]string, error)
+}
+
+func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute func(*scanExecutionPlan) error) error {
+	request, err := parseRequest(c, spec.validate)
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
-	args, err := argsFor(req)
+	args, err := spec.argsFor(request)
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
 	if len(args) == 0 {
 		return internalServerError(c, "internal error: no command generated")
 	}
-	plan, err := prepareScanExecution(c, req, args)
+	plan, err := prepareScanExecution(c, request, args)
 	if err != nil {
 		return scanPreparationError(c, err)
 	}
-	return executeStreamPlan(c, plan)
+	return execute(plan)
 }
 
 func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
