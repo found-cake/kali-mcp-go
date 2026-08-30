@@ -38,6 +38,7 @@ type Result struct {
 	SPABaseline        *dto.SPABaseline
 	FalsePositiveRisk  string
 	Artifacts          []dto.ArtifactRef
+	HTTPRequest        *dto.HTTPRequestMetadata
 	HTTPResponse       *dto.HTTPResponseMetadata
 	Progress           *dto.ProgressMetadata
 }

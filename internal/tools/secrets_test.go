@@ -26,3 +26,17 @@ func TestRedactRequestSecretsMasksKnownAndCallerSuppliedValues(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPRequestSecretsIncludeSensitiveQueryValues(t *testing.T) {
+	// Given: a request URL carrying one sensitive and one ordinary query value.
+	request := dto.HTTPRequest{URL: "https://example.com/check?token=private-token&name=alice"}
+
+	// When: request-scoped secrets are extracted for metadata protection.
+	secrets := RequestSecrets(request)
+
+	// Then: the token value is protected without treating ordinary values as credentials.
+	joined := strings.Join(secrets, " ")
+	if !strings.Contains(joined, "private-token") || strings.Contains(joined, "alice") {
+		t.Fatalf("unexpected HTTP request secrets: %q", joined)
+	}
+}

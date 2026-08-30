@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -48,6 +49,13 @@ func RequestSecrets(request any) []string {
 		for name, header := range value.Headers {
 			if sensitiveName(name) {
 				secrets = append(secrets, header)
+			}
+		}
+		if parsed, err := url.Parse(value.URL); err == nil {
+			for name, values := range parsed.Query() {
+				if sensitiveName(name) {
+					secrets = append(secrets, values...)
+				}
 			}
 		}
 	}

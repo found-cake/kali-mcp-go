@@ -35,6 +35,7 @@ func TestHTTPRequestUsesTargetContextAndRedactsResponse(t *testing.T) {
 	body, err := json.Marshal(dto.HTTPRequest{
 		ScanOptions: dto.ScanOptions{TargetContext: context},
 		Method:      http.MethodPost,
+		Headers:     map[string]string{"Authorization": "Bearer request-secret", "X-Test": "visible"},
 		JSONBody:    json.RawMessage(`{"name":"alice"}`),
 	})
 	if err != nil {
@@ -67,6 +68,12 @@ func TestHTTPRequestUsesTargetContextAndRedactsResponse(t *testing.T) {
 	}
 	if result.HTTPResponse.Headers.Get("Set-Cookie") != "[REDACTED]" || len(result.Artifacts) != 1 {
 		t.Fatalf("response was not protected: %+v", result)
+	}
+	if result.HTTPRequest == nil || result.HTTPRequest.Method != http.MethodPost || result.HTTPRequest.URL != target.URL || result.HTTPRequest.ContentType != "application/json" {
+		t.Fatalf("missing reproducible request metadata: %+v", result.HTTPRequest)
+	}
+	if result.HTTPRequest.Headers.Get("Authorization") != "[REDACTED]" || result.HTTPRequest.Headers.Get("X-Test") != "visible" || result.HTTPRequest.BodyBytes != len(`{"name":"alice"}`) || result.HTTPRequest.BodySHA256 == "" {
+		t.Fatalf("request metadata was not safely summarized: %+v", result.HTTPRequest)
 	}
 }
 

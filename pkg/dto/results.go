@@ -107,6 +107,17 @@ type HTTPResponseMetadata struct {
 	BodyTruncated bool        `json:"body_truncated"`
 }
 
+type HTTPRequestMetadata struct {
+	Method          string      `json:"method"`
+	URL             string      `json:"url"`
+	Host            string      `json:"host,omitempty"`
+	Headers         http.Header `json:"headers"`
+	ContentType     string      `json:"content_type,omitempty"`
+	BodyBytes       int         `json:"body_bytes"`
+	BodySHA256      string      `json:"body_sha256,omitempty"`
+	FollowRedirects bool        `json:"follow_redirects"`
+}
+
 type ToolResult struct {
 	CallID               string                `json:"call_id"`
 	Stdout               string                `json:"stdout"`
@@ -133,6 +144,7 @@ type ToolResult struct {
 	FalsePositiveRisk    string                `json:"false_positive_risk"`
 	Warnings             []string              `json:"warnings,omitempty"`
 	Artifacts            []ArtifactRef         `json:"artifacts"`
+	HTTPRequest          *HTTPRequestMetadata  `json:"http_request,omitempty"`
 	HTTPResponse         *HTTPResponseMetadata `json:"http_response,omitempty"`
 	Progress             *ProgressMetadata     `json:"progress,omitempty"`
 }

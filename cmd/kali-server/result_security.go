@@ -25,6 +25,11 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 		result.Target.Original = tools.RedactText(result.Target.Original, secrets)
 		result.Target.Selected = tools.RedactText(result.Target.Selected, secrets)
 	}
+	if result.HTTPRequest != nil {
+		result.HTTPRequest.Headers = tools.RedactHeaders(result.HTTPRequest.Headers, secrets)
+		result.HTTPRequest.URL = tools.RedactText(result.HTTPRequest.URL, secrets)
+		result.HTTPRequest.Host = tools.RedactText(result.HTTPRequest.Host, secrets)
+	}
 	if result.HTTPResponse != nil {
 		result.HTTPResponse.Headers = tools.RedactHeaders(result.HTTPResponse.Headers, secrets)
 		result.HTTPResponse.FinalURL = tools.RedactText(result.HTTPResponse.FinalURL, secrets)

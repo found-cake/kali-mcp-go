@@ -75,6 +75,7 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 		FalsePositiveRisk: r.FalsePositiveRisk,
 		Warnings:          r.Warnings,
 		Artifacts:         r.Artifacts,
+		HTTPRequest:       r.HTTPRequest,
 		HTTPResponse:      r.HTTPResponse,
 		Progress:          r.Progress,
 	}

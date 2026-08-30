@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -87,6 +89,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 		result.FailureCode = "http_request_invalid"
 		return sendHTTPRequestResult(c, result, request)
 	}
+	result.HTTPRequest = summarizeHTTPRequest(httpRequest, request)
 	response, err := newHTTPClient(request).Do(httpRequest)
 	if err != nil {
 		result.Stderr = err.Error()
@@ -119,6 +122,23 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	}
 	result.ReturnCode = 0
 	return sendHTTPRequestResult(c, result, request)
+}
+
+func summarizeHTTPRequest(httpRequest *http.Request, request dto.HTTPRequest) *dto.HTTPRequestMetadata {
+	payload := request.JSONBody
+	if len(payload) == 0 {
+		payload = []byte(request.Body)
+	}
+	digest := ""
+	if len(payload) > 0 {
+		sum := sha256.Sum256(payload)
+		digest = hex.EncodeToString(sum[:])
+	}
+	return &dto.HTTPRequestMetadata{
+		Method: httpRequest.Method, URL: httpRequest.URL.String(), Host: httpRequest.Host,
+		Headers: httpRequest.Header.Clone(), ContentType: httpRequest.Header.Get("Content-Type"),
+		BodyBytes: len(payload), BodySHA256: digest, FollowRedirects: request.FollowRedirects,
+	}
 }
 
 func validateHTTPRequest(request dto.HTTPRequest) error {
