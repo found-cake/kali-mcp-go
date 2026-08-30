@@ -214,6 +214,12 @@ func annotateResult(done <-chan *executor.Result, annotate func(*executor.Result
 	return annotated
 }
 
+func handleScanCapabilities(c fiber.Ctx) error {
+	result := tools.ScanCapabilities()
+	result.CallID = callIDFromContext(c)
+	return c.JSON(result)
+}
+
 func handleHealth(c fiber.Ctx) error {
 	status := toolStatus(executor.Which)
 	allEssentialReady := allEssentialToolsAvailable(status)
