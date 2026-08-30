@@ -55,6 +55,13 @@ func TestMetasploitRejectsTargetOverrideInOptions(t *testing.T) {
 	}
 }
 
+func TestMetasploitRequiresSelectedTarget(t *testing.T) {
+	err := validateMetasploitRequest(dto.MetasploitRequest{Module: "auxiliary/scanner/http/title"})
+	if err == nil || err.Error() != "target is required" {
+		t.Fatalf("expected selected target requirement, got %v", err)
+	}
+}
+
 func signedHighImpactContext(t *testing.T) string {
 	t.Helper()
 	context, err := signTargetContext("test-secret", targetContextClaims{

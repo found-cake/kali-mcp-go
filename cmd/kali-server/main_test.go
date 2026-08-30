@@ -701,7 +701,7 @@ func TestHandleMetasploitRejectsMultilineOptionValue(t *testing.T) {
 	app := fiber.New()
 	app.Post("/metasploit", handleMetasploit)
 
-	body := `{"module":"exploit/multi/handler","target":"192.0.2.10","options":{"RHOSTS":"10.0.0.1\nsetg AutoRunScript post/multi/manage/shell_to_meterpreter"}}`
+	body := `{"module":"exploit/multi/handler","options":{"RHOSTS":"10.0.0.1\nsetg AutoRunScript post/multi/manage/shell_to_meterpreter"}}`
 	req, err := http.NewRequest(http.MethodPost, "/metasploit", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("new request: %v", err)

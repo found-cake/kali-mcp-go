@@ -32,8 +32,8 @@ func handleMetasploit(c fiber.Ctx) error {
 }
 
 func validateMetasploitRequest(request dto.MetasploitRequest) error {
-	if request.Module == "" || request.Target == "" {
-		return fmt.Errorf("module and target are required")
+	if request.Module == "" {
+		return fmt.Errorf("module is required")
 	}
 	if containsLineBreak(request.Module) {
 		return fmt.Errorf("module must not contain line breaks")
@@ -48,6 +48,9 @@ func validateMetasploitRequest(request dto.MetasploitRequest) error {
 		if strings.EqualFold(name, "RHOST") || strings.EqualFold(name, "RHOSTS") {
 			return fmt.Errorf("RHOST and RHOSTS are set from target_context and cannot be supplied in options")
 		}
+	}
+	if request.Target == "" {
+		return fmt.Errorf("target is required")
 	}
 	return nil
 }
