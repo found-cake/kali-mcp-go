@@ -68,6 +68,14 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 	case *dto.BrowserRequest:
 		return setWebTarget(&value.URL, claims.BrowserTarget)
 	case *dto.RetireRequest:
+		if len(value.ScriptURLs) > 0 {
+			for index := range value.ScriptURLs {
+				if err := setWebTarget(&value.ScriptURLs[index], claims.BrowserTarget); err != nil {
+					return fmt.Errorf("script_urls[%d]: %w", index, err)
+				}
+			}
+			return nil
+		}
 		return setWebTarget(&value.URL, claims.BrowserTarget)
 	case *dto.HTTPRequest:
 		return setWebTarget(&value.URL, claims.BrowserTarget)

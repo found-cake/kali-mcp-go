@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,5 +117,40 @@ func TestResolutionLifetimeRejectsExcessiveValidity(t *testing.T) {
 	// Then: the resolver rejects the oversized validity window.
 	if err == nil {
 		t.Fatal("expected excessive target context lifetime to be rejected")
+	}
+}
+
+func TestRetireScriptURLsStayWithinSelectedBrowserOrigin(t *testing.T) {
+	now := time.Now().UTC()
+	context, err := signTargetContext("secret", targetContextClaims{
+		ResolutionID: "resolution-1", Original: "http://127.0.0.1:3000/",
+		BrowserTarget: "http://192.0.2.10:3000/", NetworkTarget: "192.0.2.10",
+		Scope: dto.TargetScopeDockerHost, ExpiresAt: now.Add(time.Minute).Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign target context: %v", err)
+	}
+	request := dto.RetireRequest{
+		ScanOptions: dto.ScanOptions{TargetContext: context},
+		ScriptURLs:  []string{"http://192.0.2.10:3000/main.js", "http://192.0.2.10:3000/lazy.js"},
+	}
+	normalized, err := applyRequestTargetContext("secret", request, now)
+	if err != nil {
+		t.Fatalf("apply script URL context: %v", err)
+	}
+	if normalized.URL != "" || len(normalized.ScriptURLs) != 2 {
+		t.Fatalf("script URLs were replaced instead of scoped: %+v", normalized)
+	}
+
+	request.ScriptURLs = []string{"http://198.51.100.20:3000/foreign.js"}
+	if _, err := applyRequestTargetContext("secret", request, now); err == nil {
+		t.Fatal("expected cross-origin script URL to be rejected")
+	}
+}
+
+func TestRetireExplicitScriptURLsRequireTargetContext(t *testing.T) {
+	request := dto.RetireRequest{ScriptURLs: []string{"https://example.com/main.js"}}
+	if err := validateRetireRequest(request); err == nil || !strings.Contains(err.Error(), "target_context") {
+		t.Fatalf("expected target context requirement, got %v", err)
 	}
 }

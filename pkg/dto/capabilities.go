@@ -3,15 +3,16 @@ package dto
 type TargetInputFormat string
 
 const (
-	TargetInputNetworkHost TargetInputFormat = "network_host"
-	TargetInputWebURL      TargetInputFormat = "web_url"
-	TargetInputURLOrHost   TargetInputFormat = "url_or_host"
-	TargetInputURLOrFile   TargetInputFormat = "url_or_file"
-	TargetInputToken       TargetInputFormat = "token"
-	TargetInputOfflinePath TargetInputFormat = "offline_path"
-	TargetInputCapture     TargetInputFormat = "capture_or_pcap"
-	TargetInputCommand     TargetInputFormat = "command"
-	TargetInputModule      TargetInputFormat = "module_target"
+	TargetInputNetworkHost   TargetInputFormat = "network_host"
+	TargetInputWebURL        TargetInputFormat = "web_url"
+	TargetInputURLOrHost     TargetInputFormat = "url_or_host"
+	TargetInputURLOrFile     TargetInputFormat = "url_or_file"
+	TargetInputToken         TargetInputFormat = "token"
+	TargetInputOfflinePath   TargetInputFormat = "offline_path"
+	TargetInputCapture       TargetInputFormat = "capture_or_pcap"
+	TargetInputCommand       TargetInputFormat = "command"
+	TargetInputModule        TargetInputFormat = "module_target"
+	TargetInputURLListOrFile TargetInputFormat = "url_list_or_file"
 )
 
 type ScanControl string

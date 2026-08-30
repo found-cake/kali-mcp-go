@@ -234,13 +234,6 @@ func validateBrowserRequest(req dto.BrowserRequest) error {
 	return nil
 }
 
-func validateRetireRequest(req dto.RetireRequest) error {
-	if (req.Path == "") == (req.URL == "") {
-		return fmt.Errorf("provide exactly one of path or url")
-	}
-	return nil
-}
-
 func validateOSVRequest(req dto.OSVRequest) error {
 	if req.Path == "" {
 		return fmt.Errorf("path is required")

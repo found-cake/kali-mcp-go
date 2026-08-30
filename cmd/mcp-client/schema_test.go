@@ -112,6 +112,14 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 				}
 			}
 		}
+		if tool.Name == "retirejs_scan" {
+			properties, _ := schema["properties"].(map[string]any)
+			scriptURLs, _ := properties["script_urls"].(map[string]any)
+			types, _ := scriptURLs["type"].([]any)
+			if scriptURLs["type"] != "array" && !slices.Contains(types, any("array")) {
+				t.Fatalf("retirejs_scan script_urls schema is missing: %+v", scriptURLs)
+			}
+		}
 	}
 	if !foundResolver {
 		t.Fatal("resolve_target tool is missing")
@@ -165,6 +173,9 @@ func TestDependencyToolDescriptionsRouteAvailableEvidence(t *testing.T) {
 		if !strings.Contains(descriptions["retirejs_scan"], phrase) {
 			t.Fatalf("retirejs_scan description is missing routing phrase %q", phrase)
 		}
+	}
+	if !strings.Contains(descriptions["retirejs_scan"], "script_urls") || !strings.Contains(descriptions["browser_check"], "hash-route") {
+		t.Fatalf("SPA dependency routing descriptions are incomplete: retire=%q browser=%q", descriptions["retirejs_scan"], descriptions["browser_check"])
 	}
 	for _, phrase := range []string{"manifests", "lockfiles", "inside the Kali runtime", "retirejs_scan"} {
 		if !strings.Contains(descriptions["osv_scan"], phrase) {

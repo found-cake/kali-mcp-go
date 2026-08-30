@@ -67,6 +67,9 @@ func RequestTarget(request any) string {
 	case dto.BrowserRequest:
 		return value.URL
 	case dto.RetireRequest:
+		if value.URL == "" && len(value.ScriptURLs) > 0 {
+			return value.ScriptURLs[0]
+		}
 		return value.URL
 	case dto.HTTPRequest:
 		return value.URL

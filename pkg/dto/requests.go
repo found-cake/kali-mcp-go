@@ -180,10 +180,10 @@ func (r DalfoxRequest) GetRequestTimeout() int { return r.Timeout }
 
 type BrowserRequest struct {
 	ScanOptions
-	URL               string `json:"url,omitempty" jsonschema:"page URL including any test payload; may extend the browser origin from target_context"`
+	URL               string `json:"url,omitempty" jsonschema:"full page URL including SPA path, hash route, fragment payload, or query payload; may extend the browser origin from target_context"`
 	WaitMilliseconds  int    `json:"wait_milliseconds,omitempty" jsonschema:"time to observe dialogs and DOM changes after load"`
 	IncludeDOM        bool   `json:"include_dom,omitempty" jsonschema:"include up to 200KB of rendered DOM in the result"`
-	CaptureNetwork    bool   `json:"capture_network,omitempty" jsonschema:"capture a bounded redacted network summary as a related artifact"`
+	CaptureNetwork    bool   `json:"capture_network,omitempty" jsonschema:"capture a bounded redacted network summary whose script URLs can be passed to retirejs_scan"`
 	CaptureScreenshot bool   `json:"capture_screenshot,omitempty" jsonschema:"capture a viewport screenshot as a sensitive related artifact"`
 	Timeout           int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
 }
@@ -192,10 +192,11 @@ func (r BrowserRequest) GetRequestTimeout() int { return r.Timeout }
 
 type RetireRequest struct {
 	ScanOptions
-	Path           string `json:"path,omitempty" jsonschema:"file or directory containing JavaScript bundles; mutually exclusive with url"`
-	URL            string `json:"url,omitempty" jsonschema:"page URL whose public JavaScript bundles should be downloaded into a temporary workspace and scanned"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Retire.js arguments"`
-	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
+	Path           string   `json:"path,omitempty" jsonschema:"file or directory containing JavaScript bundles; mutually exclusive with url and script_urls"`
+	URL            string   `json:"url,omitempty" jsonschema:"page URL whose same-origin public JavaScript bundles should be downloaded and scanned; mutually exclusive with path and script_urls"`
+	ScriptURLs     []string `json:"script_urls,omitempty" jsonschema:"explicit same-origin public JavaScript bundle URLs observed by browser_check; requires target_context and is mutually exclusive with path and url"`
+	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Retire.js arguments"`
+	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
 func (r RetireRequest) GetRequestTimeout() int { return r.Timeout }
