@@ -15,7 +15,7 @@ func TestResolutionReceiptRejectsCandidateOutsideResolution(t *testing.T) {
 		OriginalTarget:    "http://127.0.0.1:3000/",
 		RecommendedTarget: "http://host.docker.internal:3000/",
 		Candidates: []dto.TargetCandidate{
-			{Target: "http://host.docker.internal:3000/", Reachable: true},
+			{Target: "http://host.docker.internal:3000/", Reachable: true, Selectable: true},
 		},
 	}
 	issued, err := issueResolutionReceipt("secret", result, now)
@@ -51,7 +51,7 @@ func TestResolutionReceiptAllowsPathSpecificScanOnResolvedOrigin(t *testing.T) {
 	result := dto.TargetResolutionResult{
 		OriginalTarget: "http://127.0.0.1:3000/",
 		Candidates: []dto.TargetCandidate{
-			{Target: "http://172.17.0.1:3000/", Reachable: true},
+			{Target: "http://172.17.0.1:3000/", Reachable: true, Selectable: true},
 		},
 	}
 	issued, err := issueResolutionReceipt("secret", result, now)
@@ -86,6 +86,7 @@ func TestResolutionReceiptAllowsNetworkFormDerivedFromResolvedWebTarget(t *testi
 				NetworkTarget: "host.docker.internal",
 				Port:          3000,
 				Reachable:     true,
+				Selectable:    true,
 			},
 		},
 	}

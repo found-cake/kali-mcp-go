@@ -14,10 +14,12 @@ func TestTargetContextSelectsNetworkFormWithoutServerState(t *testing.T) {
 		OriginalTarget: "http://127.0.0.1:3000/",
 		Candidates: []dto.TargetCandidate{
 			{
-				BrowserTarget: "http://host.docker.internal:3000/",
-				NetworkTarget: "host.docker.internal",
+				BrowserTarget: "http://192.168.65.254:3000/",
+				NetworkTarget: "192.168.65.254",
+				Host:          "host.docker.internal",
 				Port:          3000,
 				Scope:         dto.TargetScopeDockerHost,
+				Selectable:    true,
 			},
 		},
 	}
@@ -41,7 +43,7 @@ func TestTargetContextSelectsNetworkFormWithoutServerState(t *testing.T) {
 	}
 
 	// Then: the network form is explicit, verified, and tied to the original target.
-	if normalized.Target != "host.docker.internal" {
+	if normalized.Target != "192.168.65.254" {
 		t.Fatalf("unexpected network target: %s", normalized.Target)
 	}
 	if !provenance.Verified || provenance.Original != result.OriginalTarget || provenance.Selected != normalized.Target {

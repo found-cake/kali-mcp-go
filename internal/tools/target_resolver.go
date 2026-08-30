@@ -2,15 +2,11 @@ package tools
 
 import (
 	"context"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -49,7 +45,7 @@ func ResolveTarget(ctx context.Context, request dto.ResolveTargetRequest) (*dto.
 		Loopback:       isLoopbackHost(parsed.host),
 	}
 	for _, candidate := range candidateHosts(parsed.host, result.Loopback) {
-		result.Candidates = append(result.Candidates, inspectCandidate(ctx, parsed, candidate, timeout))
+		result.Candidates = append(result.Candidates, inspectCandidateAddresses(ctx, parsed, candidate, timeout)...)
 	}
 	if recommended, ok := onlyReachableCandidate(result.Candidates); ok {
 		result.RecommendedTarget = recommended.Target
@@ -146,67 +142,6 @@ func dockerHostResolvable() bool {
 	return err == nil && len(addresses) > 0
 }
 
-func inspectCandidate(ctx context.Context, target parsedTarget, candidate candidateHost, timeout time.Duration) dto.TargetCandidate {
-	result := dto.TargetCandidate{
-		Target:        target.withHost(candidate.host),
-		NetworkTarget: candidate.host,
-		Host:          candidate.host,
-		Port:          target.port,
-		Scope:         candidate.scope,
-	}
-	if target.url != nil {
-		result.BrowserTarget = result.Target
-	}
-	lookupCtx, cancel := context.WithTimeout(ctx, timeout)
-	addresses, err := net.DefaultResolver.LookupIPAddr(lookupCtx, candidate.host)
-	cancel()
-	if err == nil {
-		for _, address := range addresses {
-			result.ResolvedAddresses = append(result.ResolvedAddresses, address.IP.String())
-		}
-	}
-	if target.port == 0 {
-		return result
-	}
-	result.Probed = true
-	probeStarted := time.Now()
-	dialCtx, cancel := context.WithTimeout(ctx, timeout)
-	connection, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", net.JoinHostPort(candidate.host, strconv.Itoa(target.port)))
-	cancel()
-	result.Probe = &dto.TargetProbeEvidence{
-		Type: dto.TargetProbeTCPConnect, Address: candidate.host, Port: target.port,
-		LatencyMS: time.Since(probeStarted).Milliseconds(),
-	}
-	if err != nil {
-		result.ProbeError = err.Error()
-		result.Probe.ErrorCode = probeErrorCode(err)
-		return result
-	}
-	result.Reachable = true
-	if host, _, splitErr := net.SplitHostPort(connection.RemoteAddr().String()); splitErr == nil {
-		result.Probe.Address = strings.Trim(host, "[]")
-	}
-	_ = connection.Close()
-	return result
-}
-
-func probeErrorCode(err error) dto.TargetProbeErrorCode {
-	var networkError net.Error
-	if errors.As(err, &networkError) && networkError.Timeout() {
-		return dto.TargetProbeTimeout
-	}
-	switch {
-	case errors.Is(err, syscall.ECONNREFUSED):
-		return dto.TargetProbeConnectionRefused
-	case errors.Is(err, syscall.EHOSTUNREACH):
-		return dto.TargetProbeHostUnreachable
-	case errors.Is(err, syscall.ENETUNREACH):
-		return dto.TargetProbeNetworkUnreachable
-	default:
-		return dto.TargetProbeUnknown
-	}
-}
-
 func (target parsedTarget) withHost(host string) string {
 	if target.url != nil {
 		copyURL := *target.url
@@ -222,43 +157,4 @@ func (target parsedTarget) withHost(host string) string {
 		return net.JoinHostPort(host, strconv.Itoa(target.port))
 	}
 	return host
-}
-
-func onlyReachableCandidate(candidates []dto.TargetCandidate) (dto.TargetCandidate, bool) {
-	var recommended dto.TargetCandidate
-	found := false
-	for _, candidate := range candidates {
-		if !candidate.Reachable {
-			continue
-		}
-		if found {
-			return dto.TargetCandidate{}, false
-		}
-		recommended = candidate
-		found = true
-	}
-	return recommended, found
-}
-
-func defaultGateway() string {
-	content, err := os.ReadFile("/proc/net/route")
-	if err != nil {
-		return ""
-	}
-	for line := range strings.Lines(string(content)) {
-		fields := strings.Fields(line)
-		if len(fields) < 4 || fields[1] != "00000000" {
-			continue
-		}
-		flags, err := strconv.ParseUint(fields[3], 16, 32)
-		if err != nil || flags&0x2 == 0 {
-			continue
-		}
-		gatewayBytes, err := hex.DecodeString(fields[2])
-		if err != nil || len(gatewayBytes) != net.IPv4len {
-			continue
-		}
-		return net.IPv4(gatewayBytes[3], gatewayBytes[2], gatewayBytes[1], gatewayBytes[0]).String()
-	}
-	return ""
 }

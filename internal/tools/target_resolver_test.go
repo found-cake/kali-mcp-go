@@ -4,12 +4,66 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func TestResolveTargetSplitsDNSAddressesAndPinsReachableHTTPAddress(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse test server URL: %v", err)
+	}
+	_, port, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		t.Fatalf("split test server address: %v", err)
+	}
+
+	result, err := ResolveTarget(context.Background(), dto.ResolveTargetRequest{
+		Target:                     "http://localhost:" + port + "/health",
+		ConnectTimeoutMilliseconds: 250,
+	})
+	if err != nil {
+		t.Fatalf("resolve target: %v", err)
+	}
+
+	foundReachable := false
+	for _, candidate := range result.Candidates {
+		if candidate.Host != "localhost" {
+			continue
+		}
+		if candidate.NetworkNamespace != "kali" || !candidate.Selectable {
+			t.Fatalf("candidate lacks explicit Kali address provenance: %+v", candidate)
+		}
+		if net.ParseIP(candidate.NetworkTarget) == nil || len(candidate.ResolvedAddresses) != 1 || candidate.ResolvedAddresses[0] != candidate.NetworkTarget {
+			t.Fatalf("candidate did not pin one resolved address: %+v", candidate)
+		}
+		if candidate.AddressFamily != "ipv4" && candidate.AddressFamily != "ipv6" {
+			t.Fatalf("candidate lacks address family: %+v", candidate)
+		}
+		if candidate.Reachable {
+			foundReachable = true
+			if candidate.HTTPProbe == nil || candidate.HTTPProbe.StatusCode != http.StatusNoContent {
+				t.Fatalf("reachable URL lacks HTTP evidence: %+v", candidate)
+			}
+			if candidate.NetworkTarget != "127.0.0.1" || candidate.Target != "http://127.0.0.1:"+port+"/health" {
+				t.Fatalf("reachable candidate was not pinned to the tested IPv4 address: %+v", candidate)
+			}
+		}
+	}
+	if !foundReachable {
+		t.Fatalf("expected an address-level reachable candidate: %+v", result.Candidates)
+	}
+}
 
 func TestResolveTargetReportsReachableRuntimeCandidate(t *testing.T) {
 	// Given: a service listening inside the current Kali runtime.

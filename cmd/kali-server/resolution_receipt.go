@@ -66,6 +66,9 @@ func issueResolutionReceiptUntil(secret string, result dto.TargetResolutionResul
 	}
 	seenCandidates := make(map[string]bool)
 	for _, candidate := range result.Candidates {
+		if !candidate.Selectable {
+			continue
+		}
 		for _, target := range []string{candidate.Target, candidate.BrowserTarget, candidate.NetworkTarget} {
 			if target != "" && !seenCandidates[target] {
 				claims.Candidates = append(claims.Candidates, target)

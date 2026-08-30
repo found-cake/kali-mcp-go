@@ -33,6 +33,9 @@ type targetContextClaims struct {
 func attachTargetContexts(secret string, result *dto.TargetResolutionResult, issued issuedResolutionReceipt) error {
 	for index := range result.Candidates {
 		candidate := &result.Candidates[index]
+		if !candidate.Selectable {
+			continue
+		}
 		context, err := signTargetContext(secret, targetContextClaims{
 			ResolutionID:  issued.ID,
 			Original:      result.OriginalTarget,
