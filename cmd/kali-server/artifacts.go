@@ -21,6 +21,7 @@ import (
 const (
 	artifactStoreLocalKey = "artifact-store"
 	artifactTTL           = time.Hour
+	artifactExpiryWarning = 5 * time.Minute
 	defaultArtifactPage   = 16 * 1024
 	minimumArtifactPage   = 256
 	maximumArtifactPage   = 64 * 1024
@@ -33,7 +34,17 @@ var (
 
 type storedArtifact struct {
 	path      string
-	expiresAt time.Time
+	reference dto.ArtifactRef
+}
+
+type artifactContent struct {
+	Kind           string
+	MediaType      string
+	Encoding       dto.ArtifactEncoding
+	RedactionState dto.ArtifactRedactionState
+	SourceCallID   string
+	Relation       dto.ArtifactRelation
+	Payload        []byte
 }
 
 type artifactStore struct {
@@ -55,44 +66,58 @@ func newArtifactStore() (*artifactStore, error) {
 }
 
 func (s *artifactStore) save(result *executor.Result, now time.Time) (dto.ArtifactRef, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pruneLocked(now)
-	id, err := randomArtifactID()
-	if err != nil {
-		return dto.ArtifactRef{}, err
-	}
-	expiresAt := now.Add(artifactTTL)
-	path := filepath.Join(s.directory, id+".json")
 	payload, err := json.MarshalIndent(toAPIResult(result), "", "  ")
 	if err != nil {
 		return dto.ArtifactRef{}, fmt.Errorf("encode artifact: %w", err)
 	}
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
-		return dto.ArtifactRef{}, fmt.Errorf("write artifact: %w", err)
-	}
-	s.items[id] = storedArtifact{path: path, expiresAt: expiresAt}
-	return dto.ArtifactRef{ID: id, Kind: "tool-result-json", Location: "/api/artifacts/" + id, ExpiresAt: expiresAt}, nil
+	return s.saveContent(artifactContent{
+		Kind: "tool-result-json", MediaType: fiber.MIMEApplicationJSON,
+		Encoding: dto.ArtifactEncodingUTF8, RedactionState: dto.ArtifactRedacted,
+		SourceCallID: result.CallID, Relation: dto.ArtifactRelationToolResult, Payload: payload,
+	}, now)
 }
 
-func (s *artifactStore) read(id string, now time.Time) ([]byte, error) {
+func (s *artifactStore) saveContent(content artifactContent, now time.Time) (dto.ArtifactRef, error) {
+	id, err := randomArtifactID()
+	if err != nil {
+		return dto.ArtifactRef{}, err
+	}
+	reference := dto.ArtifactRef{
+		ID: id, Kind: content.Kind, Location: "/api/artifacts/" + id, ExpiresAt: now.Add(artifactTTL),
+		SourceCallID: content.SourceCallID, MediaType: content.MediaType, Encoding: content.Encoding,
+		RedactionState: content.RedactionState, Relation: content.Relation,
+	}
+	path := filepath.Join(s.directory, id+".artifact")
+	if err := os.WriteFile(path, content.Payload, 0o600); err != nil {
+		return dto.ArtifactRef{}, fmt.Errorf("write artifact: %w", err)
+	}
+	s.prune(now)
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pruneLocked(now)
+	s.items[id] = storedArtifact{path: path, reference: reference}
+	s.mu.Unlock()
+	return reference, nil
+}
+
+func (s *artifactStore) read(id string, now time.Time) (storedArtifact, []byte, error) {
+	s.prune(now)
+	s.mu.Lock()
 	artifact, ok := s.items[id]
+	s.mu.Unlock()
 	if !ok {
-		return nil, errArtifactNotFound
+		return storedArtifact{}, nil, errArtifactNotFound
 	}
 	payload, err := os.ReadFile(artifact.path)
 	if err != nil {
+		s.mu.Lock()
 		delete(s.items, id)
-		return nil, errArtifactNotFound
+		s.mu.Unlock()
+		return storedArtifact{}, nil, errArtifactNotFound
 	}
-	return payload, nil
+	return artifact, payload, nil
 }
 
 func (s *artifactStore) readPage(request dto.ArtifactReadRequest, now time.Time) (dto.ArtifactReadResult, error) {
-	payload, err := s.read(request.ArtifactID, now)
+	artifact, payload, err := s.read(request.ArtifactID, now)
 	if err != nil {
 		return dto.ArtifactReadResult{}, err
 	}
@@ -104,20 +129,27 @@ func (s *artifactStore) readPage(request dto.ArtifactReadRequest, now time.Time)
 	if request.Offset < 0 || request.Offset > total {
 		return dto.ArtifactReadResult{}, errInvalidArtifactPage
 	}
-	if request.Offset < total && !utf8.RuneStart(payload[request.Offset]) {
+	if artifact.reference.Encoding == dto.ArtifactEncodingUTF8 && request.Offset < total && !utf8.RuneStart(payload[request.Offset]) {
 		return dto.ArtifactReadResult{}, errInvalidArtifactPage
 	}
 	end := min(request.Offset+int64(limit), total)
-	for end < total && end > request.Offset && !utf8.RuneStart(payload[end]) {
-		end--
+	if artifact.reference.Encoding == dto.ArtifactEncodingUTF8 {
+		for end < total && end > request.Offset && !utf8.RuneStart(payload[end]) {
+			end--
+		}
 	}
+	content := string(payload[request.Offset:end])
+	if artifact.reference.Encoding == dto.ArtifactEncodingBase64 {
+		content = base64.StdEncoding.EncodeToString(payload[request.Offset:end])
+	}
+	expiresIn := max(int64(artifact.reference.ExpiresAt.Sub(now)/time.Second), 0)
 	return dto.ArtifactReadResult{
-		ArtifactID: request.ArtifactID,
-		Content:    string(payload[request.Offset:end]),
-		Offset:     request.Offset,
-		NextOffset: end,
-		HasMore:    end < total,
-		TotalBytes: total,
+		ArtifactID: request.ArtifactID, Content: content, Offset: request.Offset, NextOffset: end,
+		HasMore: end < total, TotalBytes: total, ExpiresAt: artifact.reference.ExpiresAt,
+		ExpiresInSeconds: expiresIn, ExpiringSoon: expiresIn <= int64(artifactExpiryWarning/time.Second),
+		SourceCallID: artifact.reference.SourceCallID, MediaType: artifact.reference.MediaType,
+		Encoding: artifact.reference.Encoding, RedactionState: artifact.reference.RedactionState,
+		Relation: artifact.reference.Relation,
 	}, nil
 }
 
@@ -133,18 +165,24 @@ func artifactPageSize(requested int) (int, error) {
 
 func (s *artifactStore) close() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.items = make(map[string]storedArtifact)
+	s.mu.Unlock()
 	return os.RemoveAll(s.directory)
 }
 
-func (s *artifactStore) pruneLocked(now time.Time) {
+func (s *artifactStore) prune(now time.Time) {
+	s.mu.Lock()
+	var expired []string
 	for id, artifact := range s.items {
-		if now.Before(artifact.expiresAt) {
+		if now.Before(artifact.reference.ExpiresAt) {
 			continue
 		}
-		_ = os.Remove(artifact.path)
+		expired = append(expired, artifact.path)
 		delete(s.items, id)
+	}
+	s.mu.Unlock()
+	for _, path := range expired {
+		_ = os.Remove(path)
 	}
 }
 
@@ -181,11 +219,11 @@ func attachResultArtifact(store *artifactStore, result *executor.Result) {
 }
 
 func handleGetArtifact(c fiber.Ctx) error {
-	payload, err := artifactStoreFromContext(c).read(c.Params("id"), time.Now().UTC())
+	artifact, payload, err := artifactStoreFromContext(c).read(c.Params("id"), time.Now().UTC())
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": errArtifactNotFound.Error()})
 	}
-	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	c.Set(fiber.HeaderContentType, artifact.reference.MediaType)
 	return c.Send(payload)
 }
 

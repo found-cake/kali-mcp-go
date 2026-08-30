@@ -67,13 +67,6 @@ type FailureInfo struct {
 	RetryEstimate   *RetryEstimate `json:"retry_estimate,omitempty"`
 }
 
-type ArtifactRef struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Location  string    `json:"location"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
 type ExecutionMetadata struct {
 	Tool            string                 `json:"tool"`
 	ToolVersion     string                 `json:"tool_version"`
