@@ -202,6 +202,7 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 			StartedAt:       result.StartedAt,
 			EndedAt:         result.StartedAt.Add(result.Duration),
 			TimeoutMS:       result.Timeout.Milliseconds(),
+			TimeoutPlanning: result.TimeoutPlanning,
 			DryRun:          result.DryRun,
 			Profile:         result.Policy.Profile,
 			MaxRequests:     result.Policy.MaxRequests,

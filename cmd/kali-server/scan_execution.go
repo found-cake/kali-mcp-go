@@ -39,6 +39,7 @@ type scanExecutionPlan struct {
 	controls              dto.ScanControlApplication
 	target                *dto.TargetProvenance
 	timeout               time.Duration
+	timeoutPlanning       *dto.TimeoutPlanning
 	release               func()
 	healthURL             string
 	request               any
@@ -100,11 +101,27 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		dryRun = request.GetDryRun()
 	}
 	timeout := commandTimeout(requestedTimeout)
+	timeoutPlanning := &dto.TimeoutPlanning{Source: dto.TimeoutSourceDefault}
+	if requestedTimeout > 0 {
+		timeoutPlanning.Source = dto.TimeoutSourceRequest
+	}
 	if effective.MaxRequests > 0 && effective.RateLimit > 0 {
 		budgetSeconds := (effective.MaxRequests + effective.RateLimit - 1) / effective.RateLimit
 		budgetTimeout := time.Duration(budgetSeconds) * time.Second
-		if budgetTimeout < timeout {
-			timeout = budgetTimeout
+		timeoutPlanning.RequestBudgetEstimateMS = budgetTimeout.Milliseconds()
+		if requestedTimeout == 0 {
+			startupGrace := 10 * time.Second
+			switch controlledArgs[0] {
+			case "ffuf", "nmap":
+				startupGrace = 5 * time.Second
+			case "feroxbuster":
+				startupGrace = 10 * time.Second
+			case "nuclei", "sqlmap":
+				startupGrace = 30 * time.Second
+			}
+			timeout = budgetTimeout + startupGrace
+			timeoutPlanning.Source = dto.TimeoutSourceRequestBudget
+			timeoutPlanning.StartupGraceMS = startupGrace.Milliseconds()
 		}
 	}
 	return &scanExecutionPlan{
@@ -112,8 +129,9 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		args:   controlledArgs, options: effective, target: provenance, timeout: timeout,
 		controls: tools.ScanControlApplication(args[0], options, effective),
 		release:  release, healthURL: effective.HealthURL, request: request, context: c.Context(),
-		artifactStore: artifactStoreFromContext(c),
-		dryRun:        dryRun,
+		artifactStore:   artifactStoreFromContext(c),
+		dryRun:          dryRun,
+		timeoutPlanning: timeoutPlanning,
 	}, nil
 }
 
@@ -127,6 +145,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.BrowserScreenshotPath = p.browserScreenshotPath
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
+	result.TimeoutPlanning = p.timeoutPlanning
 	result.Warnings = append(result.Warnings, p.extraWarnings...)
 	result.FinalizeProgress()
 	if p.healthURL != "" {

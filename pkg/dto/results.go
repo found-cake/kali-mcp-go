@@ -68,6 +68,21 @@ type FailureInfo struct {
 	RetryEstimate   *RetryEstimate `json:"retry_estimate,omitempty"`
 }
 
+type TimeoutSource string
+
+const (
+	TimeoutSourceDefault       TimeoutSource = "default"
+	TimeoutSourceRequest       TimeoutSource = "request"
+	TimeoutSourceRequestBudget TimeoutSource = "request_budget_estimate"
+)
+
+type TimeoutPlanning struct {
+	Source                  TimeoutSource `json:"source"`
+	RequestBudgetEstimateMS int64         `json:"request_budget_estimate_ms"`
+	StartupGraceMS          int64         `json:"startup_grace_ms"`
+	MaxRequestsHardLimit    bool          `json:"max_requests_hard_limit"`
+}
+
 type ExecutionMetadata struct {
 	Tool            string                 `json:"tool"`
 	ToolVersion     string                 `json:"tool_version"`
@@ -75,6 +90,7 @@ type ExecutionMetadata struct {
 	StartedAt       time.Time              `json:"started_at"`
 	EndedAt         time.Time              `json:"ended_at"`
 	TimeoutMS       int64                  `json:"timeout_ms"`
+	TimeoutPlanning *TimeoutPlanning       `json:"timeout_planning,omitempty"`
 	DryRun          bool                   `json:"dry_run"`
 	Profile         SafetyProfile          `json:"profile"`
 	MaxRequests     int                    `json:"max_requests"`

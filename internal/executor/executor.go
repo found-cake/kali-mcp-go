@@ -33,6 +33,7 @@ type Result struct {
 	ToolVersion           string
 	ArgvRedacted          []string
 	Timeout               time.Duration
+	TimeoutPlanning       *dto.TimeoutPlanning
 	Target                *dto.TargetProvenance
 	Policy                dto.ScanOptions
 	Controls              dto.ScanControlApplication

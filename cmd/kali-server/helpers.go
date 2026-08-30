@@ -63,6 +63,7 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 			StartedAt:       r.StartedAt,
 			EndedAt:         r.StartedAt.Add(r.Duration),
 			TimeoutMS:       r.Timeout.Milliseconds(),
+			TimeoutPlanning: r.TimeoutPlanning,
 			DryRun:          r.DryRun,
 			Profile:         r.Policy.Profile,
 			MaxRequests:     r.Policy.MaxRequests,
