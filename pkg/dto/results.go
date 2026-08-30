@@ -16,6 +16,19 @@ const (
 	ExecutionCancelled ExecutionStatus = "cancelled"
 )
 
+func ExecutionStatusFromResult(returnCode int, timedOut, cancelled bool) ExecutionStatus {
+	switch {
+	case timedOut:
+		return ExecutionTimedOut
+	case cancelled:
+		return ExecutionCancelled
+	case returnCode != 0:
+		return ExecutionFailed
+	default:
+		return ExecutionSucceeded
+	}
+}
+
 type FindingStatus string
 
 const (

@@ -151,3 +151,33 @@ func TestToolResultFinalizeMapsExecutionStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestExecutionStatusFromResultPreservesPrecedence(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		returnCode int
+		timedOut   bool
+		cancelled  bool
+		want       ExecutionStatus
+	}{
+		{name: "success", want: ExecutionSucceeded},
+		{name: "nonzero is failed", returnCode: 1, want: ExecutionFailed},
+		{name: "cancelled beats nonzero", returnCode: 1, cancelled: true, want: ExecutionCancelled},
+		{name: "timeout beats nonzero", returnCode: 1, timedOut: true, want: ExecutionTimedOut},
+		{name: "timeout beats cancellation", returnCode: 1, timedOut: true, cancelled: true, want: ExecutionTimedOut},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Given: primitive process outcome fields from either HTTP transport boundary.
+			// When: the shared DTO rule derives the execution status.
+			got := ExecutionStatusFromResult(test.returnCode, test.timedOut, test.cancelled)
+
+			// Then: precedence matches the established server and SSE client behavior.
+			if got != test.want {
+				t.Fatalf("expected %q, got %q", test.want, got)
+			}
+		})
+	}
+}

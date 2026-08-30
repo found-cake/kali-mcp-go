@@ -50,7 +50,7 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 		TimedOut:        r.TimedOut,
 		Cancelled:       r.Cancelled,
 		PartialResults:  r.TimedOut && (r.Stdout != "" || r.Stderr != ""),
-		ExecutionStatus: executionStatus(r),
+		ExecutionStatus: dto.ExecutionStatusFromResult(r.ReturnCode, r.TimedOut, r.Cancelled),
 		FindingStatus:   dto.FindingsUnknown,
 		HTTPRequests:    r.HTTPRequests,
 		DurationMS:      r.Duration.Milliseconds(),
@@ -86,19 +86,6 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 	}
 	result.Finalize()
 	return result
-}
-
-func executionStatus(r *executor.Result) dto.ExecutionStatus {
-	if r.TimedOut {
-		return dto.ExecutionTimedOut
-	}
-	if r.Cancelled {
-		return dto.ExecutionCancelled
-	}
-	if r.ReturnCode != 0 {
-		return dto.ExecutionFailed
-	}
-	return dto.ExecutionSucceeded
 }
 
 func badRequest(c fiber.Ctx, msg string) error {
