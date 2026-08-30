@@ -12,6 +12,9 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	case result.TimedOut:
 		result.ExecutionStatus = dto.ExecutionTimedOut
 		result.ClassificationReason = "execution_timed_out"
+	case result.Cancelled:
+		result.ExecutionStatus = dto.ExecutionCancelled
+		result.ClassificationReason = "execution_cancelled"
 	case toolName == "osv_scan" && result.ReturnCode == 1 && osvFindingStatus(result.Stdout) == dto.FindingsDetected:
 		result.ExecutionStatus = dto.ExecutionSucceeded
 		result.Success = true
@@ -158,6 +161,9 @@ func finalizeClassifiedResult(result *dto.ToolResult) {
 		result.Failure = &dto.FailureInfo{Code: code, Message: message, Retryable: retryable}
 	}
 	result.Finalize()
+	if result.ExecutionStatus == dto.ExecutionTimedOut || result.ExecutionStatus == dto.ExecutionCancelled || result.ExecutionStatus == dto.ExecutionFailed && result.PartialResults {
+		result.FindingStatus = dto.FindingsInconclusive
+	}
 }
 
 func osvFindingStatus(stdout string) dto.FindingStatus {

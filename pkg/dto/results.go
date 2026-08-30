@@ -32,9 +32,10 @@ func ExecutionStatusFromResult(returnCode int, timedOut, cancelled bool) Executi
 type FindingStatus string
 
 const (
-	FindingsDetected    FindingStatus = "detected"
-	FindingsNotDetected FindingStatus = "not_detected"
-	FindingsUnknown     FindingStatus = "unknown"
+	FindingsDetected     FindingStatus = "detected"
+	FindingsNotDetected  FindingStatus = "not_detected"
+	FindingsInconclusive FindingStatus = "inconclusive"
+	FindingsUnknown      FindingStatus = "unknown"
 )
 
 type RequestCountSource string
