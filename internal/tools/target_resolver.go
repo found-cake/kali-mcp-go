@@ -47,11 +47,27 @@ func ResolveTarget(ctx context.Context, request dto.ResolveTargetRequest) (*dto.
 	for _, candidate := range candidateHosts(parsed.host, result.Loopback) {
 		result.Candidates = append(result.Candidates, inspectCandidateAddresses(ctx, parsed, candidate, timeout)...)
 	}
-	if recommended, ok := onlyReachableCandidate(result.Candidates); ok {
+	result.RecommendationBasis = "explicit_selection_required"
+	if recommended, basis, ok := recommendTargetCandidate(result.Candidates); ok {
 		result.RecommendedTarget = recommended.Target
 		result.RecommendedBrowserTarget = recommended.BrowserTarget
 		result.RecommendedNetworkTarget = recommended.NetworkTarget
 		result.RecommendedNetworkPort = recommended.Port
+		result.RecommendationBasis = basis
+	}
+	for index := range result.Candidates {
+		candidate := &result.Candidates[index]
+		if candidate.HTTPProbe != nil && candidate.HTTPProbe.ServiceFingerprint != "" {
+			groupID := candidate.HTTPProbe.ServiceFingerprint
+			if len(groupID) > 16 {
+				groupID = groupID[:16]
+			}
+			candidate.EquivalentServiceGroup = "service_" + groupID
+		}
+		if result.RecommendedTarget != "" && candidate.Target == result.RecommendedTarget {
+			candidate.Recommended = true
+			candidate.RecommendationBasis = result.RecommendationBasis
+		}
 	}
 	if result.Loopback {
 		result.Warnings = []string{"scan targets are never rewritten; choose a candidate explicitly for the next tool call"}

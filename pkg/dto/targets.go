@@ -34,9 +34,14 @@ type TargetProbeEvidence struct {
 }
 
 type TargetHTTPProbeEvidence struct {
-	StatusCode int    `json:"status_code,omitempty"`
-	FinalURL   string `json:"final_url,omitempty"`
-	Error      string `json:"error,omitempty"`
+	StatusCode         int    `json:"status_code,omitempty"`
+	FinalURL           string `json:"final_url,omitempty"`
+	ContentType        string `json:"content_type,omitempty"`
+	BodySHA256         string `json:"body_sha256,omitempty"`
+	BodyBytes          int    `json:"body_bytes,omitempty"`
+	BodyTruncated      bool   `json:"body_truncated,omitempty"`
+	ServiceFingerprint string `json:"service_fingerprint,omitempty"`
+	Error              string `json:"error,omitempty"`
 }
 
 type ResolveTargetRequest struct {
@@ -46,23 +51,26 @@ type ResolveTargetRequest struct {
 }
 
 type TargetCandidate struct {
-	Target            string                   `json:"target"`
-	BrowserTarget     string                   `json:"browser_target,omitempty"`
-	NetworkTarget     string                   `json:"network_target"`
-	Host              string                   `json:"host"`
-	Port              int                      `json:"port,omitempty"`
-	Scope             TargetScope              `json:"scope"`
-	NetworkNamespace  string                   `json:"network_namespace"`
-	AddressFamily     string                   `json:"address_family,omitempty"`
-	ResolvedAddresses []string                 `json:"resolved_addresses,omitempty"`
-	Selectable        bool                     `json:"selectable"`
-	Probed            bool                     `json:"probed"`
-	Reachable         bool                     `json:"reachable"`
-	ProbeError        string                   `json:"probe_error,omitempty"`
-	Probe             *TargetProbeEvidence     `json:"probe,omitempty"`
-	HTTPProbe         *TargetHTTPProbeEvidence `json:"http_probe,omitempty"`
-	TargetContext     string                   `json:"target_context,omitempty"`
-	ContextExpiresAt  time.Time                `json:"context_expires_at,omitempty"`
+	Target                 string                   `json:"target"`
+	BrowserTarget          string                   `json:"browser_target,omitempty"`
+	NetworkTarget          string                   `json:"network_target"`
+	Host                   string                   `json:"host"`
+	Port                   int                      `json:"port,omitempty"`
+	Scope                  TargetScope              `json:"scope"`
+	NetworkNamespace       string                   `json:"network_namespace"`
+	AddressFamily          string                   `json:"address_family,omitempty"`
+	ResolvedAddresses      []string                 `json:"resolved_addresses,omitempty"`
+	Selectable             bool                     `json:"selectable"`
+	Probed                 bool                     `json:"probed"`
+	Reachable              bool                     `json:"reachable"`
+	ProbeError             string                   `json:"probe_error,omitempty"`
+	Probe                  *TargetProbeEvidence     `json:"probe,omitempty"`
+	HTTPProbe              *TargetHTTPProbeEvidence `json:"http_probe,omitempty"`
+	TargetContext          string                   `json:"target_context,omitempty"`
+	ContextExpiresAt       time.Time                `json:"context_expires_at,omitempty"`
+	EquivalentServiceGroup string                   `json:"equivalent_service_group,omitempty"`
+	Recommended            bool                     `json:"recommended"`
+	RecommendationBasis    string                   `json:"recommendation_basis,omitempty"`
 }
 
 type TargetResolutionResult struct {

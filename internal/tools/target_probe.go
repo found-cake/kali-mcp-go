@@ -2,10 +2,14 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -13,6 +17,8 @@ import (
 )
 
 const kaliNetworkNamespace = "kali"
+
+const maximumServiceFingerprintBodyBytes = 64 * 1024
 
 func inspectCandidateAddresses(ctx context.Context, target parsedTarget, candidate candidateHost, timeout time.Duration) []dto.TargetCandidate {
 	lookupCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -104,7 +110,23 @@ func inspectHTTPAddress(ctx context.Context, address string, timeout time.Durati
 		return &dto.TargetHTTPProbeEvidence{Error: err.Error()}
 	}
 	defer response.Body.Close()
-	return &dto.TargetHTTPProbeEvidence{StatusCode: response.StatusCode, FinalURL: response.Request.URL.String()}
+	payload, err := io.ReadAll(io.LimitReader(response.Body, maximumServiceFingerprintBodyBytes+1))
+	if err != nil {
+		return &dto.TargetHTTPProbeEvidence{StatusCode: response.StatusCode, FinalURL: response.Request.URL.String(), Error: err.Error()}
+	}
+	truncated := len(payload) > maximumServiceFingerprintBodyBytes
+	if truncated {
+		payload = payload[:maximumServiceFingerprintBodyBytes]
+	}
+	bodyDigest := sha256.Sum256(payload)
+	bodySHA256 := hex.EncodeToString(bodyDigest[:])
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	serviceDigest := sha256.Sum256([]byte(strconv.Itoa(response.StatusCode) + "\x00" + contentType + "\x00" + bodySHA256))
+	return &dto.TargetHTTPProbeEvidence{
+		StatusCode: response.StatusCode, FinalURL: response.Request.URL.String(), ContentType: contentType,
+		BodySHA256: bodySHA256, BodyBytes: len(payload), BodyTruncated: truncated,
+		ServiceFingerprint: hex.EncodeToString(serviceDigest[:]),
+	}
 }
 
 func addressFamily(address string) string {
@@ -149,4 +171,42 @@ func onlyReachableCandidate(candidates []dto.TargetCandidate) (dto.TargetCandida
 		found = true
 	}
 	return recommended, found
+}
+
+func recommendTargetCandidate(candidates []dto.TargetCandidate) (dto.TargetCandidate, string, bool) {
+	if candidate, ok := onlyReachableCandidate(candidates); ok {
+		return candidate, "only_reachable_candidate", true
+	}
+	groups := make(map[string][]dto.TargetCandidate)
+	for _, candidate := range candidates {
+		if candidate.Reachable && candidate.HTTPProbe != nil && candidate.HTTPProbe.ServiceFingerprint != "" {
+			groups[candidate.HTTPProbe.ServiceFingerprint] = append(groups[candidate.HTTPProbe.ServiceFingerprint], candidate)
+		}
+	}
+	var recommendation dto.TargetCandidate
+	eligibleGroups := 0
+	for _, group := range groups {
+		var dockerCandidate dto.TargetCandidate
+		hasDocker := false
+		hasGateway := false
+		for _, candidate := range group {
+			switch candidate.Scope {
+			case dto.TargetScopeDockerHost:
+				if !hasDocker || candidate.AddressFamily == "ipv4" {
+					dockerCandidate = candidate
+				}
+				hasDocker = true
+			case dto.TargetScopeDefaultGateway:
+				hasGateway = true
+			}
+		}
+		if hasDocker && hasGateway {
+			recommendation = dockerCandidate
+			eligibleGroups++
+		}
+	}
+	if eligibleGroups != 1 {
+		return dto.TargetCandidate{}, "", false
+	}
+	return recommendation, "equivalent_reachable_mappings_prefer_docker_host", true
 }

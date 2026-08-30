@@ -52,7 +52,7 @@ func TestResolveTargetSplitsDNSAddressesAndPinsReachableHTTPAddress(t *testing.T
 		}
 		if candidate.Reachable {
 			foundReachable = true
-			if candidate.HTTPProbe == nil || candidate.HTTPProbe.StatusCode != http.StatusNoContent {
+			if candidate.HTTPProbe == nil || candidate.HTTPProbe.StatusCode != http.StatusNoContent || candidate.HTTPProbe.BodySHA256 == "" || candidate.HTTPProbe.ServiceFingerprint == "" {
 				t.Fatalf("reachable URL lacks HTTP evidence: %+v", candidate)
 			}
 			if candidate.NetworkTarget != "127.0.0.1" || candidate.Target != "http://127.0.0.1:"+port+"/health" {
@@ -62,6 +62,26 @@ func TestResolveTargetSplitsDNSAddressesAndPinsReachableHTTPAddress(t *testing.T
 	}
 	if !foundReachable {
 		t.Fatalf("expected an address-level reachable candidate: %+v", result.Candidates)
+	}
+}
+
+func TestRecommendTargetCandidate_prefers_explicit_Docker_mapping_for_equivalent_services(t *testing.T) {
+	// Given: loopback is unreachable while Docker-host and gateway mappings expose the same HTTP service fingerprint.
+	candidates := []dto.TargetCandidate{
+		{Target: "http://127.0.0.1:3000/", Scope: dto.TargetScopeKaliRuntime},
+		{Target: "http://192.168.65.254:3000/", Scope: dto.TargetScopeDockerHost, Reachable: true, AddressFamily: "ipv4", HTTPProbe: &dto.TargetHTTPProbeEvidence{ServiceFingerprint: "same-service"}},
+		{Target: "http://172.17.0.1:3000/", Scope: dto.TargetScopeDefaultGateway, Reachable: true, AddressFamily: "ipv4", HTTPProbe: &dto.TargetHTTPProbeEvidence{ServiceFingerprint: "same-service"}},
+	}
+
+	// When: the resolver computes a non-binding recommendation.
+	recommended, basis, ok := recommendTargetCandidate(candidates)
+
+	// Then: Docker host is the clear default option, but no target has been rewritten or selected.
+	if !ok || recommended.Target != "http://192.168.65.254:3000/" || basis != "equivalent_reachable_mappings_prefer_docker_host" {
+		t.Fatalf("unexpected recommendation: candidate=%+v basis=%q ok=%t", recommended, basis, ok)
+	}
+	if candidates[0].Target != "http://127.0.0.1:3000/" {
+		t.Fatalf("original candidate was rewritten: %+v", candidates)
 	}
 }
 
@@ -104,6 +124,9 @@ func TestResolveTargetReportsReachableRuntimeCandidate(t *testing.T) {
 	}
 	if result.RecommendedBrowserTarget != target || result.RecommendedNetworkTarget != "127.0.0.1" || result.RecommendedNetworkPort != port {
 		t.Fatalf("unexpected recommended tool targets: %+v", result)
+	}
+	if !candidate.Recommended || result.RecommendationBasis != "only_reachable_candidate" {
+		t.Fatalf("recommended candidate is not explicit in the result: candidate=%+v result=%+v", candidate, result)
 	}
 }
 

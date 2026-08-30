@@ -35,9 +35,8 @@ func handleResolveTarget(c fiber.Ctx) error {
 	if err := attachTargetContexts(apiTokenFromContext(c), result, receipt); err != nil {
 		return internalServerError(c, err.Error())
 	}
-	result.RecommendationBasis = "explicit_selection_required"
-	if result.RecommendedTarget != "" {
-		result.RecommendationBasis = "only_reachable_candidate"
+	if result.RecommendationBasis == "" {
+		result.RecommendationBasis = "explicit_selection_required"
 	}
 	return c.JSON(result)
 }

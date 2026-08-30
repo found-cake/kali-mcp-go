@@ -52,6 +52,15 @@ func formatTargetResolution(result *dto.TargetResolutionResult) string {
 			}
 			output.WriteByte('\n')
 		}
+		if candidate.HTTPProbe != nil {
+			fmt.Fprintf(&output, "  HTTP probe: status=%d content_type=%s fingerprint=%s\n", candidate.HTTPProbe.StatusCode, candidate.HTTPProbe.ContentType, candidate.HTTPProbe.ServiceFingerprint)
+		}
+		if candidate.EquivalentServiceGroup != "" {
+			fmt.Fprintf(&output, "  equivalent service group: %s\n", candidate.EquivalentServiceGroup)
+		}
+		if candidate.Recommended {
+			fmt.Fprintf(&output, "  recommended option: %s\n", candidate.RecommendationBasis)
+		}
 		if candidate.BrowserTarget != "" {
 			fmt.Fprintf(&output, "  browser target: %s\n", candidate.BrowserTarget)
 		}
@@ -73,6 +82,9 @@ func formatTargetResolution(result *dto.TargetResolutionResult) string {
 			fmt.Fprintf(&output, " (port %d)", result.RecommendedNetworkPort)
 		}
 		output.WriteByte('\n')
+	}
+	if result.RecommendationBasis != "" {
+		fmt.Fprintf(&output, "recommendation basis: %s\n", result.RecommendationBasis)
 	}
 	for _, warning := range result.Warnings {
 		fmt.Fprintf(&output, "warning: %s\n", warning)
