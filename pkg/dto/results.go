@@ -91,6 +91,8 @@ type ExecutionMetadata struct {
 	EndedAt         time.Time              `json:"ended_at"`
 	TimeoutMS       int64                  `json:"timeout_ms"`
 	TimeoutPlanning *TimeoutPlanning       `json:"timeout_planning,omitempty"`
+	ProcessStarted  bool                   `json:"process_started"`
+	GracefulStopMS  int64                  `json:"graceful_stop_ms"`
 	DryRun          bool                   `json:"dry_run"`
 	Profile         SafetyProfile          `json:"profile"`
 	MaxRequests     int                    `json:"max_requests"`

@@ -34,6 +34,8 @@ type Result struct {
 	ArgvRedacted          []string
 	Timeout               time.Duration
 	TimeoutPlanning       *dto.TimeoutPlanning
+	ProcessStarted        bool
+	GracefulStop          time.Duration
 	Target                *dto.TargetProvenance
 	Policy                dto.ScanOptions
 	Controls              dto.ScanControlApplication
@@ -46,6 +48,8 @@ type Result struct {
 	JWTAnalysis           *dto.JWTAnalysisMetadata
 	BrowserScreenshotPath string
 }
+
+const gracefulStopTimeout = time.Second
 
 type Line struct {
 	Stream   string
@@ -118,6 +122,8 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cmdSpec.name, cmdSpec.args...)
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = gracefulStopTimeout
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -148,8 +154,9 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 		}
 		return result
 	}
-
-	cancelPipeClose := closePipesOnCancel(ctx, stdoutPipe, stderrPipe)
+	result.ProcessStarted = true
+	result.GracefulStop = gracefulStopTimeout
+	cancelPipeClose := closePipesAfterGrace(ctx, gracefulStopTimeout, stdoutPipe, stderrPipe)
 	defer close(cancelPipeClose)
 
 	var (
@@ -180,7 +187,6 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	go collect(stderrPipe, "stderr", &stderr)
 	wg.Wait()
 	close(scanErrCh)
-
 	waitErr := cmd.Wait()
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	cancelled := ctx.Err() == context.Canceled
@@ -236,20 +242,6 @@ func newScanner(r io.Reader) *bufio.Scanner {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
 	return sc
-}
-
-func closePipesOnCancel(ctx context.Context, pipes ...io.ReadCloser) chan struct{} {
-	stop := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			for _, p := range pipes {
-				_ = p.Close()
-			}
-		case <-stop:
-		}
-	}()
-	return stop
 }
 
 func Which(name string) bool {
