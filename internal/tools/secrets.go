@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 
@@ -26,74 +25,24 @@ func RequestSecrets(request any) []string {
 		secrets = append(secrets, value.RedactValues...)
 	case dto.MetasploitRequest:
 		secrets = append(secrets, value.RedactValues...)
-		for name, option := range value.Options {
-			if sensitiveName(name) {
-				secrets = append(secrets, option)
-			}
-		}
-	case dto.SQLMapRequest:
-		secrets = append(secrets, value.Cookie)
-		for name, header := range value.Headers {
-			if sensitiveName(name) {
-				secrets = append(secrets, header)
-			}
-		}
-	case dto.HydraRequest:
-		secrets = append(secrets, value.Password)
 	case dto.JohnRequest:
-		secrets = append(secrets, value.Hash)
 		secrets = append(secrets, value.RedactValues...)
-	case dto.JWTRequest:
-		secrets = append(secrets, value.Token, value.RequestHeader, value.RequestCookie)
-	case dto.HTTPRequest:
-		for name, header := range value.Headers {
-			if sensitiveName(name) {
-				secrets = append(secrets, header)
-			}
-		}
-		if parsed, err := url.Parse(value.URL); err == nil {
-			for name, values := range parsed.Query() {
-				if sensitiveName(name) {
-					secrets = append(secrets, values...)
-				}
-			}
-		}
 	}
 	return normalizedSecrets(secrets)
 }
 
 func RedactHeaders(headers http.Header, secrets []string) http.Header {
 	redacted := headers.Clone()
-	for name, values := range redacted {
-		if sensitiveName(name) {
-			redacted[name] = []string{"[REDACTED]"}
-			continue
-		}
+	for _, values := range redacted {
 		for index := range values {
-			if strings.EqualFold(name, "Location") {
-				values[index] = RedactURL(values[index], secrets)
-			} else {
-				values[index] = RedactText(values[index], secrets)
-			}
+			values[index] = RedactText(values[index], secrets)
 		}
 	}
 	return redacted
 }
 
 func RedactURL(value string, secrets []string) string {
-	redacted := RedactText(value, secrets)
-	parsed, err := url.Parse(redacted)
-	if err != nil {
-		return redacted
-	}
-	query := parsed.Query()
-	for name := range query {
-		if sensitiveName(name) {
-			query.Set(name, "[REDACTED]")
-		}
-	}
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
+	return RedactText(value, secrets)
 }
 
 func RedactText(value string, secrets []string) string {
@@ -132,14 +81,4 @@ func normalizedSecrets(values []string) []string {
 		return cmp.Compare(len(right), len(left))
 	})
 	return secrets
-}
-
-func sensitiveName(name string) bool {
-	lower := strings.ToLower(name)
-	for _, marker := range []string{"authorization", "cookie", "password", "passwd", "secret", "token", "api-key", "apikey"} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
 }

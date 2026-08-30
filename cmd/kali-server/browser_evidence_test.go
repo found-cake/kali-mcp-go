@@ -55,16 +55,42 @@ func TestProtectResultExtractsOptInBrowserEvidenceArtifacts(t *testing.T) {
 	}
 	network := artifactByRelation(t, result.Artifacts, dto.ArtifactRelationBrowserNetwork)
 	_, payload, err = store.read(network.ID, time.Now().UTC())
-	if err != nil || strings.Contains(string(payload), "private-value") {
+	if err != nil || strings.Contains(string(payload), "private-value") || network.RedactionState != dto.ArtifactRedacted {
 		t.Fatalf("network artifact was not redacted: err=%v payload=%s", err, payload)
 	}
 	dom := artifactByRelation(t, result.Artifacts, dto.ArtifactRelationBrowserDOM)
 	_, payload, err = store.read(dom.ID, time.Now().UTC())
-	if err != nil || strings.Contains(string(payload), "private-value") || !strings.Contains(string(payload), "[REDACTED]") {
+	if err != nil || strings.Contains(string(payload), "private-value") || !strings.Contains(string(payload), "[REDACTED]") || dom.RedactionState != dto.ArtifactRedacted {
 		t.Fatalf("DOM artifact was not redacted: err=%v payload=%s", err, payload)
 	}
 	if result.Evidence == nil || result.Evidence.GroupID != result.CallID || len(result.Evidence.Artifacts) != 4 || result.Evidence.PrimaryArtifactID == "" {
 		t.Fatalf("browser evidence manifest is incomplete: %+v", result.Evidence)
+	}
+}
+
+func TestProtectResultPreservesBrowserEvidenceByDefault(t *testing.T) {
+	// Given: browser evidence containing a credential-like URL and DOM value.
+	store, err := newArtifactStore()
+	if err != nil {
+		t.Fatalf("create artifact store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.close() })
+	result := &executor.Result{
+		CallID: "call-browser-raw", Tool: "browser-check", ReturnCode: 0,
+		Stdout: `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","status":200,"dialogs":[],"console":[],"pageErrors":[],"dom":"<html>server-secret</html>","networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/api?token=server-secret","resourceType":"xhr","status":200}]}`,
+	}
+	request := dto.BrowserRequest{IncludeDOM: true, CaptureNetwork: true}
+
+	// When: the final result and related evidence are retained without redaction values.
+	protectResult(store, result, request)
+
+	// Then: raw DOM and network values remain and their artifact state declares that fact.
+	for _, relation := range []dto.ArtifactRelation{dto.ArtifactRelationBrowserDOM, dto.ArtifactRelationBrowserNetwork} {
+		artifact := artifactByRelation(t, result.Artifacts, relation)
+		_, payload, readErr := store.read(artifact.ID, time.Now().UTC())
+		if readErr != nil || !strings.Contains(string(payload), "server-secret") || artifact.RedactionState != dto.ArtifactSensitiveUnredacted {
+			t.Fatalf("raw browser artifact was not preserved: relation=%s err=%v payload=%s ref=%+v", relation, readErr, payload, artifact)
+		}
 	}
 }
 

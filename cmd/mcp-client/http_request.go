@@ -42,7 +42,7 @@ func httpRequestInputSchema() map[string]any {
 			"target_context":     map[string]any{"type": "string", "description": "signed candidate context returned by resolve_target"},
 			"resolution_receipt": map[string]any{"type": "string", "description": "legacy receipt used together with an explicit URL"},
 			"profile":            map[string]any{"type": "string", "enum": []string{"safe-recon", "explicit-custom"}},
-			"redact_values":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"redact_values":      map[string]any{"type": "array", "description": "optional exact values to replace; all other evidence remains verbatim", "items": map[string]any{"type": "string"}},
 		},
 	}
 }

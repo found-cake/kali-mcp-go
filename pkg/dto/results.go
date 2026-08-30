@@ -252,7 +252,7 @@ func (r *ToolResult) Format() string {
 		}
 	}
 	if r.OutputTruncated {
-		sb.WriteString("\n\n[output truncated — read the result artifact for full redacted output]")
+		sb.WriteString("\n\n[output truncated — read the result artifact for full retained output]")
 	}
 	if r.Evidence != nil && len(r.Evidence.Artifacts) > 0 {
 		fmt.Fprintf(&sb, "\n\n[evidence group: %s]", r.Evidence.GroupID)

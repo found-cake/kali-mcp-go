@@ -21,18 +21,16 @@ var (
 )
 
 type httpResponseSummaryInput struct {
-	RetainedBody  []byte
-	SafeBody      []byte
-	Headers       http.Header
-	Secrets       []string
-	UTF8          bool
-	SensitiveJSON bool
+	Body    []byte
+	Headers http.Header
+	Secrets []string
+	UTF8    bool
 }
 
 func summarizeHTTPResponse(input httpResponseSummaryInput) *dto.HTTPBodySummary {
-	digest := sha256.Sum256(input.RetainedBody)
-	bodyText := string(input.RetainedBody)
-	bodySensitive := input.SensitiveJSON || sensitiveResponsePattern.MatchString(bodyText)
+	digest := sha256.Sum256(input.Body)
+	bodyText := string(input.Body)
+	bodySensitive := sensitiveResponsePattern.MatchString(bodyText)
 	summary := &dto.HTTPBodySummary{
 		BodySHA256:             hex.EncodeToString(digest[:]),
 		Location:               tools.RedactURL(input.Headers.Get("Location"), input.Secrets),
@@ -40,23 +38,19 @@ func summarizeHTTPResponse(input httpResponseSummaryInput) *dto.HTTPBodySummary 
 		SensitiveDataSuspected: bodySensitive || input.Headers.Get("Set-Cookie") != "",
 	}
 	if input.UTF8 {
-		if bodySensitive && !input.SensitiveJSON {
-			summary.BodyExcerpt = "[REDACTED: sensitive response body]"
-		} else {
-			excerpt := input.SafeBody
-			if len(excerpt) > maximumHTTPBodyExcerptBytes {
-				end := maximumHTTPBodyExcerptBytes
-				for end > 0 && !utf8.RuneStart(excerpt[end]) {
-					end--
-				}
-				excerpt = excerpt[:end]
-				summary.BodyExcerptTruncated = true
+		excerpt := input.Body
+		if len(excerpt) > maximumHTTPBodyExcerptBytes {
+			end := maximumHTTPBodyExcerptBytes
+			for end > 0 && !utf8.RuneStart(excerpt[end]) {
+				end--
 			}
-			summary.BodyExcerpt = string(excerpt)
+			excerpt = excerpt[:end]
+			summary.BodyExcerptTruncated = true
 		}
+		summary.BodyExcerpt = string(excerpt)
 	}
 	var object map[string]json.RawMessage
-	if json.Unmarshal(input.SafeBody, &object) == nil {
+	if json.Unmarshal(input.Body, &object) == nil {
 		for key := range object {
 			summary.JSONKeys = append(summary.JSONKeys, key)
 		}

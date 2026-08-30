@@ -109,17 +109,12 @@ func handleHTTPRequest(c fiber.Ctx) error {
 		return sendHTTPRequestResult(c, result, request)
 	}
 	isUTF8 := utf8.Valid(retained)
-	safeBody := retained
-	sensitiveJSON := false
-	if isUTF8 {
-		safeBody, sensitiveJSON = tools.RedactSensitiveJSON(retained)
-	}
 	result.HTTPResponse.Summary = summarizeHTTPResponse(httpResponseSummaryInput{
-		RetainedBody: retained, SafeBody: safeBody, Headers: response.Header,
-		Secrets: tools.RequestSecrets(request), UTF8: isUTF8, SensitiveJSON: sensitiveJSON,
+		Body: retained, Headers: response.Header,
+		Secrets: tools.RequestSecrets(request), UTF8: isUTF8,
 	})
 	if isUTF8 {
-		result.Stdout = string(safeBody)
+		result.Stdout = string(retained)
 		result.HTTPResponse.BodyEncoding = "utf-8"
 	} else {
 		result.Stdout = base64.StdEncoding.EncodeToString(retained)

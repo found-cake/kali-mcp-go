@@ -10,7 +10,7 @@ type MetasploitRequest struct {
 	Target       string            `json:"target,omitempty" jsonschema:"target IP or hostname; omit when target_context is supplied"`
 	Options      map[string]string `json:"options,omitempty" jsonschema:"module options excluding RHOST and RHOSTS, which are set from target or target_context"`
 	DryRun       bool              `json:"dry_run,omitempty" jsonschema:"validate policy and return a redacted execution preview without running Metasploit"`
-	RedactValues []string          `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in output"`
+	RedactValues []string          `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output; all other content is preserved verbatim"`
 	Timeout      int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
 }
 
@@ -39,7 +39,7 @@ type JohnRequest struct {
 	Wordlist       string   `json:"wordlist,omitempty" jsonschema:"path to wordlist (default: rockyou.txt)"`
 	Format         string   `json:"format,omitempty" jsonschema:"hash format e.g. md5crypt"`
 	MaskPlaintext  bool     `json:"mask_plaintext,omitempty" jsonschema:"mask recovered plaintext passwords in returned output"`
-	RedactValues   []string `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in output"`
+	RedactValues   []string `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output; all other content is preserved verbatim"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra john arguments"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the cracking run (0 = default 300s)"`
 }

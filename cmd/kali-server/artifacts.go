@@ -65,14 +65,14 @@ func newArtifactStore() (*artifactStore, error) {
 	return &artifactStore{directory: directory, items: make(map[string]storedArtifact)}, nil
 }
 
-func (s *artifactStore) save(result *executor.Result, now time.Time) (dto.ArtifactRef, error) {
+func (s *artifactStore) save(result *executor.Result, state dto.ArtifactRedactionState, now time.Time) (dto.ArtifactRef, error) {
 	payload, err := json.MarshalIndent(toAPIResult(result), "", "  ")
 	if err != nil {
 		return dto.ArtifactRef{}, fmt.Errorf("encode artifact: %w", err)
 	}
 	return s.saveContent(artifactContent{
 		Kind: "tool-result-json", MediaType: fiber.MIMEApplicationJSON,
-		Encoding: dto.ArtifactEncodingUTF8, RedactionState: dto.ArtifactRedacted,
+		Encoding: dto.ArtifactEncodingUTF8, RedactionState: state,
 		SourceCallID: result.CallID, Relation: dto.ArtifactRelationToolResult, Payload: payload,
 	}, now)
 }
@@ -206,12 +206,12 @@ func artifactStoreFromContext(c fiber.Ctx) *artifactStore {
 	return store
 }
 
-func attachResultArtifact(store *artifactStore, result *executor.Result) {
+func attachResultArtifact(store *artifactStore, result *executor.Result, state dto.ArtifactRedactionState) {
 	if store == nil || result == nil {
 		return
 	}
 	rebuildEvidenceManifest(result)
-	artifact, err := store.save(result, time.Now().UTC())
+	artifact, err := store.save(result, state, time.Now().UTC())
 	if err != nil {
 		result.Warnings = append(result.Warnings, "result artifact unavailable: "+err.Error())
 		return

@@ -28,6 +28,9 @@ func TestProtectResultRedactsBeforeArtifactStorage(t *testing.T) {
 	if len(result.Artifacts) != 1 {
 		t.Fatalf("expected one artifact: %+v", result.Artifacts)
 	}
+	if result.Artifacts[0].RedactionState != dto.ArtifactRedacted {
+		t.Fatalf("explicit redaction state was not declared: %+v", result.Artifacts[0])
+	}
 	_, payload, err := store.read(result.Artifacts[0].ID, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("read artifact: %v", err)

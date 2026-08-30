@@ -79,7 +79,7 @@ func protectBrowserEvidence(store *artifactStore, result *executor.Result, reque
 			report.Network[index].URL = tools.RedactText(report.Network[index].URL, secrets)
 			report.Network[index].Failure = tools.RedactText(report.Network[index].Failure, secrets)
 		}
-		protectBrowserNetwork(store, result, &report)
+		store.protectBrowserNetwork(result, &report, secrets)
 	}
 	if request.IncludeDOM {
 		store.protectBrowserDOM(result, &report, tools.RequestSecrets(request))
@@ -126,7 +126,7 @@ func (s *artifactStore) protectBrowserDOM(result *executor.Result, report *brows
 	redactedDOM := tools.RedactText(report.DOM, secrets)
 	reference, err := s.saveContent(artifactContent{
 		Kind: "browser-dom-html", MediaType: fiber.MIMETextHTML, Encoding: dto.ArtifactEncodingUTF8,
-		RedactionState: dto.ArtifactRedacted, SourceCallID: result.CallID,
+		RedactionState: artifactRedactionState(secrets), SourceCallID: result.CallID,
 		Relation: dto.ArtifactRelationBrowserDOM, Payload: []byte(redactedDOM),
 	}, time.Now().UTC())
 	if err != nil {
@@ -170,16 +170,16 @@ func protectBrowserScreenshot(store *artifactStore, result *executor.Result, rep
 	report.ScreenshotArtifactID = reference.ID
 }
 
-func protectBrowserNetwork(store *artifactStore, result *executor.Result, report *browserReport) {
+func (s *artifactStore) protectBrowserNetwork(result *executor.Result, report *browserReport, secrets []string) {
 	report.NetworkEventCount = len(report.Network)
 	payload, err := json.Marshal(browserNetworkEvidence{Events: report.Network, Truncated: report.NetworkTruncated})
 	if err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("browser network artifact unavailable: %v", err))
 		return
 	}
-	reference, err := store.saveContent(artifactContent{
+	reference, err := s.saveContent(artifactContent{
 		Kind: "browser-network-json", MediaType: fiber.MIMEApplicationJSON, Encoding: dto.ArtifactEncodingUTF8,
-		RedactionState: dto.ArtifactRedacted, SourceCallID: result.CallID,
+		RedactionState: artifactRedactionState(secrets), SourceCallID: result.CallID,
 		Relation: dto.ArtifactRelationBrowserNetwork, Payload: payload,
 	}, time.Now().UTC())
 	if err != nil {

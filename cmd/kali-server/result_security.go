@@ -47,7 +47,14 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 			result.SQLMapAnalysis.Parameters[index].Name = tools.RedactText(result.SQLMapAnalysis.Parameters[index].Name, secrets)
 		}
 	}
-	attachResultArtifact(store, result)
+	attachResultArtifact(store, result, artifactRedactionState(secrets))
+}
+
+func artifactRedactionState(values []string) dto.ArtifactRedactionState {
+	if len(values) == 0 {
+		return dto.ArtifactSensitiveUnredacted
+	}
+	return dto.ArtifactRedacted
 }
 
 func protectStream(ctx context.Context, lines <-chan executor.Line, request any) <-chan executor.Line {

@@ -22,7 +22,7 @@ func TestArtifactStorePersistsPrivateResultAndExpiresIt(t *testing.T) {
 	now := time.Date(2026, time.August, 29, 10, 0, 0, 0, time.UTC)
 
 	// When: a completed tool result is saved.
-	reference, err := store.save(&executor.Result{CallID: "call-1", Tool: "nmap", Stdout: "scan output", ReturnCode: 0}, now)
+	reference, err := store.save(&executor.Result{CallID: "call-1", Tool: "nmap", Stdout: "scan output", ReturnCode: 0}, dto.ArtifactSensitiveUnredacted, now)
 	if err != nil {
 		t.Fatalf("save result: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestArtifactStorePersistsPrivateResultAndExpiresIt(t *testing.T) {
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("artifact mode = %o, want 600", info.Mode().Perm())
 	}
-	if reference.SourceCallID != "call-1" || reference.MediaType != "application/json" || reference.Encoding != dto.ArtifactEncodingUTF8 || reference.RedactionState != dto.ArtifactRedacted {
+	if reference.SourceCallID != "call-1" || reference.MediaType != "application/json" || reference.Encoding != dto.ArtifactEncodingUTF8 || reference.RedactionState != dto.ArtifactSensitiveUnredacted {
 		t.Fatalf("missing artifact provenance: %+v", reference)
 	}
 	if _, _, err := store.read(reference.ID, now.Add(artifactTTL+time.Second)); !errors.Is(err, errArtifactNotFound) {
@@ -52,7 +52,7 @@ func TestArtifactStoreReadsBoundedUTF8Page(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.close() })
 	now := time.Date(2026, time.August, 30, 10, 0, 0, 0, time.UTC)
-	reference, err := store.save(&executor.Result{Tool: "nuclei", Stdout: strings.Repeat("한글", 500)}, now)
+	reference, err := store.save(&executor.Result{Tool: "nuclei", Stdout: strings.Repeat("한글", 500)}, dto.ArtifactSensitiveUnredacted, now)
 	if err != nil {
 		t.Fatalf("save result: %v", err)
 	}
@@ -67,20 +67,20 @@ func TestArtifactStoreReadsBoundedUTF8Page(t *testing.T) {
 	if !utf8.ValidString(page.Content) || !page.HasMore || page.NextOffset <= 0 || page.TotalBytes <= int64(len(page.Content)) {
 		t.Fatalf("unexpected artifact page: %+v", page)
 	}
-	if page.ExpiresAt != reference.ExpiresAt || page.ExpiresInSeconds != int64(artifactTTL/time.Second) || page.ExpiringSoon || page.RedactionState != dto.ArtifactRedacted {
+	if page.ExpiresAt != reference.ExpiresAt || page.ExpiresInSeconds != int64(artifactTTL/time.Second) || page.ExpiringSoon || page.RedactionState != dto.ArtifactSensitiveUnredacted {
 		t.Fatalf("missing artifact lifetime metadata: %+v", page)
 	}
 }
 
 func TestArtifactStoreWarnsBeforeExpiry(t *testing.T) {
-	// Given: a redacted result artifact with four minutes remaining.
+	// Given: a raw result artifact with four minutes remaining.
 	store, err := newArtifactStore()
 	if err != nil {
 		t.Fatalf("create artifact store: %v", err)
 	}
 	t.Cleanup(func() { _ = store.close() })
 	createdAt := time.Date(2026, time.August, 30, 10, 0, 0, 0, time.UTC)
-	reference, err := store.save(&executor.Result{CallID: "call-2", Tool: "nmap"}, createdAt)
+	reference, err := store.save(&executor.Result{CallID: "call-2", Tool: "nmap"}, dto.ArtifactSensitiveUnredacted, createdAt)
 	if err != nil {
 		t.Fatalf("save result: %v", err)
 	}

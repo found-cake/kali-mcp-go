@@ -9,7 +9,7 @@ type TimeoutRequest interface {
 type CommandRequest struct {
 	Command      string   `json:"command" jsonschema:"required,the shell command to run on Kali"`
 	Timeout      int      `json:"timeout,omitempty" jsonschema:"timeout in seconds (0 = default 300s)"`
-	RedactValues []string `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in inline output and retained artifacts"`
+	RedactValues []string `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output and artifacts; all other content is preserved verbatim"`
 }
 
 func (r CommandRequest) GetRequestTimeout() int { return r.Timeout }
@@ -183,7 +183,7 @@ type BrowserRequest struct {
 	URL               string `json:"url,omitempty" jsonschema:"full page URL including SPA path, hash route, fragment payload, or query payload; may extend the browser origin from target_context"`
 	WaitMilliseconds  int    `json:"wait_milliseconds,omitempty" jsonschema:"time to observe dialogs and DOM changes after load"`
 	IncludeDOM        bool   `json:"include_dom,omitempty" jsonschema:"include up to 200KB of rendered DOM in the result"`
-	CaptureNetwork    bool   `json:"capture_network,omitempty" jsonschema:"capture a bounded redacted network summary whose script URLs can be passed to retirejs_scan"`
+	CaptureNetwork    bool   `json:"capture_network,omitempty" jsonschema:"capture a bounded raw network artifact whose script URLs can be passed to retirejs_scan"`
 	CaptureScreenshot bool   `json:"capture_screenshot,omitempty" jsonschema:"capture a viewport screenshot as a sensitive related artifact"`
 	Timeout           int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
 }
@@ -213,7 +213,7 @@ type HTTPRequest struct {
 	ScanOptions
 	URL              string            `json:"url,omitempty" jsonschema:"HTTP or HTTPS URL; omit when target_context is supplied"`
 	Method           string            `json:"method,omitempty" jsonschema:"GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS (default GET)"`
-	Headers          map[string]string `json:"headers,omitempty" jsonschema:"request headers; Authorization and Cookie values are automatically redacted"`
+	Headers          map[string]string `json:"headers,omitempty" jsonschema:"request headers; returned evidence preserves values unless redact_values explicitly selects them"`
 	Body             string            `json:"body,omitempty" jsonschema:"raw request body; mutually exclusive with json_body"`
 	JSONBody         json.RawMessage   `json:"json_body,omitempty" jsonschema:"JSON request body; mutually exclusive with body"`
 	FollowRedirects  bool              `json:"follow_redirects,omitempty" jsonschema:"follow at most five same-origin redirects"`

@@ -504,7 +504,7 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 - `execution_status`: the detailed process state retained for existing clients
 - `finding_status`: `detected`, `not_detected`, or `unknown`
 - `partial_results`, `http_requests`, `duration_ms`, original stdout/stderr byte counts, and `output_truncated`
-- `progress`: phase, observed output item count, last redacted output item, exact HTTP request count when known, request budget, and a stateless checkpoint
+- `progress`: phase, observed output item count, last retained output item, exact HTTP request count when known, request budget, and a stateless checkpoint
 - `target`: original target, explicitly selected target, resolution ID, and selection basis
 - `execution`: redacted argv, tool version, start/end time, timeout, profile, rate, concurrency, request budget, health URL, and 5xx threshold
 - `failure`: reason, retryability, resume support, and the bounded cost of a fresh retry
@@ -514,7 +514,7 @@ Tool process failures and timeouts set MCP `isError`; a successful scan with no 
 
 Every HTTP call also emits one JSON telemetry record containing its `call_id`, MCP operation, path, start/end time, duration, and HTTP status. Target and credential values remain in the protected structured result rather than server logs.
 
-`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the original redacted sizes. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
+`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the retained sizes. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
 
 Progress checkpoints describe already observed output but are not server-side jobs. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without shared MCP session memory.
 
@@ -542,7 +542,7 @@ The server limits total work and weighted work per target. Heavy tools cannot ru
 
 ### Credential management
 
-`kali-server` does not store or manage authentication tokens and cookies. Manage them directly using safeguards appropriate to your environment, and pass them only in request-scoped fields supported by the selected tool. The server does not create, list, retain, or reuse credential sessions across calls, and sensitive command arguments remain redacted from execution metadata.
+`kali-server` does not store or manage authentication tokens and cookies. Manage them directly using safeguards appropriate to your environment, and pass them only in request-scoped fields supported by the selected tool. Tool output and artifacts preserve raw credential-like values by default; the server does not create, list, retain, or reuse credential sessions across calls. Temporary implementation paths remain hidden from execution metadata, while `redact_values` provides explicit exact-value replacement when the caller chooses it.
 
 ### Natural-language tool routing
 
@@ -554,7 +554,7 @@ The MCP server instructions and tool descriptions identify authorized black-box 
 
 ### Bounded manual HTTP requests
 
-Use `http_request` instead of `execute_command` with curl for one-off validation. It accepts HTTP(S) only, one request per call, an optional arbitrary `json_body`, bounded raw bodies and responses, a maximum 300-second timeout, and at most five same-origin redirects. Loopback targets require a selected `target_context` or the legacy explicit URL plus receipt. Authorization, Cookie, and Set-Cookie values are masked before inline output or artifact storage.
+Use `http_request` instead of `execute_command` with curl for one-off validation. It accepts HTTP(S) only, one request per call, an optional arbitrary `json_body`, bounded raw bodies and responses, a maximum 300-second timeout, and at most five same-origin redirects. Loopback targets require a selected `target_context` or the legacy explicit URL plus receipt. Request headers, response headers, URLs, and bodies are preserved verbatim unless the caller supplies exact `redact_values`.
 
 ### Scan load, SPA baselines, and artifacts
 
@@ -562,7 +562,7 @@ Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/u
 
 John accepts either `hash_file` or an inline `hash`. Inline hashes and John state live under a temporary HOME that is deleted after the run. Set `mask_plaintext` to redact recovered plaintext from returned output. JWT Tool likewise starts from a clean temporary HOME seeded with its packaged configuration, then removes that workspace after each call.
 
-Completed, failed, timed-out, and cancelled tool calls write a mode-`0600` JSON result into a private server directory before the MCP response is compacted. The result contains an opaque artifact ID and `/api/artifacts/...` location, both protected by the same bearer token. Artifacts expire after one hour and are removed when the server shuts down. Known Authorization, Cookie, password, hash, and JWT values are replaced before streaming or storage; callers can add exact values through `redact_values`, subject to bounded count and size limits.
+Completed, failed, timed-out, and cancelled tool calls write a mode-`0600` JSON result into a private server directory before the MCP response is compacted. The result contains an opaque artifact ID and `/api/artifacts/...` location, both protected by the same bearer token. Artifacts expire after one hour and are removed when the server shuts down. Results are retained verbatim by default and carry `redaction_state: sensitive_unredacted`; callers can opt into exact-value replacement through `redact_values`, subject to bounded count and size limits, which marks affected result artifacts as `redacted`. Credential and privacy handling remains the caller or orchestrator's responsibility.
 
 ### Choosing between `hydra_attack` and `hydra_attack_stream`
 

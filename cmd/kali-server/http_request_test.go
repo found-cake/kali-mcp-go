@@ -10,11 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func TestHTTPRequestUsesTargetContextAndRedactsResponse(t *testing.T) {
+func TestHTTPRequestUsesTargetContextAndPreservesResponseByDefault(t *testing.T) {
 	// Given: an authorized local HTTP target and a signed browser context.
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		w.Header().Set("Set-Cookie", "session=server-secret")
@@ -63,44 +62,45 @@ func TestHTTPRequestUsesTargetContextAndRedactsResponse(t *testing.T) {
 		t.Fatalf("decode result: %v", err)
 	}
 
-	// Then: transport status is structured, provenance is verified, and cookies are masked.
+	// Then: transport status and provenance are structured without altering the evidence.
 	if response.StatusCode != http.StatusOK || result.HTTPResponse == nil || result.HTTPResponse.StatusCode != http.StatusCreated {
 		t.Fatalf("unexpected HTTP result: status=%d result=%+v", response.StatusCode, result)
 	}
 	if result.Target == nil || !result.Target.Verified || result.HTTPRequests == nil || *result.HTTPRequests != 1 {
 		t.Fatalf("missing verified request metadata: %+v", result)
 	}
-	if result.HTTPResponse.Headers.Get("Set-Cookie") != "[REDACTED]" || result.HTTPResponse.Headers.Get("Location") != "/next?token=%5BREDACTED%5D" || len(result.Artifacts) != 1 {
-		t.Fatalf("response was not protected: %+v", result)
+	if result.HTTPResponse.Headers.Get("Set-Cookie") != "session=server-secret" || result.HTTPResponse.Headers.Get("Location") != "/next?token=server-secret" || len(result.Artifacts) != 1 {
+		t.Fatalf("response was not preserved: %+v", result)
 	}
 	if result.HTTPRequest == nil || result.HTTPRequest.Method != http.MethodPost || result.HTTPRequest.URL != target.URL || result.HTTPRequest.ContentType != "application/json" {
 		t.Fatalf("missing reproducible request metadata: %+v", result.HTTPRequest)
 	}
-	if result.HTTPRequest.Headers.Get("Authorization") != "[REDACTED]" || result.HTTPRequest.Headers.Get("X-Test") != "visible" || result.HTTPRequest.BodyBytes != len(`{"name":"alice"}`) || result.HTTPRequest.BodySHA256 == "" {
-		t.Fatalf("request metadata was not safely summarized: %+v", result.HTTPRequest)
+	if result.HTTPRequest.Headers.Get("Authorization") != "Bearer request-secret" || result.HTTPRequest.Headers.Get("X-Test") != "visible" || result.HTTPRequest.BodyBytes != len(`{"name":"alice"}`) || result.HTTPRequest.BodySHA256 == "" {
+		t.Fatalf("request metadata was not preserved: %+v", result.HTTPRequest)
 	}
-	if result.HTTPResponse.Summary == nil || result.HTTPResponse.Summary.BodySHA256 == "" || strings.Contains(result.Stdout, "server-secret") || strings.Contains(result.HTTPResponse.Summary.BodyExcerpt, "server-secret") || !slices.Equal(result.HTTPResponse.Summary.JSONKeys, []string{"ok", "token"}) || !result.HTTPResponse.Summary.SensitiveDataSuspected {
+	if result.HTTPResponse.Summary == nil || result.HTTPResponse.Summary.BodySHA256 == "" || !strings.Contains(result.Stdout, "server-secret") || !strings.Contains(result.HTTPResponse.Summary.BodyExcerpt, "server-secret") || !slices.Equal(result.HTTPResponse.Summary.JSONKeys, []string{"ok", "token"}) || !result.HTTPResponse.Summary.SensitiveDataSuspected {
 		t.Fatalf("response body was not summarized: %+v", result.HTTPResponse.Summary)
+	}
+	if result.Artifacts[0].RedactionState != dto.ArtifactSensitiveUnredacted {
+		t.Fatalf("raw artifact state was not declared: %+v", result.Artifacts[0])
 	}
 }
 
-func TestSummarizeHTTPResponse_redacts_sensitive_JSON_and_location_values(t *testing.T) {
+func TestSummarizeHTTPResponsePreservesSensitiveJSONAndLocationValues(t *testing.T) {
 	// Given: a JSON response with nested credentials, a JavaScript stack, and a credential-bearing redirect.
 	original := []byte(`{"ok":false,"token":"response-secret","profile":{"password":"hidden"},"stack":"Error: failed\n    at login (app.js:1:1)"}`)
-	safeBody, sensitive := tools.RedactSensitiveJSON(original)
 	headers := http.Header{"Content-Type": []string{"application/json"}, "Location": []string{"/login?token=response-secret"}}
 
-	// When: the body and response headers are reduced to safe structured evidence.
+	// When: the body and response headers are summarized.
 	summary := summarizeHTTPResponse(httpResponseSummaryInput{
-		RetainedBody: original, SafeBody: safeBody, Headers: headers,
-		UTF8: true, SensitiveJSON: sensitive,
+		Body: original, Headers: headers, UTF8: true,
 	})
 
-	// Then: secrets are absent while keys, stack evidence, location, and body identity remain useful.
-	if strings.Contains(string(safeBody), "response-secret") || strings.Contains(string(safeBody), "hidden") || strings.Contains(summary.BodyExcerpt, "response-secret") {
-		t.Fatalf("sensitive JSON value remained: body=%s summary=%+v", safeBody, summary)
+	// Then: raw values remain while detection metadata and body identity stay available.
+	if !strings.Contains(summary.BodyExcerpt, "response-secret") || !strings.Contains(summary.BodyExcerpt, "hidden") {
+		t.Fatalf("response evidence was altered: summary=%+v", summary)
 	}
-	if !summary.SensitiveDataSuspected || !summary.StackTraceSuspected || summary.BodySHA256 == "" || !slices.Equal(summary.JSONKeys, []string{"ok", "profile", "stack", "token"}) || summary.Location != "/login?token=%5BREDACTED%5D" {
+	if !summary.SensitiveDataSuspected || !summary.StackTraceSuspected || summary.BodySHA256 == "" || !slices.Equal(summary.JSONKeys, []string{"ok", "profile", "stack", "token"}) || summary.Location != "/login?token=response-secret" {
 		t.Fatalf("unexpected response summary: %+v", summary)
 	}
 }
