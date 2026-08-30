@@ -223,6 +223,27 @@ func TestStreamPreservesPartialFailedResultsAndRequestCountSource(t *testing.T) 
 	}
 }
 
+func TestStreamPreservesJWTAnalysisMetadata(t *testing.T) {
+	// Given: a terminal stream event containing safe JWT structure metadata.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":0,\"jwt_analysis\":{\"parse_status\":\"parsed\",\"segment_count\":3,\"alg\":\"HS256\",\"claim_names\":[\"sub\"]}}\n\n")
+	}))
+	defer ts.Close()
+
+	// When: the MCP client reconstructs the tool result.
+	client := New(ts.URL, 5*time.Second, "")
+	result, err := client.Stream(context.Background(), "/api/tools/jwt/stream", map[string]string{"token": "redacted"})
+	if err != nil {
+		t.Fatalf("stream result: %v", err)
+	}
+
+	// Then: parsing status is retained without requiring the token value.
+	if result.JWTAnalysis == nil || result.JWTAnalysis.ParseStatus != dto.JWTParsed || result.JWTAnalysis.Algorithm != "HS256" {
+		t.Fatalf("missing JWT analysis metadata: %+v", result.JWTAnalysis)
+	}
+}
+
 func TestStreamAppendsTerminalDoneErrorToStderr(t *testing.T) {
 	t.Parallel()
 

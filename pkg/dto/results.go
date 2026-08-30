@@ -139,6 +139,7 @@ type ToolResult struct {
 	Artifacts            []ArtifactRef         `json:"artifacts"`
 	HTTPRequest          *HTTPRequestMetadata  `json:"http_request,omitempty"`
 	HTTPResponse         *HTTPResponseMetadata `json:"http_response,omitempty"`
+	JWTAnalysis          *JWTAnalysisMetadata  `json:"jwt_analysis,omitempty"`
 	Progress             *ProgressMetadata     `json:"progress,omitempty"`
 }
 

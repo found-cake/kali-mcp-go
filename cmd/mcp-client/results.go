@@ -24,6 +24,9 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		result.ClassificationReason = "no_reliable_finding_classifier"
 	}
 	result.FindingStatus = dto.FindingsUnknown
+	if toolName == "jwt_analyze" && result.JWTAnalysis != nil && result.JWTAnalysis.ParseStatus != dto.JWTParsed {
+		result.ClassificationReason = "jwt_" + string(result.JWTAnalysis.FailureStage) + "_failed"
+	}
 	if result.ExecutionStatus != dto.ExecutionSucceeded {
 		finalizeClassifiedResult(&result)
 		return result
@@ -120,6 +123,10 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		if strings.Contains(output, "1g ") || strings.Contains(output, "password hash cracked") {
 			result.FindingStatus = dto.FindingsDetected
 			result.ClassificationReason = "john_password_recovered"
+		}
+	case "jwt_analyze":
+		if result.JWTAnalysis != nil && result.JWTAnalysis.ParseStatus == dto.JWTParsed {
+			result.ClassificationReason = "jwt_structure_parsed_without_reliable_finding_classifier"
 		}
 	}
 	finalizeClassifiedResult(&result)

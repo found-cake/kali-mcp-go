@@ -47,6 +47,7 @@ type scanExecutionPlan struct {
 	falsePositiveRisk string
 	extraWarnings     []string
 	artifactStore     *artifactStore
+	jwtAnalysis       *dto.JWTAnalysisMetadata
 }
 
 func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanExecutionPlan, error) {
@@ -112,6 +113,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.Warnings = append(result.Warnings, targetWarnings(p.request, p.target)...)
 	result.Policy = p.options
 	result.Controls = p.controls
+	result.JWTAnalysis = p.jwtAnalysis
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
 	result.Warnings = append(result.Warnings, p.extraWarnings...)

@@ -60,3 +60,21 @@ func TestTextResultReturnsStructuredContentAndMarksFailure(t *testing.T) {
 		t.Fatalf("expected structured failed status, got %+v", structured)
 	}
 }
+
+func TestClassifyJWTResultExplainsMalformedInput(t *testing.T) {
+	// Given: jwt_tool rejected a token that failed payload parsing before execution.
+	input := dto.ToolResult{
+		ReturnCode: 1,
+		JWTAnalysis: &dto.JWTAnalysisMetadata{
+			ParseStatus: dto.JWTMalformed, FailureStage: dto.JWTFailurePayloadJSON,
+		},
+	}
+
+	// When: the MCP boundary classifies the tool result.
+	result := classifyToolResult("jwt_analyze", input)
+
+	// Then: execution failure and the parser failure stage remain distinct.
+	if result.ExecutionStatus != dto.ExecutionFailed || result.FindingStatus != dto.FindingsUnknown || result.ClassificationReason != "jwt_payload_json_failed" {
+		t.Fatalf("unexpected JWT classification: %+v", result)
+	}
+}

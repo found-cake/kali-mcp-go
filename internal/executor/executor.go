@@ -41,6 +41,7 @@ type Result struct {
 	HTTPRequest        *dto.HTTPRequestMetadata
 	HTTPResponse       *dto.HTTPResponseMetadata
 	Progress           *dto.ProgressMetadata
+	JWTAnalysis        *dto.JWTAnalysisMetadata
 }
 
 func (r *Result) Success() bool {

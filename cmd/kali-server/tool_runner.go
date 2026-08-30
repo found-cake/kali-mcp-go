@@ -27,6 +27,7 @@ func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, ar
 type toolExecutionSpec[T any] struct {
 	validate func(T) error
 	argsFor  func(T) ([]string, error)
+	decorate func(T, *scanExecutionPlan)
 }
 
 func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute func(*scanExecutionPlan) error) error {
@@ -44,6 +45,9 @@ func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute fun
 	plan, err := prepareScanExecution(c, request, args)
 	if err != nil {
 		return scanPreparationError(c, err)
+	}
+	if spec.decorate != nil {
+		spec.decorate(request, plan)
 	}
 	return execute(plan)
 }

@@ -160,7 +160,16 @@ func handleWhatWebStream(c fiber.Ctx) error {
 }
 
 func handleJWTStream(c fiber.Ctx) error {
-	return runToolStream(c, validateJWTRequest, tools.JWTToolArgs)
+	return withPreparedTool(c, toolExecutionSpec[dto.JWTRequest]{
+		validate: validateJWTRequest,
+		argsFor:  tools.JWTToolArgs,
+		decorate: func(request dto.JWTRequest, plan *scanExecutionPlan) {
+			analysis := tools.AnalyzeJWTStructure(request.Token)
+			plan.jwtAnalysis = &analysis
+		},
+	}, func(plan *scanExecutionPlan) error {
+		return executeStreamPlan(c, plan)
+	})
 }
 
 func handleDalfoxStream(c fiber.Ctx) error {

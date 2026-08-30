@@ -216,6 +216,7 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 		Warnings:          result.Warnings,
 		Artifacts:         result.Artifacts,
 		Progress:          result.Progress,
+		JWTAnalysis:       result.JWTAnalysis,
 	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr

@@ -78,6 +78,7 @@ func toAPIResult(r *executor.Result) dto.ToolResult {
 		HTTPRequest:       r.HTTPRequest,
 		HTTPResponse:      r.HTTPResponse,
 		Progress:          r.Progress,
+		JWTAnalysis:       r.JWTAnalysis,
 	}
 	if result.ExecutionStatus != dto.ExecutionSucceeded {
 		result.Failure = &dto.FailureInfo{
