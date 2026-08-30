@@ -45,6 +45,13 @@ func formatTargetResolution(result *dto.TargetResolutionResult) string {
 		if candidate.TargetContext != "" {
 			fmt.Fprintf(&output, "  target context valid until: %s\n", candidate.ContextExpiresAt.Format(time.RFC3339))
 		}
+		if candidate.Probe != nil {
+			fmt.Fprintf(&output, "  probe: %s %s:%d in %dms", candidate.Probe.Type, candidate.Probe.Address, candidate.Probe.Port, candidate.Probe.LatencyMS)
+			if candidate.Probe.ErrorCode != "" {
+				fmt.Fprintf(&output, " (%s)", candidate.Probe.ErrorCode)
+			}
+			output.WriteByte('\n')
+		}
 		if candidate.BrowserTarget != "" {
 			fmt.Fprintf(&output, "  browser target: %s\n", candidate.BrowserTarget)
 		}

@@ -185,12 +185,13 @@ func resolveTargetProvenance(request any, secret string, now time.Time) (*dto.Ta
 		if target != claims.NetworkTarget && !sameWebOrigin(target, claims.BrowserTarget) {
 			return nil, errResolutionTargetMismatch
 		}
+		expiresAt := time.Unix(claims.ExpiresAt, 0).UTC()
+		expiresIn := max(int64(expiresAt.Sub(now)/time.Second), 0)
 		return &dto.TargetProvenance{
-			Original:        claims.Original,
-			Selected:        target,
-			ResolutionID:    claims.ResolutionID,
-			SelectionReason: "target_context",
-			Verified:        true,
+			Original: claims.Original, Selected: target, ResolutionID: claims.ResolutionID,
+			SelectionReason: "target_context", Verified: true, Scope: claims.Scope, Port: claims.Port,
+			ContextExpiresAt: expiresAt, ExpiresInSeconds: expiresIn,
+			ExpiringSoon: expiresIn <= int64(targetContextExpiryWarning/time.Second),
 		}, nil
 	}
 	if !ok || scanRequest.GetScanOptions().ResolutionReceipt == "" {
@@ -217,6 +218,9 @@ func targetWarnings(request any, provenance *dto.TargetProvenance) []string {
 	warnings := tools.TargetWarnings(request)
 	if provenance != nil && !provenance.Verified {
 		warnings = append(warnings, "target was not verified by resolve_target")
+	}
+	if provenance != nil && provenance.ExpiringSoon {
+		warnings = append(warnings, "target context expires soon; call resolve_target again and explicitly reselect the candidate")
 	}
 	return warnings
 }

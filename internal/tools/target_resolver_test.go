@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"syscall"
 	"testing"
 	"time"
 
@@ -44,8 +45,24 @@ func TestResolveTargetReportsReachableRuntimeCandidate(t *testing.T) {
 	if candidate.BrowserTarget != target || candidate.NetworkTarget != "127.0.0.1" {
 		t.Fatalf("unexpected tool-specific targets: %+v", candidate)
 	}
+	if candidate.Probe == nil || candidate.Probe.Type != dto.TargetProbeTCPConnect || candidate.Probe.Address == "" || candidate.Probe.Port != port {
+		t.Fatalf("missing TCP reachability evidence: %+v", candidate.Probe)
+	}
 	if result.RecommendedBrowserTarget != target || result.RecommendedNetworkTarget != "127.0.0.1" || result.RecommendedNetworkPort != port {
 		t.Fatalf("unexpected recommended tool targets: %+v", result)
+	}
+}
+
+func TestProbeErrorCodeClassifiesConnectionRefusal(t *testing.T) {
+	// Given: a TCP dial failure caused by an explicitly refused connection.
+	err := &net.OpError{Op: "dial", Err: fmt.Errorf("connect: %w", syscall.ECONNREFUSED)}
+
+	// When: the resolver classifies the reachability failure.
+	code := probeErrorCode(err)
+
+	// Then: callers receive a stable reason instead of parsing operating-system text.
+	if code != dto.TargetProbeConnectionRefused {
+		t.Fatalf("unexpected probe error code: %s", code)
 	}
 }
 

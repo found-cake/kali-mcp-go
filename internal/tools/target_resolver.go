@@ -3,12 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -167,16 +169,42 @@ func inspectCandidate(ctx context.Context, target parsedTarget, candidate candid
 		return result
 	}
 	result.Probed = true
+	probeStarted := time.Now()
 	dialCtx, cancel := context.WithTimeout(ctx, timeout)
 	connection, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", net.JoinHostPort(candidate.host, strconv.Itoa(target.port)))
 	cancel()
+	result.Probe = &dto.TargetProbeEvidence{
+		Type: dto.TargetProbeTCPConnect, Address: candidate.host, Port: target.port,
+		LatencyMS: time.Since(probeStarted).Milliseconds(),
+	}
 	if err != nil {
 		result.ProbeError = err.Error()
+		result.Probe.ErrorCode = probeErrorCode(err)
 		return result
 	}
 	result.Reachable = true
+	if host, _, splitErr := net.SplitHostPort(connection.RemoteAddr().String()); splitErr == nil {
+		result.Probe.Address = strings.Trim(host, "[]")
+	}
 	_ = connection.Close()
 	return result
+}
+
+func probeErrorCode(err error) dto.TargetProbeErrorCode {
+	var networkError net.Error
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		return dto.TargetProbeTimeout
+	}
+	switch {
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return dto.TargetProbeConnectionRefused
+	case errors.Is(err, syscall.EHOSTUNREACH):
+		return dto.TargetProbeHostUnreachable
+	case errors.Is(err, syscall.ENETUNREACH):
+		return dto.TargetProbeNetworkUnreachable
+	default:
+		return dto.TargetProbeUnknown
+	}
 }
 
 func (target parsedTarget) withHost(host string) string {

@@ -18,6 +18,8 @@ var (
 	errExpiredTargetContext = errors.New("target context has expired")
 )
 
+const targetContextExpiryWarning = time.Minute
+
 type targetContextClaims struct {
 	ResolutionID  string          `json:"resolution_id"`
 	Original      string          `json:"original"`

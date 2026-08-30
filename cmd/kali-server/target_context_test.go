@@ -47,6 +47,34 @@ func TestTargetContextSelectsNetworkFormWithoutServerState(t *testing.T) {
 	if !provenance.Verified || provenance.Original != result.OriginalTarget || provenance.Selected != normalized.Target {
 		t.Fatalf("unexpected provenance: %+v", provenance)
 	}
+	if provenance.Scope != dto.TargetScopeDockerHost || provenance.ContextExpiresAt != issued.ExpiresAt || provenance.ExpiresInSeconds != int64(resolutionReceiptLifetime/time.Second) {
+		t.Fatalf("missing context lifetime provenance: %+v", provenance)
+	}
+}
+
+func TestTargetContextWarnsWhenExpiryIsNear(t *testing.T) {
+	// Given: a verified target context with thirty seconds remaining.
+	now := time.Date(2026, time.August, 30, 9, 0, 0, 0, time.UTC)
+	context, err := signTargetContext("secret", targetContextClaims{
+		ResolutionID: "resolution-1", Original: "http://127.0.0.1:3000/",
+		BrowserTarget: "http://host.docker.internal:3000/", NetworkTarget: "host.docker.internal",
+		Port: 3000, Scope: dto.TargetScopeDockerHost, ExpiresAt: now.Add(30 * time.Second).Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign target context: %v", err)
+	}
+	request := dto.NmapRequest{Target: "host.docker.internal", ScanOptions: dto.ScanOptions{TargetContext: context}}
+
+	// When: scan provenance is resolved immediately before execution.
+	provenance, err := resolveTargetProvenance(request, "secret", now)
+	if err != nil {
+		t.Fatalf("resolve provenance: %v", err)
+	}
+
+	// Then: the result exposes the remaining lifetime and a machine-readable warning state.
+	if !provenance.ExpiringSoon || provenance.ExpiresInSeconds != 30 || len(targetWarnings(request, provenance)) == 0 {
+		t.Fatalf("missing expiry warning metadata: %+v", provenance)
+	}
 }
 
 func TestResolutionLifetimeRejectsExcessiveValidity(t *testing.T) {
