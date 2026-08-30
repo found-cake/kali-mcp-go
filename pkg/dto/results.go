@@ -84,10 +84,19 @@ type ExecutionMetadata struct {
 }
 
 type ScanControlApplication struct {
-	RequestedRateLimit   int `json:"requested_rate_limit"`
-	AppliedRateLimit     int `json:"applied_rate_limit"`
-	RequestedConcurrency int `json:"requested_concurrency"`
-	AppliedConcurrency   int `json:"applied_concurrency"`
+	RequestedRateLimit   int                  `json:"requested_rate_limit"`
+	AppliedRateLimit     int                  `json:"applied_rate_limit"`
+	RequestedConcurrency int                  `json:"requested_concurrency"`
+	AppliedConcurrency   int                  `json:"applied_concurrency"`
+	Controls             []AppliedScanControl `json:"controls"`
+}
+
+type AppliedScanControl struct {
+	Control     ScanControl        `json:"control"`
+	Requested   int                `json:"requested"`
+	Effective   int                `json:"effective"`
+	Applied     bool               `json:"applied"`
+	Enforcement ControlEnforcement `json:"enforcement"`
 }
 
 type HTTPResponseMetadata struct {

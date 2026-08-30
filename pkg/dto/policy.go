@@ -14,11 +14,11 @@ type ScanOptions struct {
 	ResolutionReceipt string        `json:"resolution_receipt,omitempty" jsonschema:"receipt returned by resolve_target for the selected target"`
 	TargetContext     string        `json:"target_context,omitempty" jsonschema:"signed candidate context returned by resolve_target; use instead of target plus resolution_receipt"`
 	Profile           SafetyProfile `json:"profile,omitempty" jsonschema:"safe-recon|web-discovery-low-rate|sqli-verify-low-risk|browser-xss-confirm|explicit-custom"`
-	MaxRequests       int           `json:"max_requests,omitempty" jsonschema:"maximum HTTP requests when the selected tool can enforce it"`
-	RateLimit         int           `json:"rate_limit,omitempty" jsonschema:"maximum requests per second when the selected tool can enforce it"`
-	Concurrency       int           `json:"concurrency,omitempty" jsonschema:"maximum tool-level concurrency when supported"`
+	MaxRequests       int           `json:"max_requests,omitempty" jsonschema:"maximum HTTP requests when enforceable; 0 means unset, not unlimited"`
+	RateLimit         int           `json:"rate_limit,omitempty" jsonschema:"maximum requests per second when enforceable; 0 means unset, not unlimited"`
+	Concurrency       int           `json:"concurrency,omitempty" jsonschema:"maximum tool-level concurrency when supported; 0 means unset, not unlimited"`
 	HealthURL         string        `json:"health_url,omitempty" jsonschema:"optional target health URL checked before and after the scan"`
-	Max5xxResponses   int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when supported"`
+	Max5xxResponses   int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when supported; 0 means unset, not unlimited"`
 	RedactValues      []string      `json:"redact_values,omitempty" jsonschema:"exact sensitive values to replace in inline output and retained artifacts"`
 }
 

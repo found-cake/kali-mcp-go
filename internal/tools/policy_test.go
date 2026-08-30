@@ -3,6 +3,7 @@ package tools
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -84,6 +85,48 @@ func TestScanControlApplicationSeparatesRequestedAndAppliedValues(t *testing.T) 
 	// Then: requested values remain visible without claiming unsupported controls were applied.
 	if application.RequestedRateLimit != 4 || application.RequestedConcurrency != 3 || application.AppliedRateLimit != 0 || application.AppliedConcurrency != 0 {
 		t.Fatalf("unexpected control application: %+v", application)
+	}
+}
+
+func TestEffectiveScanOptionsRejectsUnsupportedExplicitControl(t *testing.T) {
+	_, err := EffectiveScanOptions("whatweb", dto.ScanOptions{RateLimit: 4})
+	if err == nil || !strings.Contains(err.Error(), "rate_limit is not supported") {
+		t.Fatalf("expected unsupported rate limit rejection, got %v", err)
+	}
+}
+
+func TestEffectiveScanOptionsAppliesOnlyEnforceableProfileDefaults(t *testing.T) {
+	whatweb, err := EffectiveScanOptions("whatweb", dto.ScanOptions{Profile: dto.ProfileSafeRecon})
+	if err != nil {
+		t.Fatalf("apply WhatWeb profile: %v", err)
+	}
+	if whatweb.RateLimit != 0 || whatweb.Concurrency != 0 || whatweb.MaxRequests != 0 || whatweb.Max5xxResponses != 0 {
+		t.Fatalf("unsupported defaults were presented as effective: %+v", whatweb)
+	}
+
+	nmap, err := EffectiveScanOptions("nmap", dto.ScanOptions{Profile: dto.ProfileSafeRecon})
+	if err != nil {
+		t.Fatalf("apply Nmap profile: %v", err)
+	}
+	if nmap.RateLimit != 10 || nmap.MaxRequests != 2000 || nmap.Concurrency != 0 || nmap.Max5xxResponses != 0 {
+		t.Fatalf("Nmap profile did not preserve only enforceable defaults: %+v", nmap)
+	}
+}
+
+func TestScanControlApplicationReportsEnforcementMethod(t *testing.T) {
+	requested := dto.ScanOptions{MaxRequests: 50}
+	effective := dto.ScanOptions{RateLimit: 10, Concurrency: 2, MaxRequests: 50, Max5xxResponses: 20}
+	application := ScanControlApplication("ffuf", requested, effective)
+
+	methods := make(map[dto.ScanControl]dto.AppliedScanControl)
+	for _, control := range application.Controls {
+		methods[control.Control] = control
+	}
+	if methods[dto.ScanControlMaxRequests].Enforcement != dto.ControlDerivedTimeout || !methods[dto.ScanControlMaxRequests].Applied {
+		t.Fatalf("max request enforcement is not explicit: %+v", application)
+	}
+	if methods[dto.ScanControlMax5xx].Enforcement != dto.ControlOutputObserver || !methods[dto.ScanControlMax5xx].Applied {
+		t.Fatalf("5xx enforcement is not explicit: %+v", application)
 	}
 }
 

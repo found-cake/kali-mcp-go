@@ -2,7 +2,6 @@ package tools
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -12,44 +11,93 @@ func EffectiveScanOptions(tool string, options dto.ScanOptions) (dto.ScanOptions
 	if err := ValidateScanProfile(tool, options); err != nil {
 		return dto.ScanOptions{}, err
 	}
+	if err := validateControlRanges(options); err != nil {
+		return dto.ScanOptions{}, err
+	}
+	if err := validateSupportedControls(tool, options); err != nil {
+		return dto.ScanOptions{}, err
+	}
 	limits := profileLimits(options.Profile)
-	if limits.RateLimit > 0 {
+	if supportsRuntimeControl(tool, dto.ScanControlRateLimit) && limits.RateLimit > 0 {
 		if options.RateLimit == 0 {
 			options.RateLimit = limits.RateLimit
 		} else if options.RateLimit > limits.RateLimit {
 			return dto.ScanOptions{}, fmt.Errorf("rate_limit exceeds profile maximum %d", limits.RateLimit)
 		}
 	}
-	if limits.Concurrency > 0 {
+	if supportsRuntimeControl(tool, dto.ScanControlConcurrency) && limits.Concurrency > 0 {
 		if options.Concurrency == 0 {
 			options.Concurrency = limits.Concurrency
 		} else if options.Concurrency > limits.Concurrency {
 			return dto.ScanOptions{}, fmt.Errorf("concurrency exceeds profile maximum %d", limits.Concurrency)
 		}
 	}
-	if limits.MaxRequests > 0 {
+	if supportsRuntimeControl(tool, dto.ScanControlMaxRequests) && limits.MaxRequests > 0 {
 		if options.MaxRequests == 0 {
 			options.MaxRequests = limits.MaxRequests
 		} else if options.MaxRequests > limits.MaxRequests {
 			return dto.ScanOptions{}, fmt.Errorf("max_requests exceeds profile maximum %d", limits.MaxRequests)
 		}
 	}
+	if supportsRuntimeControl(tool, dto.ScanControlMax5xx) && limits.Max5xxResponses > 0 {
+		if options.Max5xxResponses == 0 {
+			options.Max5xxResponses = limits.Max5xxResponses
+		} else if options.Max5xxResponses > limits.Max5xxResponses {
+			return dto.ScanOptions{}, fmt.Errorf("max_5xx_responses exceeds profile maximum %d", limits.Max5xxResponses)
+		}
+	}
 	if options.MaxRequests > 0 && options.RateLimit == 0 {
 		return dto.ScanOptions{}, fmt.Errorf("max_requests requires rate_limit for enforceable budgeting")
 	}
+	return options, nil
+}
+
+func validateControlRanges(options dto.ScanOptions) error {
 	if options.RateLimit < 0 || options.RateLimit > 1000 {
-		return dto.ScanOptions{}, fmt.Errorf("rate_limit must be between 1 and 1000")
+		return fmt.Errorf("rate_limit must be between 1 and 1000")
 	}
 	if options.Concurrency < 0 || options.Concurrency > 100 {
-		return dto.ScanOptions{}, fmt.Errorf("concurrency must be between 1 and 100")
+		return fmt.Errorf("concurrency must be between 1 and 100")
 	}
 	if options.MaxRequests < 0 || options.MaxRequests > 1000000 {
-		return dto.ScanOptions{}, fmt.Errorf("max_requests must be between 1 and 1000000")
+		return fmt.Errorf("max_requests must be between 1 and 1000000")
 	}
 	if options.Max5xxResponses < 0 || options.Max5xxResponses > 1000 {
-		return dto.ScanOptions{}, fmt.Errorf("max_5xx_responses must be between 1 and 1000")
+		return fmt.Errorf("max_5xx_responses must be between 1 and 1000")
 	}
-	return options, nil
+	return nil
+}
+
+func validateSupportedControls(tool string, options dto.ScanOptions) error {
+	requested := []struct {
+		control dto.ScanControl
+		value   int
+	}{
+		{dto.ScanControlRateLimit, options.RateLimit},
+		{dto.ScanControlConcurrency, options.Concurrency},
+		{dto.ScanControlMaxRequests, options.MaxRequests},
+		{dto.ScanControlMax5xx, options.Max5xxResponses},
+	}
+	for _, request := range requested {
+		if request.value > 0 && !supportsRuntimeControl(tool, request.control) {
+			return fmt.Errorf("%s is not supported by %s", request.control, tool)
+		}
+	}
+	return nil
+}
+
+func supportsRuntimeControl(tool string, control dto.ScanControl) bool {
+	for _, capability := range scanToolCapabilities {
+		if capability.RuntimeTool != tool {
+			continue
+		}
+		for _, supported := range capability.Controls {
+			if supported.Control == control {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func ValidateScanProfile(tool string, options dto.ScanOptions) error {
@@ -101,9 +149,21 @@ func ApplyScanControls(args []string, options dto.ScanOptions) ([]string, error)
 			result = append(result, "--threads", concurrency)
 		case "dalfox":
 			result = append(result, "--workers", concurrency)
+		case "hydra":
+			result = replaceFlagValue(result, "-t", concurrency)
 		}
 	}
 	return result, nil
+}
+
+func replaceFlagValue(args []string, flag, value string) []string {
+	for index := 0; index+1 < len(args); index++ {
+		if args[index] == flag {
+			args[index+1] = value
+			return args
+		}
+	}
+	return append(args, flag, value)
 }
 
 func ScanControlApplication(tool string, requested, effective dto.ScanOptions) dto.ScanControlApplication {
@@ -114,15 +174,49 @@ func ScanControlApplication(tool string, requested, effective dto.ScanOptions) d
 		if capability.RuntimeTool != tool {
 			continue
 		}
-		if slices.Contains(capability.SupportedControls, dto.ScanControlRateLimit) {
+		if supportsCapabilityControl(capability, dto.ScanControlRateLimit) {
 			application.AppliedRateLimit = effective.RateLimit
 		}
-		if slices.Contains(capability.SupportedControls, dto.ScanControlConcurrency) {
+		if supportsCapabilityControl(capability, dto.ScanControlConcurrency) {
 			application.AppliedConcurrency = effective.Concurrency
+		}
+		for _, control := range capability.Controls {
+			if control.Control == dto.ScanControlTimeout || control.Control == dto.ScanControlDryRun {
+				continue
+			}
+			requestedValue, effectiveValue := controlValues(control.Control, requested, effective)
+			application.Controls = append(application.Controls, dto.AppliedScanControl{
+				Control: control.Control, Requested: requestedValue, Effective: effectiveValue,
+				Applied: effectiveValue > 0, Enforcement: control.Enforcement,
+			})
 		}
 		break
 	}
 	return application
+}
+
+func supportsCapabilityControl(capability dto.ScanToolCapability, control dto.ScanControl) bool {
+	for _, supported := range capability.Controls {
+		if supported.Control == control {
+			return true
+		}
+	}
+	return false
+}
+
+func controlValues(control dto.ScanControl, requested, effective dto.ScanOptions) (int, int) {
+	switch control {
+	case dto.ScanControlRateLimit:
+		return requested.RateLimit, effective.RateLimit
+	case dto.ScanControlConcurrency:
+		return requested.Concurrency, effective.Concurrency
+	case dto.ScanControlMaxRequests:
+		return requested.MaxRequests, effective.MaxRequests
+	case dto.ScanControlMax5xx:
+		return requested.Max5xxResponses, effective.Max5xxResponses
+	default:
+		return 0, 0
+	}
 }
 
 func profileLimits(profile dto.SafetyProfile) dto.ScanOptions {
