@@ -37,6 +37,14 @@ const (
 	FindingsUnknown     FindingStatus = "unknown"
 )
 
+type RequestCountSource string
+
+const (
+	RequestCountMeasured RequestCountSource = "measured"
+	RequestCountParsed   RequestCountSource = "parsed"
+	RequestCountUnknown  RequestCountSource = "unknown"
+)
+
 type RunStatus string
 
 const (
@@ -67,18 +75,26 @@ type ArtifactRef struct {
 }
 
 type ExecutionMetadata struct {
-	Tool            string        `json:"tool"`
-	ToolVersion     string        `json:"tool_version"`
-	ArgvRedacted    []string      `json:"argv_redacted"`
-	StartedAt       time.Time     `json:"started_at"`
-	EndedAt         time.Time     `json:"ended_at"`
-	TimeoutMS       int64         `json:"timeout_ms"`
-	Profile         SafetyProfile `json:"profile"`
-	MaxRequests     int           `json:"max_requests"`
-	RateLimit       int           `json:"rate_limit"`
-	Concurrency     int           `json:"concurrency"`
-	HealthURL       string        `json:"health_url"`
-	Max5xxResponses int           `json:"max_5xx_responses"`
+	Tool            string                 `json:"tool"`
+	ToolVersion     string                 `json:"tool_version"`
+	ArgvRedacted    []string               `json:"argv_redacted"`
+	StartedAt       time.Time              `json:"started_at"`
+	EndedAt         time.Time              `json:"ended_at"`
+	TimeoutMS       int64                  `json:"timeout_ms"`
+	Profile         SafetyProfile          `json:"profile"`
+	MaxRequests     int                    `json:"max_requests"`
+	RateLimit       int                    `json:"rate_limit"`
+	Concurrency     int                    `json:"concurrency"`
+	HealthURL       string                 `json:"health_url"`
+	Max5xxResponses int                    `json:"max_5xx_responses"`
+	Controls        ScanControlApplication `json:"controls"`
+}
+
+type ScanControlApplication struct {
+	RequestedRateLimit   int `json:"requested_rate_limit"`
+	AppliedRateLimit     int `json:"applied_rate_limit"`
+	RequestedConcurrency int `json:"requested_concurrency"`
+	AppliedConcurrency   int `json:"applied_concurrency"`
 }
 
 type HTTPResponseMetadata struct {
@@ -92,31 +108,33 @@ type HTTPResponseMetadata struct {
 }
 
 type ToolResult struct {
-	CallID            string                `json:"call_id"`
-	Stdout            string                `json:"stdout"`
-	Stderr            string                `json:"stderr"`
-	StdoutBytes       int                   `json:"stdout_bytes"`
-	StderrBytes       int                   `json:"stderr_bytes"`
-	OutputTruncated   bool                  `json:"output_truncated"`
-	ReturnCode        int                   `json:"return_code"`
-	Success           bool                  `json:"success"`
-	TimedOut          bool                  `json:"timed_out"`
-	Cancelled         bool                  `json:"cancelled"`
-	PartialResults    bool                  `json:"partial_results"`
-	Status            RunStatus             `json:"status"`
-	ExecutionStatus   ExecutionStatus       `json:"execution_status"`
-	FindingStatus     FindingStatus         `json:"finding_status"`
-	HTTPRequests      *int                  `json:"http_requests"`
-	DurationMS        int64                 `json:"duration_ms"`
-	Failure           *FailureInfo          `json:"failure"`
-	Execution         ExecutionMetadata     `json:"execution"`
-	Target            *TargetProvenance     `json:"target"`
-	SPABaseline       *SPABaseline          `json:"spa_baseline"`
-	FalsePositiveRisk string                `json:"false_positive_risk"`
-	Warnings          []string              `json:"warnings,omitempty"`
-	Artifacts         []ArtifactRef         `json:"artifacts"`
-	HTTPResponse      *HTTPResponseMetadata `json:"http_response,omitempty"`
-	Progress          *ProgressMetadata     `json:"progress,omitempty"`
+	CallID               string                `json:"call_id"`
+	Stdout               string                `json:"stdout"`
+	Stderr               string                `json:"stderr"`
+	StdoutBytes          int                   `json:"stdout_bytes"`
+	StderrBytes          int                   `json:"stderr_bytes"`
+	OutputTruncated      bool                  `json:"output_truncated"`
+	ReturnCode           int                   `json:"return_code"`
+	Success              bool                  `json:"success"`
+	TimedOut             bool                  `json:"timed_out"`
+	Cancelled            bool                  `json:"cancelled"`
+	PartialResults       bool                  `json:"partial_results"`
+	Status               RunStatus             `json:"status"`
+	ExecutionStatus      ExecutionStatus       `json:"execution_status"`
+	FindingStatus        FindingStatus         `json:"finding_status"`
+	ClassificationReason string                `json:"classification_reason,omitempty"`
+	HTTPRequests         *int                  `json:"http_requests"`
+	RequestCountSource   RequestCountSource    `json:"request_count_source"`
+	DurationMS           int64                 `json:"duration_ms"`
+	Failure              *FailureInfo          `json:"failure"`
+	Execution            ExecutionMetadata     `json:"execution"`
+	Target               *TargetProvenance     `json:"target"`
+	SPABaseline          *SPABaseline          `json:"spa_baseline"`
+	FalsePositiveRisk    string                `json:"false_positive_risk"`
+	Warnings             []string              `json:"warnings,omitempty"`
+	Artifacts            []ArtifactRef         `json:"artifacts"`
+	HTTPResponse         *HTTPResponseMetadata `json:"http_response,omitempty"`
+	Progress             *ProgressMetadata     `json:"progress,omitempty"`
 }
 
 func (r ToolResult) Compact(maximumBytes int) ToolResult {
@@ -157,6 +175,12 @@ func (r *ToolResult) Finalize() {
 	}
 	if r.Success {
 		r.Failure = nil
+	}
+	if r.RequestCountSource == "" {
+		r.RequestCountSource = RequestCountUnknown
+	}
+	if !r.Success && !r.PartialResults {
+		r.PartialResults = r.Stdout != "" || r.HTTPRequests != nil || r.Progress != nil && r.Progress.ObservedOutputItems > 0
 	}
 }
 

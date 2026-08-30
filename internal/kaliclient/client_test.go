@@ -201,6 +201,28 @@ func TestStreamMarksPartialTimedOutResults(t *testing.T) {
 	}
 }
 
+func TestStreamPreservesPartialFailedResultsAndRequestCountSource(t *testing.T) {
+	// Given: an SSE stream that performed parsed HTTP requests before failing.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"stream\":\"stdout\",\"line\":\"partial\"}\n\n")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":2,\"http_requests\":3,\"request_count_source\":\"parsed\"}\n\n")
+	}))
+	defer ts.Close()
+
+	// When: the MCP client reconstructs the terminal result.
+	client := New(ts.URL, 5*time.Second, "")
+	result, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
+	if err != nil {
+		t.Fatalf("stream result: %v", err)
+	}
+
+	// Then: failure does not discard evidence or request-count provenance.
+	if !result.PartialResults || result.RequestCountSource != dto.RequestCountParsed || result.HTTPRequests == nil || *result.HTTPRequests != 3 {
+		t.Fatalf("unexpected reconstructed metadata: %+v", result)
+	}
+}
+
 func TestStreamAppendsTerminalDoneErrorToStderr(t *testing.T) {
 	t.Parallel()
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -29,6 +30,7 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	done = annotateResult(done, func(result *executor.Result) {
 		count := sqlmapPlan.HTTPRequestCount()
 		result.HTTPRequests = &count
+		result.RequestCountSource = dto.RequestCountParsed
 		scanPlan.annotate(result)
 	})
 	release := retainExecutionLease(c)

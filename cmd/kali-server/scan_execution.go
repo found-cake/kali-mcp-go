@@ -36,6 +36,7 @@ type scanExecutionPlan struct {
 	callID            string
 	args              []string
 	options           dto.ScanOptions
+	controls          dto.ScanControlApplication
 	target            *dto.TargetProvenance
 	timeout           time.Duration
 	release           func()
@@ -99,7 +100,8 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	return &scanExecutionPlan{
 		callID: callIDFromContext(c),
 		args:   controlledArgs, options: effective, target: provenance, timeout: timeout,
-		release: release, healthURL: effective.HealthURL, request: request, context: c.Context(),
+		controls: tools.ScanControlApplication(args[0], options, effective),
+		release:  release, healthURL: effective.HealthURL, request: request, context: c.Context(),
 		artifactStore: artifactStoreFromContext(c),
 	}, nil
 }
@@ -109,6 +111,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.Target = p.target
 	result.Warnings = append(result.Warnings, targetWarnings(p.request, p.target)...)
 	result.Policy = p.options
+	result.Controls = p.controls
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
 	result.Warnings = append(result.Warnings, p.extraWarnings...)

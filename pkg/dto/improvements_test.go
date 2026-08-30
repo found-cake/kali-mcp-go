@@ -152,6 +152,38 @@ func TestToolResultFinalizeMapsExecutionStatus(t *testing.T) {
 	}
 }
 
+func TestToolResultFinalizeMarksObservedFailedWorkAsPartial(t *testing.T) {
+	// Given: a failed tool result that emitted output and counted parsed requests.
+	requestCount := 7
+	result := ToolResult{
+		ExecutionStatus:    ExecutionFailed,
+		Stdout:             "partial scan output",
+		HTTPRequests:       &requestCount,
+		RequestCountSource: RequestCountParsed,
+	}
+
+	// When: the result is normalized for the MCP boundary.
+	result.Finalize()
+
+	// Then: partial work and the origin of the request count remain explicit.
+	if !result.PartialResults || result.RequestCountSource != RequestCountParsed {
+		t.Fatalf("unexpected partial result metadata: %+v", result)
+	}
+}
+
+func TestToolResultFinalizeMarksUnavailableRequestCountsUnknown(t *testing.T) {
+	// Given: a successful tool whose request count cannot be observed.
+	result := ToolResult{ExecutionStatus: ExecutionSucceeded}
+
+	// When: the result is normalized for the MCP boundary.
+	result.Finalize()
+
+	// Then: the source is unknown without inventing a zero request count.
+	if result.RequestCountSource != RequestCountUnknown || result.HTTPRequests != nil {
+		t.Fatalf("unexpected request count metadata: %+v", result)
+	}
+}
+
 func TestExecutionStatusFromResultPreservesPrecedence(t *testing.T) {
 	t.Parallel()
 

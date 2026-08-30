@@ -187,13 +187,14 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 	}
 	returnCode := result.ReturnCode
 	doneEvent := dto.StreamEvent{
-		CallID:       result.CallID,
-		Done:         true,
-		ReturnCode:   &returnCode,
-		TimedOut:     result.TimedOut,
-		Cancelled:    result.Cancelled,
-		HTTPRequests: result.HTTPRequests,
-		DurationMS:   result.Duration.Milliseconds(),
+		CallID:             result.CallID,
+		Done:               true,
+		ReturnCode:         &returnCode,
+		TimedOut:           result.TimedOut,
+		Cancelled:          result.Cancelled,
+		HTTPRequests:       result.HTTPRequests,
+		RequestCountSource: result.RequestCountSource,
+		DurationMS:         result.Duration.Milliseconds(),
 		Execution: dto.ExecutionMetadata{
 			Tool:            result.Tool,
 			ToolVersion:     result.ToolVersion,
@@ -207,6 +208,7 @@ func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStder
 			Concurrency:     result.Policy.Concurrency,
 			HealthURL:       result.Policy.HealthURL,
 			Max5xxResponses: result.Policy.Max5xxResponses,
+			Controls:        result.Controls,
 		},
 		Target:            result.Target,
 		SPABaseline:       result.SPABaseline,

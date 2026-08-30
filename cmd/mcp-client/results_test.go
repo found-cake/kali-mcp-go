@@ -38,6 +38,9 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 			if got.ExecutionStatus != dto.ExecutionSucceeded && got.Failure == nil {
 				t.Fatalf("expected structured failure metadata: %+v", got)
 			}
+			if got.ClassificationReason == "" {
+				t.Fatalf("expected a machine-readable classification reason: %+v", got)
+			}
 		})
 	}
 }

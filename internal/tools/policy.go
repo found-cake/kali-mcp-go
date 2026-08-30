@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -103,6 +104,25 @@ func ApplyScanControls(args []string, options dto.ScanOptions) ([]string, error)
 		}
 	}
 	return result, nil
+}
+
+func ScanControlApplication(tool string, requested, effective dto.ScanOptions) dto.ScanControlApplication {
+	application := dto.ScanControlApplication{
+		RequestedRateLimit: requested.RateLimit, RequestedConcurrency: requested.Concurrency,
+	}
+	for _, capability := range scanToolCapabilities {
+		if capability.RuntimeTool != tool {
+			continue
+		}
+		if slices.Contains(capability.SupportedControls, dto.ScanControlRateLimit) {
+			application.AppliedRateLimit = effective.RateLimit
+		}
+		if slices.Contains(capability.SupportedControls, dto.ScanControlConcurrency) {
+			application.AppliedConcurrency = effective.Concurrency
+		}
+		break
+	}
+	return application
 }
 
 func profileLimits(profile dto.SafetyProfile) dto.ScanOptions {

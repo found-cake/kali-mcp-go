@@ -13,24 +13,25 @@ import (
 )
 
 type streamAccumulator struct {
-	stdout            []string
-	stderr            []string
-	returnCode        int
-	timedOut          bool
-	cancelled         bool
-	done              bool
-	finalError        string
-	httpRequests      *int
-	durationMS        int64
-	failure           *dto.FailureInfo
-	execution         dto.ExecutionMetadata
-	target            *dto.TargetProvenance
-	spaBaseline       *dto.SPABaseline
-	falsePositiveRisk string
-	warnings          []string
-	artifacts         []dto.ArtifactRef
-	callID            string
-	progress          *dto.ProgressMetadata
+	stdout             []string
+	stderr             []string
+	returnCode         int
+	timedOut           bool
+	cancelled          bool
+	done               bool
+	finalError         string
+	httpRequests       *int
+	requestCountSource dto.RequestCountSource
+	durationMS         int64
+	failure            *dto.FailureInfo
+	execution          dto.ExecutionMetadata
+	target             *dto.TargetProvenance
+	spaBaseline        *dto.SPABaseline
+	falsePositiveRisk  string
+	warnings           []string
+	artifacts          []dto.ArtifactRef
+	callID             string
+	progress           *dto.ProgressMetadata
 }
 
 func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
@@ -103,6 +104,7 @@ func (a *streamAccumulator) consume(event dto.StreamEvent) error {
 		a.cancelled = event.Cancelled
 		a.finalError = event.Error
 		a.httpRequests = event.HTTPRequests
+		a.requestCountSource = event.RequestCountSource
 		a.durationMS = event.DurationMS
 		a.failure = event.Failure
 		a.execution = event.Execution
@@ -135,7 +137,8 @@ func (a *streamAccumulator) result() (*dto.ToolResult, error) {
 		CallID: a.callID, Stdout: joinStreamLines(a.stdout), Stderr: joinStreamLines(a.stderr),
 		ReturnCode: a.returnCode, TimedOut: a.timedOut, Cancelled: a.cancelled,
 		PartialResults: (a.timedOut || a.cancelled) && (len(a.stdout) > 0 || len(a.stderr) > 0),
-		HTTPRequests:   a.httpRequests, DurationMS: a.durationMS, Failure: a.failure, Execution: a.execution,
+		HTTPRequests:   a.httpRequests, RequestCountSource: a.requestCountSource,
+		DurationMS: a.durationMS, Failure: a.failure, Execution: a.execution,
 		Target: a.target, SPABaseline: a.spaBaseline, FalsePositiveRisk: a.falsePositiveRisk,
 		Warnings: a.warnings, Artifacts: a.artifacts, Progress: a.progress, FindingStatus: dto.FindingsUnknown,
 		ExecutionStatus: dto.ExecutionStatusFromResult(a.returnCode, a.timedOut, a.cancelled),

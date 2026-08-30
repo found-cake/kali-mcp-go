@@ -67,16 +67,17 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	startedAt := time.Now().UTC()
 	requestCount := 1
 	result := &executor.Result{
-		CallID:       callIDFromContext(c),
-		ReturnCode:   -1,
-		HTTPRequests: &requestCount,
-		StartedAt:    startedAt,
-		Tool:         "http-request",
-		ToolVersion:  runtime.Version(),
-		ArgvRedacted: []string{method, request.URL},
-		Timeout:      timeout,
-		Target:       provenance,
-		Policy:       options,
+		CallID:             callIDFromContext(c),
+		ReturnCode:         -1,
+		HTTPRequests:       &requestCount,
+		RequestCountSource: dto.RequestCountMeasured,
+		StartedAt:          startedAt,
+		Tool:               "http-request",
+		ToolVersion:        runtime.Version(),
+		ArgvRedacted:       []string{method, request.URL},
+		Timeout:            timeout,
+		Target:             provenance,
+		Policy:             options,
 	}
 	execContext, cancel := context.WithTimeout(c.Context(), timeout)
 	defer cancel()

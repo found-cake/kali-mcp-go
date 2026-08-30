@@ -73,6 +73,20 @@ func TestScanCapabilitiesExposeMCPToolProfileCompatibility(t *testing.T) {
 	}
 }
 
+func TestScanControlApplicationSeparatesRequestedAndAppliedValues(t *testing.T) {
+	// Given: explicit controls and policy-effective defaults for a tool that supports neither.
+	requested := dto.ScanOptions{RateLimit: 4, Concurrency: 3}
+	effective := dto.ScanOptions{RateLimit: 10, Concurrency: 2}
+
+	// When: the runtime control application is described for WhatWeb.
+	application := ScanControlApplication("whatweb", requested, effective)
+
+	// Then: requested values remain visible without claiming unsupported controls were applied.
+	if application.RequestedRateLimit != 4 || application.RequestedConcurrency != 3 || application.AppliedRateLimit != 0 || application.AppliedConcurrency != 0 {
+		t.Fatalf("unexpected control application: %+v", application)
+	}
+}
+
 func findToolCapability(t *testing.T, capabilities []dto.ScanToolCapability, name string) dto.ScanToolCapability {
 	t.Helper()
 	for _, capability := range capabilities {
