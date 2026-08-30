@@ -24,4 +24,5 @@ type StreamEvent struct {
 	Artifacts          []ArtifactRef        `json:"artifacts,omitempty"`
 	Progress           *ProgressMetadata    `json:"progress,omitempty"`
 	JWTAnalysis        *JWTAnalysisMetadata `json:"jwt_analysis,omitempty"`
+	SQLMapAnalysis     *SQLMapAnalysis      `json:"sqlmap_analysis,omitempty"`
 }

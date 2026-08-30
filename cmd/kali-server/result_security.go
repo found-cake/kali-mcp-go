@@ -38,6 +38,11 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 		result.HTTPResponse.Headers = tools.RedactHeaders(result.HTTPResponse.Headers, secrets)
 		result.HTTPResponse.FinalURL = tools.RedactText(result.HTTPResponse.FinalURL, secrets)
 	}
+	if result.SQLMapAnalysis != nil {
+		for index := range result.SQLMapAnalysis.Parameters {
+			result.SQLMapAnalysis.Parameters[index].Name = tools.RedactText(result.SQLMapAnalysis.Parameters[index].Name, secrets)
+		}
+	}
 	attachResultArtifact(store, result)
 }
 

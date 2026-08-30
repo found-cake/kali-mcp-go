@@ -28,9 +28,11 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
 	lines = protectStream(execCtx, lines, req)
 	done = annotateResult(done, func(result *executor.Result) {
-		count := sqlmapPlan.HTTPRequestCount()
+		analysis := sqlmapPlan.Analysis(result.Stdout, req.TestParameters)
+		count := analysis.HTTPRequests
 		result.HTTPRequests = &count
 		result.RequestCountSource = dto.RequestCountParsed
+		result.SQLMapAnalysis = &analysis
 		scanPlan.annotate(result)
 	})
 	release := retainExecutionLease(c)

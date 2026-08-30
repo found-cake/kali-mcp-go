@@ -19,6 +19,7 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 	}{
 		{name: "sqlmap finding", tool: "sqlmap_scan", in: dto.ToolResult{Success: true, Stdout: "Parameter: name (JSON) is vulnerable"}, exec: dto.ExecutionSucceeded, find: dto.FindingsDetected},
 		{name: "sqlmap clean", tool: "sqlmap_scan", in: dto.ToolResult{Success: true, Stdout: "all tested parameters do not appear to be injectable"}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
+		{name: "sqlmap differential negative", tool: "sqlmap_scan", in: dto.ToolResult{Success: true, Stdout: "all tested parameters do not appear to be injectable", SQLMapAnalysis: &dto.SQLMapAnalysis{ManualVerificationRecommended: true}}, exec: dto.ExecutionSucceeded, find: dto.FindingsInconclusive},
 		{name: "tool failure", tool: "sqlmap_scan", in: dto.ToolResult{ReturnCode: 1, Stderr: "unable to connect"}, exec: dto.ExecutionFailed, find: dto.FindingsUnknown},
 		{name: "partial failure", tool: "sqlmap_scan", in: dto.ToolResult{ReturnCode: 1, Stdout: "testing parameter id", PartialResults: true}, exec: dto.ExecutionFailed, find: dto.FindingsInconclusive},
 		{name: "timeout", tool: "nikto_scan", in: dto.ToolResult{TimedOut: true, PartialResults: true}, exec: dto.ExecutionTimedOut, find: dto.FindingsInconclusive},

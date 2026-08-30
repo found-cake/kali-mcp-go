@@ -46,6 +46,7 @@ type Result struct {
 	HTTPResponse          *dto.HTTPResponseMetadata
 	Progress              *dto.ProgressMetadata
 	JWTAnalysis           *dto.JWTAnalysisMetadata
+	SQLMapAnalysis        *dto.SQLMapAnalysis
 	BrowserScreenshotPath string
 }
 

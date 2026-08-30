@@ -99,11 +99,7 @@ func (p *SQLMapPlan) Args() []string {
 }
 
 func (p *SQLMapPlan) HTTPRequestCount() int {
-	content, err := os.ReadFile(p.trafficFile)
-	if err != nil {
-		return 0
-	}
-	return strings.Count(string(content), "HTTP request [#")
+	return p.Analysis("", "").HTTPRequests
 }
 
 func (p *SQLMapPlan) Cleanup() {

@@ -169,6 +169,7 @@ type ToolResult struct {
 	HTTPRequest          *HTTPRequestMetadata  `json:"http_request,omitempty"`
 	HTTPResponse         *HTTPResponseMetadata `json:"http_response,omitempty"`
 	JWTAnalysis          *JWTAnalysisMetadata  `json:"jwt_analysis,omitempty"`
+	SQLMapAnalysis       *SQLMapAnalysis       `json:"sqlmap_analysis,omitempty"`
 	Progress             *ProgressMetadata     `json:"progress,omitempty"`
 }
 

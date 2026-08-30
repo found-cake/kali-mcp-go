@@ -42,8 +42,13 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 			result.FindingStatus = dto.FindingsDetected
 			result.ClassificationReason = "sqlmap_injection_point_reported"
 		case strings.Contains(output, "do not appear to be injectable"), strings.Contains(output, "does not seem to be injectable"):
-			result.FindingStatus = dto.FindingsNotDetected
-			result.ClassificationReason = "sqlmap_no_injection_reported"
+			if result.SQLMapAnalysis != nil && result.SQLMapAnalysis.ManualVerificationRecommended {
+				result.FindingStatus = dto.FindingsInconclusive
+				result.ClassificationReason = "sqlmap_manual_verification_recommended"
+			} else {
+				result.FindingStatus = dto.FindingsNotDetected
+				result.ClassificationReason = "sqlmap_no_injection_reported"
+			}
 		}
 	case "nmap_scan":
 		if strings.Contains(output, "/tcp open") || strings.Contains(output, "/udp open") {
