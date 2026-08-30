@@ -26,19 +26,19 @@ func TestProtectResultExtractsOptInBrowserEvidenceArtifacts(t *testing.T) {
 	result := &executor.Result{
 		CallID: "call-browser", Tool: "browser-check", ReturnCode: 0,
 		BrowserScreenshotPath: screenshotPath,
-		Stdout:                `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","status":200,"title":"Example","dialogs":[],"console":[],"pageErrors":[],"networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/api?token=private-value","resourceType":"xhr","status":200}],"screenshotCaptured":true,"screenshotMediaType":"image/png"}`,
+		Stdout:                `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","status":200,"title":"Example","dialogs":[],"console":[],"pageErrors":[],"dom":"<html>private-value</html>","networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/api?token=private-value","resourceType":"xhr","status":200}],"screenshotCaptured":true,"screenshotMediaType":"image/png"}`,
 		Progress:              &dto.ProgressMetadata{LastObservedOutput: `{"network":[{"url":"http://example.test/api?token=private-value"}]}`},
 	}
 	request := dto.BrowserRequest{
-		ScanOptions:    dto.ScanOptions{RedactValues: []string{"private-value"}},
-		CaptureNetwork: true, CaptureScreenshot: true,
+		ScanOptions: dto.ScanOptions{RedactValues: []string{"private-value"}},
+		IncludeDOM:  true, CaptureNetwork: true, CaptureScreenshot: true,
 	}
 
 	// When: the result is protected before inline delivery and retention.
 	protectResult(store, result, request)
 
 	// Then: large and sensitive evidence is linked separately from the redacted JSON result.
-	if len(result.Artifacts) != 3 || strings.Contains(result.Stdout, base64.StdEncoding.EncodeToString(png)) || strings.Contains(result.Stdout, "private-value") || strings.Contains(result.Progress.LastObservedOutput, "private-value") {
+	if len(result.Artifacts) != 4 || strings.Contains(result.Stdout, base64.StdEncoding.EncodeToString(png)) || strings.Contains(result.Stdout, "private-value") || strings.Contains(result.Progress.LastObservedOutput, "private-value") {
 		t.Fatalf("browser evidence was not extracted safely: result=%+v", result)
 	}
 	screenshot := artifactByRelation(t, result.Artifacts, dto.ArtifactRelationBrowserScreenshot)
@@ -58,17 +58,25 @@ func TestProtectResultExtractsOptInBrowserEvidenceArtifacts(t *testing.T) {
 	if err != nil || strings.Contains(string(payload), "private-value") {
 		t.Fatalf("network artifact was not redacted: err=%v payload=%s", err, payload)
 	}
+	dom := artifactByRelation(t, result.Artifacts, dto.ArtifactRelationBrowserDOM)
+	_, payload, err = store.read(dom.ID, time.Now().UTC())
+	if err != nil || strings.Contains(string(payload), "private-value") || !strings.Contains(string(payload), "[REDACTED]") {
+		t.Fatalf("DOM artifact was not redacted: err=%v payload=%s", err, payload)
+	}
+	if result.Evidence == nil || result.Evidence.GroupID != result.CallID || len(result.Evidence.Artifacts) != 4 || result.Evidence.PrimaryArtifactID == "" {
+		t.Fatalf("browser evidence manifest is incomplete: %+v", result.Evidence)
+	}
 }
 
 func TestProtectBrowserStreamLineOmitsNetworkDetails(t *testing.T) {
 	// Given: an opt-in browser stream result carrying captured network events.
-	line := executor.Line{Stream: "stdout", Text: `{"networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/private","resourceType":"xhr","status":200}]}`}
+	line := executor.Line{Stream: "stdout", Text: `{"dom":"<html>private</html>","networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/private","resourceType":"xhr","status":200}]}`}
 
 	// When: the SSE line is protected before delivery.
-	protected := protectBrowserStreamLine(line, dto.BrowserRequest{CaptureNetwork: true})
+	protected := protectBrowserStreamLine(line, dto.BrowserRequest{IncludeDOM: true, CaptureNetwork: true})
 
 	// Then: only the event count remains inline; details are reserved for the artifact.
-	if strings.Contains(protected.Text, "/private") || !strings.Contains(protected.Text, `"networkEventCount":1`) {
+	if strings.Contains(protected.Text, "/private") || strings.Contains(protected.Text, "<html>") || !strings.Contains(protected.Text, `"networkEventCount":1`) || !strings.Contains(protected.Text, `"domBytes":20`) {
 		t.Fatalf("unexpected protected browser stream: %s", protected.Text)
 	}
 }

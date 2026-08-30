@@ -39,6 +39,27 @@ func TestToolResultFormatDoesNotClaimPartialOutputWhenTimeoutIsEmpty(t *testing.
 	}
 }
 
+func TestToolResultFormat_exposes_evidence_artifact_identifiers(t *testing.T) {
+	// Given: a result with one browser evidence group and two related artifacts.
+	result := ToolResult{
+		Stdout: "browser finding",
+		Evidence: &EvidenceManifest{GroupID: "call-browser", PrimaryArtifactID: "artifact-result", Artifacts: []EvidenceArtifact{
+			{ID: "artifact-dom", Relation: ArtifactRelationBrowserDOM, Kind: "browser-dom-html"},
+			{ID: "artifact-result", Relation: ArtifactRelationToolResult, Kind: "tool-result-json"},
+		}},
+	}
+
+	// When: the MCP text content is rendered.
+	formatted := result.Format()
+
+	// Then: the group and every opaque artifact ID are available without reading structured content separately.
+	for _, expected := range []string{"call-browser", "artifact-dom", "artifact-result"} {
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("evidence identifier %q missing from %q", expected, formatted)
+		}
+	}
+}
+
 func TestToolResultCarriesMachineReadableStatus(t *testing.T) {
 	t.Parallel()
 

@@ -210,12 +210,28 @@ func attachResultArtifact(store *artifactStore, result *executor.Result) {
 	if store == nil || result == nil {
 		return
 	}
+	rebuildEvidenceManifest(result)
 	artifact, err := store.save(result, time.Now().UTC())
 	if err != nil {
 		result.Warnings = append(result.Warnings, "result artifact unavailable: "+err.Error())
 		return
 	}
 	result.Artifacts = append(result.Artifacts, artifact)
+	rebuildEvidenceManifest(result)
+}
+
+func rebuildEvidenceManifest(result *executor.Result) {
+	if result == nil || len(result.Artifacts) == 0 {
+		return
+	}
+	manifest := &dto.EvidenceManifest{GroupID: result.CallID, Artifacts: make([]dto.EvidenceArtifact, 0, len(result.Artifacts))}
+	for _, artifact := range result.Artifacts {
+		manifest.Artifacts = append(manifest.Artifacts, dto.EvidenceArtifact{ID: artifact.ID, Kind: artifact.Kind, Relation: artifact.Relation})
+		if artifact.Relation == dto.ArtifactRelationToolResult {
+			manifest.PrimaryArtifactID = artifact.ID
+		}
+	}
+	result.Evidence = manifest
 }
 
 func handleGetArtifact(c fiber.Ctx) error {

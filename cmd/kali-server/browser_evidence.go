@@ -25,6 +25,8 @@ type browserReport struct {
 	PageErrors           []string              `json:"pageErrors"`
 	DOM                  string                `json:"dom,omitempty"`
 	DOMTruncated         bool                  `json:"domTruncated,omitempty"`
+	DOMBytes             int                   `json:"domBytes,omitempty"`
+	DOMArtifactID        string                `json:"domArtifactId,omitempty"`
 	NetworkCaptured      bool                  `json:"networkCaptured"`
 	Network              []browserNetworkEvent `json:"network,omitempty"`
 	NetworkTruncated     bool                  `json:"networkTruncated"`
@@ -60,7 +62,7 @@ type browserNetworkEvidence struct {
 }
 
 func protectBrowserEvidence(store *artifactStore, result *executor.Result, request dto.BrowserRequest) {
-	if store == nil || result == nil || (!request.CaptureNetwork && !request.CaptureScreenshot) {
+	if store == nil || result == nil || (!request.IncludeDOM && !request.CaptureNetwork && !request.CaptureScreenshot) {
 		return
 	}
 	var report browserReport
@@ -79,6 +81,9 @@ func protectBrowserEvidence(store *artifactStore, result *executor.Result, reque
 		}
 		protectBrowserNetwork(store, result, &report)
 	}
+	if request.IncludeDOM {
+		store.protectBrowserDOM(result, &report, tools.RequestSecrets(request))
+	}
 	encoded, err := json.Marshal(report)
 	if err != nil {
 		result.Warnings = append(result.Warnings, "browser evidence summary unavailable: "+err.Error())
@@ -91,20 +96,47 @@ func protectBrowserEvidence(store *artifactStore, result *executor.Result, reque
 }
 
 func protectBrowserStreamLine(line executor.Line, request dto.BrowserRequest) executor.Line {
-	if line.Stream != "stdout" || !request.CaptureNetwork {
+	if line.Stream != "stdout" || (!request.CaptureNetwork && !request.IncludeDOM) {
 		return line
 	}
 	var report browserReport
 	if err := json.Unmarshal([]byte(strings.TrimSpace(line.Text)), &report); err != nil {
 		return line
 	}
-	report.NetworkEventCount = len(report.Network)
-	report.Network = nil
+	if request.CaptureNetwork {
+		report.NetworkEventCount = len(report.Network)
+		report.Network = nil
+	}
+	if request.IncludeDOM {
+		report.DOMBytes = len(report.DOM)
+		report.DOM = ""
+	}
 	encoded, err := json.Marshal(report)
 	if err == nil {
 		line.Text = string(encoded)
 	}
 	return line
+}
+
+func (s *artifactStore) protectBrowserDOM(result *executor.Result, report *browserReport, secrets []string) {
+	if report.DOM == "" {
+		result.Warnings = append(result.Warnings, "browser DOM was requested but not captured")
+		return
+	}
+	redactedDOM := tools.RedactText(report.DOM, secrets)
+	reference, err := s.saveContent(artifactContent{
+		Kind: "browser-dom-html", MediaType: fiber.MIMETextHTML, Encoding: dto.ArtifactEncodingUTF8,
+		RedactionState: dto.ArtifactRedacted, SourceCallID: result.CallID,
+		Relation: dto.ArtifactRelationBrowserDOM, Payload: []byte(redactedDOM),
+	}, time.Now().UTC())
+	if err != nil {
+		result.Warnings = append(result.Warnings, "browser DOM artifact unavailable: "+err.Error())
+		return
+	}
+	result.Artifacts = append(result.Artifacts, reference)
+	report.DOMBytes = len(report.DOM)
+	report.DOMArtifactID = reference.ID
+	report.DOM = ""
 }
 
 func protectBrowserScreenshot(store *artifactStore, result *executor.Result, report *browserReport) {

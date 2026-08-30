@@ -34,6 +34,7 @@ type streamAccumulator struct {
 	progress           *dto.ProgressMetadata
 	jwtAnalysis        *dto.JWTAnalysisMetadata
 	sqlmapAnalysis     *dto.SQLMapAnalysis
+	evidence           *dto.EvidenceManifest
 }
 
 func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
@@ -118,6 +119,7 @@ func (a *streamAccumulator) consume(event dto.StreamEvent) error {
 		a.progress = event.Progress
 		a.jwtAnalysis = event.JWTAnalysis
 		a.sqlmapAnalysis = event.SQLMapAnalysis
+		a.evidence = event.Evidence
 		a.done = true
 		return nil
 	}
@@ -147,6 +149,7 @@ func (a *streamAccumulator) result() (*dto.ToolResult, error) {
 		Warnings: a.warnings, Artifacts: a.artifacts, Progress: a.progress, FindingStatus: dto.FindingsUnknown,
 		JWTAnalysis:     a.jwtAnalysis,
 		SQLMapAnalysis:  a.sqlmapAnalysis,
+		Evidence:        a.evidence,
 		ExecutionStatus: dto.ExecutionStatusFromResult(a.returnCode, a.timedOut, a.cancelled),
 	}
 	result.Finalize()

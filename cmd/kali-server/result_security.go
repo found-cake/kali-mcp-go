@@ -53,7 +53,7 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 func protectStream(ctx context.Context, lines <-chan executor.Line, request any) <-chan executor.Line {
 	secrets := tools.RequestSecrets(request)
 	browserRequest, protectBrowser := request.(dto.BrowserRequest)
-	if len(secrets) == 0 && (!protectBrowser || !browserRequest.CaptureNetwork) {
+	if len(secrets) == 0 && (!protectBrowser || (!browserRequest.CaptureNetwork && !browserRequest.IncludeDOM)) {
 		return lines
 	}
 	protected := make(chan executor.Line, cap(lines))

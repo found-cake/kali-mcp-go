@@ -25,4 +25,5 @@ type StreamEvent struct {
 	Progress           *ProgressMetadata    `json:"progress,omitempty"`
 	JWTAnalysis        *JWTAnalysisMetadata `json:"jwt_analysis,omitempty"`
 	SQLMapAnalysis     *SQLMapAnalysis      `json:"sqlmap_analysis,omitempty"`
+	Evidence           *EvidenceManifest    `json:"evidence,omitempty"`
 }

@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -181,6 +182,7 @@ type ToolResult struct {
 	HTTPResponse         *HTTPResponseMetadata `json:"http_response,omitempty"`
 	JWTAnalysis          *JWTAnalysisMetadata  `json:"jwt_analysis,omitempty"`
 	SQLMapAnalysis       *SQLMapAnalysis       `json:"sqlmap_analysis,omitempty"`
+	Evidence             *EvidenceManifest     `json:"evidence,omitempty"`
 	Progress             *ProgressMetadata     `json:"progress,omitempty"`
 }
 
@@ -251,6 +253,12 @@ func (r *ToolResult) Format() string {
 	}
 	if r.OutputTruncated {
 		sb.WriteString("\n\n[output truncated — read the result artifact for full redacted output]")
+	}
+	if r.Evidence != nil && len(r.Evidence.Artifacts) > 0 {
+		fmt.Fprintf(&sb, "\n\n[evidence group: %s]", r.Evidence.GroupID)
+		for _, artifact := range r.Evidence.Artifacts {
+			fmt.Fprintf(&sb, "\n- %s (%s): %s", artifact.Relation, artifact.Kind, artifact.ID)
+		}
 	}
 	if sb.Len() == 0 {
 		sb.WriteString("(no output)")

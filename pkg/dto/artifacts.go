@@ -22,6 +22,7 @@ const (
 	ArtifactRelationToolResult        ArtifactRelation = "tool_result"
 	ArtifactRelationBrowserNetwork    ArtifactRelation = "browser_network"
 	ArtifactRelationBrowserScreenshot ArtifactRelation = "browser_screenshot"
+	ArtifactRelationBrowserDOM        ArtifactRelation = "browser_dom"
 )
 
 type ArtifactRef struct {
@@ -34,6 +35,18 @@ type ArtifactRef struct {
 	Encoding       ArtifactEncoding       `json:"encoding"`
 	RedactionState ArtifactRedactionState `json:"redaction_state"`
 	Relation       ArtifactRelation       `json:"relation"`
+}
+
+type EvidenceArtifact struct {
+	ID       string           `json:"id"`
+	Kind     string           `json:"kind"`
+	Relation ArtifactRelation `json:"relation"`
+}
+
+type EvidenceManifest struct {
+	GroupID           string             `json:"group_id"`
+	PrimaryArtifactID string             `json:"primary_artifact_id,omitempty"`
+	Artifacts         []EvidenceArtifact `json:"artifacts"`
 }
 
 type ArtifactReadRequest struct {
