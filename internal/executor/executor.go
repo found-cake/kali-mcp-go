@@ -16,32 +16,33 @@ import (
 )
 
 type Result struct {
-	CallID             string
-	Stdout             string
-	Stderr             string
-	ReturnCode         int
-	TimedOut           bool
-	Cancelled          bool
-	HTTPRequests       *int
-	RequestCountSource dto.RequestCountSource
-	Warnings           []string
-	StartedAt          time.Time
-	Duration           time.Duration
-	FailureCode        string
-	Tool               string
-	ToolVersion        string
-	ArgvRedacted       []string
-	Timeout            time.Duration
-	Target             *dto.TargetProvenance
-	Policy             dto.ScanOptions
-	Controls           dto.ScanControlApplication
-	SPABaseline        *dto.SPABaseline
-	FalsePositiveRisk  string
-	Artifacts          []dto.ArtifactRef
-	HTTPRequest        *dto.HTTPRequestMetadata
-	HTTPResponse       *dto.HTTPResponseMetadata
-	Progress           *dto.ProgressMetadata
-	JWTAnalysis        *dto.JWTAnalysisMetadata
+	CallID                string
+	Stdout                string
+	Stderr                string
+	ReturnCode            int
+	TimedOut              bool
+	Cancelled             bool
+	HTTPRequests          *int
+	RequestCountSource    dto.RequestCountSource
+	Warnings              []string
+	StartedAt             time.Time
+	Duration              time.Duration
+	FailureCode           string
+	Tool                  string
+	ToolVersion           string
+	ArgvRedacted          []string
+	Timeout               time.Duration
+	Target                *dto.TargetProvenance
+	Policy                dto.ScanOptions
+	Controls              dto.ScanControlApplication
+	SPABaseline           *dto.SPABaseline
+	FalsePositiveRisk     string
+	Artifacts             []dto.ArtifactRef
+	HTTPRequest           *dto.HTTPRequestMetadata
+	HTTPResponse          *dto.HTTPResponseMetadata
+	Progress              *dto.ProgressMetadata
+	JWTAnalysis           *dto.JWTAnalysisMetadata
+	BrowserScreenshotPath string
 }
 
 func (r *Result) Success() bool {

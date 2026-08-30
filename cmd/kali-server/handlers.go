@@ -176,10 +176,6 @@ func handleDalfoxStream(c fiber.Ctx) error {
 	return runToolStream(c, validateDalfoxRequest, tools.DalfoxArgs)
 }
 
-func handleBrowserStream(c fiber.Ctx) error {
-	return runToolStream(c, validateBrowserRequest, tools.BrowserArgs)
-}
-
 func handleRetireStream(c fiber.Ctx) error {
 	req, err := parseRequest(c, validateRetireRequest)
 	if err != nil {

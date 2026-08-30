@@ -33,21 +33,22 @@ func scanPreparationError(c fiber.Ctx, err error) error {
 }
 
 type scanExecutionPlan struct {
-	callID            string
-	args              []string
-	options           dto.ScanOptions
-	controls          dto.ScanControlApplication
-	target            *dto.TargetProvenance
-	timeout           time.Duration
-	release           func()
-	healthURL         string
-	request           any
-	context           context.Context
-	spaBaseline       *dto.SPABaseline
-	falsePositiveRisk string
-	extraWarnings     []string
-	artifactStore     *artifactStore
-	jwtAnalysis       *dto.JWTAnalysisMetadata
+	callID                string
+	args                  []string
+	options               dto.ScanOptions
+	controls              dto.ScanControlApplication
+	target                *dto.TargetProvenance
+	timeout               time.Duration
+	release               func()
+	healthURL             string
+	request               any
+	context               context.Context
+	spaBaseline           *dto.SPABaseline
+	falsePositiveRisk     string
+	extraWarnings         []string
+	artifactStore         *artifactStore
+	jwtAnalysis           *dto.JWTAnalysisMetadata
+	browserScreenshotPath string
 }
 
 func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanExecutionPlan, error) {
@@ -114,6 +115,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.Policy = p.options
 	result.Controls = p.controls
 	result.JWTAnalysis = p.jwtAnalysis
+	result.BrowserScreenshotPath = p.browserScreenshotPath
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
 	result.Warnings = append(result.Warnings, p.extraWarnings...)

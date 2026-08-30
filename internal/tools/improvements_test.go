@@ -113,7 +113,7 @@ func TestReviewedToolArgsUseStableNonInteractiveDefaults(t *testing.T) {
 	}{
 		{name: "whatweb", got: mustArgs(WhatWebArgs(dto.WhatWebRequest{Target: "https://example.com"})), want: []string{"whatweb", "https://example.com"}},
 		{name: "dalfox", got: mustArgs(DalfoxArgs(dto.DalfoxRequest{Target: "https://example.com/?q=FUZZ"})), want: []string{"dalfox", "scan", "https://example.com/?q=FUZZ", "--format", "json", "--no-color"}},
-		{name: "browser", got: mustArgs(BrowserArgs(dto.BrowserRequest{URL: "https://example.com", WaitMilliseconds: 250})), want: []string{"browser-check", "--url", "https://example.com", "--wait-ms", "250"}},
+		{name: "browser", got: mustArgs(BrowserArgs(dto.BrowserRequest{URL: "https://example.com", WaitMilliseconds: 250, CaptureNetwork: true, CaptureScreenshot: true})), want: []string{"browser-check", "--url", "https://example.com", "--wait-ms", "250", "--capture-network", "--capture-screenshot"}},
 		{name: "retire", got: mustArgs(RetireArgs(dto.RetireRequest{Path: "/tmp/app"})), want: []string{"retire", "--path", "/tmp/app", "--outputformat", "json", "--exitwith", "0"}},
 		{name: "osv", got: mustArgs(OSVArgs(dto.OSVRequest{Path: "/tmp/app"})), want: []string{"osv-scanner", "scan", "source", "-r", "/tmp/app", "--format", "json"}},
 	}

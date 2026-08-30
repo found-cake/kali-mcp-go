@@ -86,6 +86,10 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 				result.FindingStatus = dto.FindingsNotDetected
 				result.ClassificationReason = "browser_completed_without_dialog"
 			}
+		} else {
+			result.ExecutionStatus = dto.ExecutionFailed
+			result.ClassificationReason = "browser_report_invalid_json"
+			result.Failure = &dto.FailureInfo{Code: "output_parse_failed", Message: "browser output is not valid JSON"}
 		}
 	case "dalfox_scan":
 		var report struct {

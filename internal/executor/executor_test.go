@@ -201,6 +201,19 @@ func TestStreamExecDoneChannelIsBuffered(t *testing.T) {
 	}
 }
 
+func TestRedactArgsHidesBrowserEvidencePath(t *testing.T) {
+	// Given: a browser invocation containing its private screenshot handoff path.
+	args := []string{"--url", "https://example.com", "--screenshot-path", "/tmp/private-evidence.jpg"}
+
+	// When: reproducibility metadata is prepared for the MCP result.
+	redacted := redactArgs("browser-check", args)
+
+	// Then: the ephemeral host path is not exposed to callers.
+	if strings.Contains(strings.Join(redacted, " "), "/tmp/private-evidence.jpg") {
+		t.Fatalf("ephemeral path remains in argv metadata: %v", redacted)
+	}
+}
+
 func TestRunExecDoesNotLeakPipesWhenStartFails(t *testing.T) {
 	baseline := countOpenFDs(t)
 

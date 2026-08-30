@@ -46,6 +46,10 @@ func versionArguments(name string) []string {
 func redactArgs(name string, args []string) []string {
 	redacted := append([]string(nil), args...)
 	for index := range redacted {
+		if index > 0 && name == "browser-check" && redacted[index-1] == "--screenshot-path" {
+			redacted[index] = "[EPHEMERAL_FILE]"
+			continue
+		}
 		if index > 0 && sensitiveFlag(name, redacted[index-1]) {
 			redacted[index] = "[REDACTED]"
 			continue

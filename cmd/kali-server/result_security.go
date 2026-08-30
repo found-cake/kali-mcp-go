@@ -5,6 +5,7 @@ import (
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 func protectResult(store *artifactStore, result *executor.Result, request any) {
@@ -12,6 +13,9 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 		return
 	}
 	secrets := tools.RequestSecrets(request)
+	if browserRequest, ok := request.(dto.BrowserRequest); ok {
+		protectBrowserEvidence(store, result, browserRequest)
+	}
 	result.Stdout = tools.RedactText(result.Stdout, secrets)
 	result.Stderr = tools.RedactText(result.Stderr, secrets)
 	if result.Progress != nil {
@@ -39,13 +43,17 @@ func protectResult(store *artifactStore, result *executor.Result, request any) {
 
 func protectStream(ctx context.Context, lines <-chan executor.Line, request any) <-chan executor.Line {
 	secrets := tools.RequestSecrets(request)
-	if len(secrets) == 0 {
+	browserRequest, protectBrowser := request.(dto.BrowserRequest)
+	if len(secrets) == 0 && (!protectBrowser || !browserRequest.CaptureNetwork) {
 		return lines
 	}
 	protected := make(chan executor.Line, cap(lines))
 	go func() {
 		defer close(protected)
 		for line := range lines {
+			if protectBrowser {
+				line = protectBrowserStreamLine(line, browserRequest)
+			}
 			line.Text = tools.RedactText(line.Text, secrets)
 			select {
 			case protected <- line:

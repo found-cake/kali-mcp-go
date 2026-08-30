@@ -10,11 +10,12 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		tool string
-		in   dto.ToolResult
-		exec dto.ExecutionStatus
-		find dto.FindingStatus
+		name        string
+		tool        string
+		in          dto.ToolResult
+		exec        dto.ExecutionStatus
+		find        dto.FindingStatus
+		failureCode string
 	}{
 		{name: "sqlmap finding", tool: "sqlmap_scan", in: dto.ToolResult{Success: true, Stdout: "Parameter: name (JSON) is vulnerable"}, exec: dto.ExecutionSucceeded, find: dto.FindingsDetected},
 		{name: "sqlmap clean", tool: "sqlmap_scan", in: dto.ToolResult{Success: true, Stdout: "all tested parameters do not appear to be injectable"}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
@@ -22,6 +23,7 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 		{name: "timeout", tool: "nikto_scan", in: dto.ToolResult{TimedOut: true, PartialResults: true}, exec: dto.ExecutionTimedOut, find: dto.FindingsUnknown},
 		{name: "whatweb internal error", tool: "whatweb_scan", in: dto.ToolResult{Success: true, Stdout: "ERROR Opening: target"}, exec: dto.ExecutionFailed, find: dto.FindingsUnknown},
 		{name: "dalfox clean JSON", tool: "dalfox_scan", in: dto.ToolResult{Success: true, Stdout: `{"findings":[],"meta":{"findings_count":0}}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
+		{name: "browser invalid JSON", tool: "browser_check", in: dto.ToolResult{Success: true, Stdout: `not-json`}, exec: dto.ExecutionFailed, find: dto.FindingsUnknown, failureCode: "output_parse_failed"},
 		{name: "retire clean JSON", tool: "retirejs_scan", in: dto.ToolResult{Success: true, Stdout: `{"version":"5.7.0","data":[]}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
 		{name: "osv finding exit one", tool: "osv_scan", in: dto.ToolResult{ReturnCode: 1, Stdout: `{"results":[{"packages":[]}]}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsDetected},
 		{name: "osv clean JSON", tool: "osv_scan", in: dto.ToolResult{Success: true, Stdout: `{"results":[]}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
@@ -40,6 +42,9 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 			}
 			if got.ClassificationReason == "" {
 				t.Fatalf("expected a machine-readable classification reason: %+v", got)
+			}
+			if test.failureCode != "" && (got.Failure == nil || got.Failure.Code != test.failureCode) {
+				t.Fatalf("unexpected failure code: %+v", got.Failure)
 			}
 		})
 	}

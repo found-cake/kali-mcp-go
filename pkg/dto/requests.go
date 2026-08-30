@@ -213,10 +213,12 @@ func (r DalfoxRequest) GetRequestTimeout() int { return r.Timeout }
 
 type BrowserRequest struct {
 	ScanOptions
-	URL              string `json:"url,omitempty" jsonschema:"page URL including any test payload; may extend the browser origin from target_context"`
-	WaitMilliseconds int    `json:"wait_milliseconds,omitempty" jsonschema:"time to observe dialogs and DOM changes after load"`
-	IncludeDOM       bool   `json:"include_dom,omitempty" jsonschema:"include up to 200KB of rendered DOM in the result"`
-	Timeout          int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
+	URL               string `json:"url,omitempty" jsonschema:"page URL including any test payload; may extend the browser origin from target_context"`
+	WaitMilliseconds  int    `json:"wait_milliseconds,omitempty" jsonschema:"time to observe dialogs and DOM changes after load"`
+	IncludeDOM        bool   `json:"include_dom,omitempty" jsonschema:"include up to 200KB of rendered DOM in the result"`
+	CaptureNetwork    bool   `json:"capture_network,omitempty" jsonschema:"capture a bounded redacted network summary as a related artifact"`
+	CaptureScreenshot bool   `json:"capture_screenshot,omitempty" jsonschema:"capture a viewport screenshot as a sensitive related artifact"`
+	Timeout           int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
 }
 
 func (r BrowserRequest) GetRequestTimeout() int { return r.Timeout }

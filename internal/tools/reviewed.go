@@ -142,6 +142,12 @@ func BrowserArgs(request dto.BrowserRequest) ([]string, error) {
 	if request.IncludeDOM {
 		args = append(args, "--include-dom")
 	}
+	if request.CaptureNetwork {
+		args = append(args, "--capture-network")
+	}
+	if request.CaptureScreenshot {
+		args = append(args, "--capture-screenshot")
+	}
 	return args, nil
 }
 
