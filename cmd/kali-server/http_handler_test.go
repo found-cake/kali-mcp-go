@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -13,6 +14,34 @@ import (
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func TestHTTPRequestRejectsMalformedBody(t *testing.T) {
+	// Given: the authenticated HTTP tool route and malformed JSON input.
+	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, t.Logf)
+	t.Cleanup(func() { _ = app.Shutdown() })
+	request, err := http.NewRequest(http.MethodPost, "/api/tools/http-request", strings.NewReader(`{`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer secret-token")
+	request.Header.Set("Content-Type", "application/json")
+
+	// When: Fiber binds the malformed request at the adapter boundary.
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+
+	// Then: the adapter preserves the existing bad-request mapping.
+	if response.StatusCode != http.StatusBadRequest || !strings.Contains(string(payload), "invalid request body") {
+		t.Fatalf("unexpected malformed response: status=%d body=%s", response.StatusCode, payload)
+	}
+}
 
 func TestHTTPRequestUsesTargetContextAndPreservesResponseByDefault(t *testing.T) {
 	// Given: an authorized local HTTP target and a signed browser context.
@@ -83,46 +112,5 @@ func TestHTTPRequestUsesTargetContextAndPreservesResponseByDefault(t *testing.T)
 	}
 	if result.Artifacts[0].RedactionState != dto.ArtifactSensitiveUnredacted {
 		t.Fatalf("raw artifact state was not declared: %+v", result.Artifacts[0])
-	}
-}
-
-func TestSummarizeHTTPResponsePreservesSensitiveJSONAndLocationValues(t *testing.T) {
-	// Given: a JSON response with nested credentials, a JavaScript stack, and a credential-bearing redirect.
-	original := []byte(`{"ok":false,"token":"response-secret","profile":{"password":"hidden"},"stack":"Error: failed\n    at login (app.js:1:1)"}`)
-	headers := http.Header{"Content-Type": []string{"application/json"}, "Location": []string{"/login?token=response-secret"}}
-
-	// When: the body and response headers are summarized.
-	summary := summarizeHTTPResponse(httpResponseSummaryInput{
-		Body: original, Headers: headers, UTF8: true,
-	})
-
-	// Then: raw values remain while detection metadata and body identity stay available.
-	if !strings.Contains(summary.BodyExcerpt, "response-secret") || !strings.Contains(summary.BodyExcerpt, "hidden") {
-		t.Fatalf("response evidence was altered: summary=%+v", summary)
-	}
-	if !summary.SensitiveDataSuspected || !summary.StackTraceSuspected || summary.BodySHA256 == "" || !slices.Equal(summary.JSONKeys, []string{"ok", "profile", "stack", "token"}) || summary.Location != "/login?token=response-secret" {
-		t.Fatalf("unexpected response summary: %+v", summary)
-	}
-}
-
-func TestHTTPClientRejectsCrossOriginRedirect(t *testing.T) {
-	// Given: a target that redirects to another origin.
-	destination := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	defer destination.Close()
-	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Redirect(w, &http.Request{}, destination.URL, http.StatusFound)
-	}))
-	defer source.Close()
-	client := newHTTPClient(dto.HTTPRequest{URL: source.URL, FollowRedirects: true})
-
-	// When: the bounded client processes the redirect.
-	response, err := client.Get(source.URL)
-	if response != nil {
-		response.Body.Close()
-	}
-
-	// Then: the redirect cannot expand the selected target origin.
-	if err == nil {
-		t.Fatal("expected cross-origin redirect to be rejected")
 	}
 }

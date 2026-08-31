@@ -1,4 +1,4 @@
-package main
+package httpexec
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"golang.org/x/net/http/httpguts"
 )
 
-func validateHTTPRequest(request dto.HTTPRequest) error {
+func Validate(request dto.HTTPRequest) error {
 	parsed, err := url.Parse(request.URL)
 	if err != nil || parsed.Hostname() == "" || parsed.User != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return fmt.Errorf("url must be an HTTP or HTTPS URL without userinfo")

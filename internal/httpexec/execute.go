@@ -1,4 +1,4 @@
-package main
+package httpexec
 
 import (
 	"context"
@@ -18,7 +18,6 @@ import (
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
-	"github.com/gofiber/fiber/v3"
 )
 
 const (
@@ -38,34 +37,21 @@ var requestHTTPTransport = &http.Transport{
 	IdleConnTimeout:     30 * time.Second,
 }
 
-func handleHTTPRequest(c fiber.Ctx) error {
-	request, err := parseRequest(c, validateHTTPRequest)
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	if err := tools.ValidateScanProfile("http-request", request.ScanOptions); err != nil {
-		return badRequest(c, err.Error())
-	}
-	options := request.ScanOptions
-	provenance, err := targeting.ResolveProvenance(request, apiTokenFromContext(c), time.Now().UTC())
-	if err != nil {
-		return badRequest(c, err.Error())
-	}
-	release := func() {}
-	if scheduler := schedulerFromContext(c); scheduler != nil {
-		release, err = scheduler.Acquire(request.URL, 1)
-		if err != nil {
-			return scanPreparationError(c, err)
-		}
-	}
-	defer release()
+type Input struct {
+	CallID  string
+	Request dto.HTTPRequest
+	Target  *dto.TargetProvenance
+}
 
+func Execute(ctx context.Context, input Input) *executor.Result {
+	request := input.Request
+	options := request.ScanOptions
 	timeout := httpRequestTimeout(request.Timeout)
 	method := normalizedHTTPMethod(request.Method)
 	startedAt := time.Now().UTC()
 	requestCount := 1
 	result := &executor.Result{
-		CallID:             callIDFromContext(c),
+		CallID:             input.CallID,
 		ReturnCode:         -1,
 		HTTPRequests:       &requestCount,
 		RequestCountSource: dto.RequestCountMeasured,
@@ -74,16 +60,17 @@ func handleHTTPRequest(c fiber.Ctx) error {
 		ToolVersion:        runtime.Version(),
 		ArgvRedacted:       []string{method, request.URL},
 		Timeout:            timeout,
-		Target:             provenance,
+		Target:             input.Target,
 		Policy:             options,
 	}
-	execContext, cancel := context.WithTimeout(c.Context(), timeout)
+	defer finalizeResult(result)
+	execContext, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	httpRequest, err := newHTTPRequest(execContext, request, method)
 	if err != nil {
 		result.Stderr = err.Error()
 		result.FailureCode = "http_request_invalid"
-		return sendHTTPRequestResult(c, result, request)
+		return result
 	}
 	result.HTTPRequest = summarizeHTTPRequest(httpRequest, request)
 	response, err := newHTTPClient(request).Do(httpRequest)
@@ -92,7 +79,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 		result.FailureCode = "http_request_failed"
 		result.TimedOut = errors.Is(execContext.Err(), context.DeadlineExceeded)
 		result.Cancelled = errors.Is(execContext.Err(), context.Canceled)
-		return sendHTTPRequestResult(c, result, request)
+		return result
 	}
 	defer response.Body.Close()
 	retained, truncated, err := readHTTPBody(response.Body, responseByteLimit(request.MaxResponseBytes))
@@ -107,7 +94,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	if err != nil {
 		result.Stderr = err.Error()
 		result.FailureCode = "http_response_read_failed"
-		return sendHTTPRequestResult(c, result, request)
+		return result
 	}
 	isUTF8 := utf8.Valid(retained)
 	result.HTTPResponse.Summary = summarizeHTTPResponse(httpResponseSummaryInput{
@@ -122,7 +109,19 @@ func handleHTTPRequest(c fiber.Ctx) error {
 		result.HTTPResponse.BodyEncoding = "base64"
 	}
 	result.ReturnCode = 0
-	return sendHTTPRequestResult(c, result, request)
+	return result
+}
+
+func finalizeResult(result *executor.Result) {
+	result.Duration = time.Since(result.StartedAt)
+	if result.HTTPResponse != nil {
+		result.Progress = &dto.ProgressMetadata{
+			ObservedOutputItems: 1,
+			LastObservedOutput:  fmt.Sprintf("HTTP %d", result.HTTPResponse.StatusCode),
+			Checkpoint:          "response-1",
+		}
+	}
+	result.FinalizeProgress()
 }
 
 func summarizeHTTPRequest(httpRequest *http.Request, request dto.HTTPRequest) *dto.HTTPRequestMetadata {
@@ -185,17 +184,4 @@ func httpRequestTimeout(seconds int) time.Duration {
 		return defaultHTTPRequestTime
 	}
 	return time.Duration(seconds) * time.Second
-}
-
-func sendHTTPRequestResult(c fiber.Ctx, result *executor.Result, request dto.HTTPRequest) error {
-	result.Duration = time.Since(result.StartedAt)
-	if result.HTTPResponse != nil {
-		result.Progress = &dto.ProgressMetadata{
-			ObservedOutputItems: 1,
-			LastObservedOutput:  fmt.Sprintf("HTTP %d", result.HTTPResponse.StatusCode),
-			Checkpoint:          "response-1",
-		}
-	}
-	result.FinalizeProgress()
-	return writeToolResult(c, result, request)
 }
