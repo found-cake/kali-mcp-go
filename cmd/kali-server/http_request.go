@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -46,7 +47,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 		return badRequest(c, err.Error())
 	}
 	options := request.ScanOptions
-	provenance, err := resolveTargetProvenance(request, apiTokenFromContext(c), time.Now().UTC())
+	provenance, err := targeting.ResolveProvenance(request, apiTokenFromContext(c), time.Now().UTC())
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
@@ -142,7 +143,7 @@ func summarizeHTTPRequest(httpRequest *http.Request, request dto.HTTPRequest) *d
 }
 
 func newHTTPClient(request dto.HTTPRequest) *http.Client {
-	initialOrigin, _ := webOrigin(request.URL)
+	initialOrigin, _ := targeting.Origin(request.URL)
 	return &http.Client{
 		Transport: requestHTTPTransport,
 		CheckRedirect: func(next *http.Request, via []*http.Request) error {
@@ -152,7 +153,7 @@ func newHTTPClient(request dto.HTTPRequest) *http.Client {
 			if len(via) > maximumHTTPRedirects {
 				return fmt.Errorf("redirect limit exceeded")
 			}
-			nextOrigin, ok := webOrigin(next.URL.String())
+			nextOrigin, ok := targeting.Origin(next.URL.String())
 			if !ok || nextOrigin != initialOrigin {
 				return fmt.Errorf("cross-origin redirect rejected")
 			}

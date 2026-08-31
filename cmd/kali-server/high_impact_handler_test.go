@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
@@ -64,15 +65,17 @@ func TestMetasploitRequiresSelectedTarget(t *testing.T) {
 
 func signedHighImpactContext(t *testing.T) string {
 	t.Helper()
-	context, err := signTargetContext("test-secret", targetContextClaims{
-		ResolutionID: "resolution-1", Original: "http://127.0.0.1:3000/",
-		BrowserTarget: "http://192.0.2.10:3000/", NetworkTarget: "192.0.2.10", Port: 3000,
-		Scope: dto.TargetScopeDockerHost, ExpiresAt: time.Now().Add(time.Minute).Unix(),
-	})
-	if err != nil {
-		t.Fatalf("sign target context: %v", err)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.0.2.10:3000/", NetworkTarget: "192.0.2.10", Port: 3000,
+			Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
 	}
-	return context
+	if err := targeting.AttachResolution("test-secret", &result, time.Now().Add(time.Minute)); err != nil {
+		t.Fatalf("attach target context: %v", err)
+	}
+	return result.Candidates[0].TargetContext
 }
 
 func postHighImpactRequest[T any](t *testing.T, path string, handler fiber.Handler, body T) dto.ToolResult {

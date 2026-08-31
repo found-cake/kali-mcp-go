@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -124,7 +125,7 @@ func parseRequest[T any](c fiber.Ctx, validate func(T) error) (T, error) {
 	if err := tools.ValidateRequestSecrets(req); err != nil {
 		return req, err
 	}
-	resolved, err := applyRequestTargetContext(apiTokenFromContext(c), req, time.Now().UTC())
+	resolved, err := targeting.ApplyContext(apiTokenFromContext(c), req, time.Now().UTC())
 	if err != nil {
 		return req, err
 	}

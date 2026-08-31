@@ -1,4 +1,4 @@
-package main
+package targeting
 
 import (
 	"crypto/hmac"
@@ -15,11 +15,9 @@ import (
 
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
-	"github.com/gofiber/fiber/v3"
 )
 
 const (
-	apiTokenLocalKey          = "api-token"
 	resolutionReceiptLifetime = 10 * time.Minute
 	maximumResolutionLifetime = time.Hour
 )
@@ -48,6 +46,28 @@ type issuedResolutionReceipt struct {
 
 func issueResolutionReceipt(secret string, result dto.TargetResolutionResult, now time.Time) (issuedResolutionReceipt, error) {
 	return issueResolutionReceiptUntil(secret, result, now.Add(resolutionReceiptLifetime))
+}
+
+func Lifetime(seconds int) (time.Duration, error) {
+	if seconds == 0 {
+		return resolutionReceiptLifetime, nil
+	}
+	lifetime := time.Duration(seconds) * time.Second
+	if lifetime < time.Second || lifetime > maximumResolutionLifetime {
+		return 0, fmt.Errorf("valid_for_seconds must be between 1 and 3600")
+	}
+	return lifetime, nil
+}
+
+func AttachResolution(secret string, result *dto.TargetResolutionResult, expiresAt time.Time) error {
+	issued, err := issueResolutionReceiptUntil(secret, *result, expiresAt)
+	if err != nil {
+		return err
+	}
+	result.ResolutionID = issued.ID
+	result.ResolutionReceipt = issued.Token
+	result.ReceiptExpiresAt = issued.ExpiresAt
+	return attachTargetContexts(secret, result, issued)
 }
 
 func issueResolutionReceiptUntil(secret string, result dto.TargetResolutionResult, expiresAt time.Time) (issuedResolutionReceipt, error) {
@@ -149,12 +169,12 @@ func resolutionCandidateMatches(candidate, selected string) bool {
 	if candidate == selected {
 		return true
 	}
-	candidateOrigin, candidateOK := webOrigin(candidate)
-	selectedOrigin, selectedOK := webOrigin(selected)
+	candidateOrigin, candidateOK := Origin(candidate)
+	selectedOrigin, selectedOK := Origin(selected)
 	return candidateOK && selectedOK && candidateOrigin == selectedOrigin
 }
 
-func webOrigin(target string) (string, bool) {
+func Origin(target string) (string, bool) {
 	parsed, err := url.Parse(target)
 	if err != nil || parsed.User != nil || parsed.Hostname() == "" {
 		return "", false
@@ -174,7 +194,7 @@ func webOrigin(target string) (string, bool) {
 	return scheme + "://" + strings.ToLower(parsed.Hostname()) + ":" + port, true
 }
 
-func resolveTargetProvenance(request any, secret string, now time.Time) (*dto.TargetProvenance, error) {
+func ResolveProvenance(request any, secret string, now time.Time) (*dto.TargetProvenance, error) {
 	target := tools.RequestTarget(request)
 	if target == "" {
 		return nil, nil
@@ -207,17 +227,12 @@ func resolveTargetProvenance(request any, secret string, now time.Time) (*dto.Ta
 }
 
 func sameWebOrigin(selected, candidate string) bool {
-	selectedOrigin, selectedOK := webOrigin(selected)
-	candidateOrigin, candidateOK := webOrigin(candidate)
+	selectedOrigin, selectedOK := Origin(selected)
+	candidateOrigin, candidateOK := Origin(candidate)
 	return selectedOK && candidateOK && selectedOrigin == candidateOrigin
 }
 
-func apiTokenFromContext(c fiber.Ctx) string {
-	value, _ := c.Locals(apiTokenLocalKey).(string)
-	return value
-}
-
-func targetWarnings(request any, provenance *dto.TargetProvenance) []string {
+func Warnings(request any, provenance *dto.TargetProvenance) []string {
 	warnings := tools.TargetWarnings(request)
 	if provenance != nil && !provenance.Verified {
 		warnings = append(warnings, "target was not verified by resolve_target")

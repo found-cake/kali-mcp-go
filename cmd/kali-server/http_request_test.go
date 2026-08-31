@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
@@ -24,19 +25,18 @@ func TestHTTPRequestUsesTargetContextAndPreservesResponseByDefault(t *testing.T)
 	}))
 	defer target.Close()
 	now := time.Now().UTC()
-	context, err := signTargetContext("secret-token", targetContextClaims{
-		ResolutionID:  "resolution-1",
-		Original:      "http://127.0.0.1:3000/",
-		BrowserTarget: target.URL,
-		NetworkTarget: "127.0.0.1",
-		ExpiresAt:     now.Add(time.Minute).Unix(),
-	})
-	if err != nil {
-		t.Fatalf("sign target context: %v", err)
+	resolution := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: target.URL, NetworkTarget: "127.0.0.1", Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret-token", &resolution, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach target context: %v", err)
 	}
 	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, t.Logf)
 	body, err := json.Marshal(dto.HTTPRequest{
-		ScanOptions: dto.ScanOptions{TargetContext: context},
+		ScanOptions: dto.ScanOptions{TargetContext: resolution.Candidates[0].TargetContext},
 		Method:      http.MethodPost,
 		Headers:     map[string]string{"Authorization": "Bearer request-secret", "X-Test": "visible"},
 		JSONBody:    json.RawMessage(`{"name":"alice"}`),

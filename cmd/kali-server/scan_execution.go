@@ -11,6 +11,7 @@ import (
 	"github.com/found-cake/kali-mcp-go/internal/admission"
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -71,7 +72,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if err != nil {
 		return nil, err
 	}
-	provenance, err := resolveTargetProvenance(request, apiTokenFromContext(c), time.Now().UTC())
+	provenance, err := targeting.ResolveProvenance(request, apiTokenFromContext(c), time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +141,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.CallID = p.callID
 	result.Target = p.target
-	result.Warnings = append(result.Warnings, targetWarnings(p.request, p.target)...)
+	result.Warnings = append(result.Warnings, targeting.Warnings(p.request, p.target)...)
 	result.Policy = p.options
 	result.Controls = p.controls
 	result.JWTAnalysis = p.jwtAnalysis

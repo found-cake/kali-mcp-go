@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -20,19 +21,12 @@ func handleResolveTarget(c fiber.Ctx) error {
 		return badRequest(c, err.Error())
 	}
 	result.CallID = callIDFromContext(c)
-	lifetime, err := resolutionLifetime(request.ValidForSeconds)
+	lifetime, err := targeting.Lifetime(request.ValidForSeconds)
 	if err != nil {
 		return badRequest(c, err.Error())
 	}
 	now := time.Now().UTC()
-	receipt, err := issueResolutionReceiptUntil(apiTokenFromContext(c), *result, now.Add(lifetime))
-	if err != nil {
-		return internalServerError(c, err.Error())
-	}
-	result.ResolutionID = receipt.ID
-	result.ResolutionReceipt = receipt.Token
-	result.ReceiptExpiresAt = receipt.ExpiresAt
-	if err := attachTargetContexts(apiTokenFromContext(c), result, receipt); err != nil {
+	if err := targeting.AttachResolution(apiTokenFromContext(c), result, now.Add(lifetime)); err != nil {
 		return internalServerError(c, err.Error())
 	}
 	if result.RecommendationBasis == "" {
@@ -48,19 +42,8 @@ func validateResolveTargetRequest(request dto.ResolveTargetRequest) error {
 	if request.ConnectTimeoutMilliseconds < 0 || request.ConnectTimeoutMilliseconds > 5000 {
 		return fmt.Errorf("connect_timeout_milliseconds must be between 1 and 5000")
 	}
-	if _, err := resolutionLifetime(request.ValidForSeconds); err != nil {
+	if _, err := targeting.Lifetime(request.ValidForSeconds); err != nil {
 		return err
 	}
 	return nil
-}
-
-func resolutionLifetime(seconds int) (time.Duration, error) {
-	if seconds == 0 {
-		return resolutionReceiptLifetime, nil
-	}
-	lifetime := time.Duration(seconds) * time.Second
-	if lifetime < time.Second || lifetime > maximumResolutionLifetime {
-		return 0, fmt.Errorf("valid_for_seconds must be between 1 and 3600")
-	}
-	return lifetime, nil
 }

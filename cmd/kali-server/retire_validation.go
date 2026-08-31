@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
@@ -29,7 +30,7 @@ func validateRetireRequest(request dto.RetireRequest) error {
 	}
 	origin := ""
 	for _, address := range request.ScriptURLs {
-		currentOrigin, ok := webOrigin(address)
+		currentOrigin, ok := targeting.Origin(address)
 		if !ok {
 			return fmt.Errorf("script_urls must contain HTTP or HTTPS URLs without userinfo")
 		}

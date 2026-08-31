@@ -1,4 +1,4 @@
-package main
+package targeting
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func applyRequestTargetContext[T any](secret string, request T, now time.Time) (T, error) {
+func ApplyContext[T any](secret string, request T, now time.Time) (T, error) {
 	scanRequest, ok := any(request).(dto.ScanRequest)
 	if !ok {
 		return request, nil
@@ -97,8 +97,8 @@ func setWebTarget(current *string, expected string) error {
 		return fmt.Errorf("target_context does not contain a browser target")
 	}
 	if *current != "" {
-		currentOrigin, currentOK := webOrigin(*current)
-		expectedOrigin, expectedOK := webOrigin(expected)
+		currentOrigin, currentOK := Origin(*current)
+		expectedOrigin, expectedOK := Origin(expected)
 		if !currentOK || !expectedOK || currentOrigin != expectedOrigin {
 			return fmt.Errorf("request URL does not match target_context browser origin")
 		}

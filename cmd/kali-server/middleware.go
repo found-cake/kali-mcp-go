@@ -13,7 +13,10 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-const callIDLocalKey = "call-id"
+const (
+	apiTokenLocalKey = "api-token"
+	callIDLocalKey   = "call-id"
+)
 
 type callTelemetryRecord struct {
 	CallID     string    `json:"call_id"`
@@ -55,6 +58,11 @@ func bearerAuthMiddleware(apiToken string) fiber.Handler {
 		c.Locals(apiTokenLocalKey, apiToken)
 		return c.Next()
 	}
+}
+
+func apiTokenFromContext(c fiber.Ctx) string {
+	value, _ := c.Locals(apiTokenLocalKey).(string)
+	return value
 }
 
 func callTelemetryMiddleware(print logPrinter) fiber.Handler {
