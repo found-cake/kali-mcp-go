@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -32,5 +33,63 @@ func TestHandleScanCapabilitiesReturnsProfileToolCompatibility(t *testing.T) {
 	// Then: the endpoint returns the same non-empty policy contract used at execution.
 	if response.StatusCode != fiber.StatusOK || len(result.Profiles) == 0 || len(result.Tools) == 0 {
 		t.Fatalf("unexpected capabilities response: status=%d result=%+v", response.StatusCode, result)
+	}
+}
+
+func TestToolStatusTracksWordlistReadinessSeparatelyFromEssentialFlagSemantics(t *testing.T) {
+	// Given: available binaries, one usable directory wordlist, and one missing John wordlist.
+	directoryWordlist, err := os.CreateTemp(t.TempDir(), "dir-wordlist-*.txt")
+	if err != nil {
+		t.Fatalf("create dir wordlist: %v", err)
+	}
+	defer directoryWordlist.Close()
+	t.Setenv("KALI_MCP_DIR_WORDLIST", directoryWordlist.Name())
+	t.Setenv("KALI_MCP_JOHN_WORDLIST", "/missing/john-wordlist.txt")
+
+	// When: readiness is calculated with a missing non-essential scanner.
+	status := toolStatus(func(name string) bool {
+		return name != "sqlmap"
+	})
+
+	// Then: wordlist readiness is tool-specific and the aggregate uses only essentials.
+	if !status["gobuster"] || !status["dirb"] {
+		t.Fatalf("expected directory tools to be ready: %v", status)
+	}
+	if status["john"] {
+		t.Fatalf("expected john to be unavailable: %v", status)
+	}
+	if !allEssentialToolsAvailable(status) {
+		t.Fatalf("expected the essential aggregate to ignore sqlmap: %v", status)
+	}
+}
+
+func TestHandleHealthUsesEssentialSubsetForAggregateFlag(t *testing.T) {
+	// Given: missing default wordlists for directory tools and John.
+	t.Setenv("KALI_MCP_DIR_WORDLIST", "/missing/dir-wordlist.txt")
+	t.Setenv("KALI_MCP_JOHN_WORDLIST", "/missing/john-wordlist.txt")
+	app := fiber.New()
+	app.Get("/health", handleHealth)
+
+	// When: the health endpoint evaluates tool readiness.
+	request, err := http.NewRequest(http.MethodGet, "/health", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer response.Body.Close()
+	var result dto.HealthResult
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	// Then: missing essential tools degrade health and John remains independently unavailable.
+	if result.AllEssentialToolsAvailable && (!result.ToolsStatus["gobuster"] || !result.ToolsStatus["dirb"]) {
+		t.Fatalf("essential aggregate reported ready: %+v", result)
+	}
+	if result.Status != "degraded" || result.ToolsStatus["john"] {
+		t.Fatalf("unexpected degraded health: %+v", result)
 	}
 }
