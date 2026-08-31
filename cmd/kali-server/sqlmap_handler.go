@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -26,7 +27,7 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
-	lines = protectStream(execCtx, lines, req)
+	lines = results.ProtectStream(execCtx, lines, req)
 	done = annotateResult(done, func(result *executor.Result) {
 		analysis := sqlmapPlan.Analysis(result.Stdout, req.TestParameters)
 		count := analysis.HTTPRequests

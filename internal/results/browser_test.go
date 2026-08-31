@@ -1,4 +1,4 @@
-package main
+package results
 
 import (
 	"encoding/base64"
@@ -36,7 +36,7 @@ func TestProtectResultExtractsOptInBrowserEvidenceArtifacts(t *testing.T) {
 	}
 
 	// When: the result is protected before inline delivery and retention.
-	protectResult(store, result, request)
+	Protect(store, result, request)
 
 	// Then: large and sensitive evidence is linked separately from the redacted JSON result.
 	if len(result.Artifacts) != 4 || strings.Contains(result.Stdout, base64.StdEncoding.EncodeToString(png)) || strings.Contains(result.Stdout, "private-value") || strings.Contains(result.Progress.LastObservedOutput, "private-value") {
@@ -61,11 +61,29 @@ func TestProtectResultExtractsOptInBrowserEvidenceArtifacts(t *testing.T) {
 	}
 	dom := artifactByRelation(t, result.Artifacts, dto.ArtifactRelationBrowserDOM)
 	_, payload, err = store.Read(dom.ID, time.Now().UTC())
-	if err != nil || strings.Contains(string(payload), "private-value") || !strings.Contains(string(payload), "[REDACTED]") || dom.RedactionState != dto.ArtifactRedacted {
+	if err != nil || strings.Contains(string(payload), "private-value") || !strings.Contains(string(payload), "[REDACTED]") || dom.RedactionState != dto.ArtifactRedacted || dom.MediaType != "text/html" || network.MediaType != "application/json" {
 		t.Fatalf("DOM artifact was not redacted: err=%v payload=%s", err, payload)
 	}
 	if result.Evidence == nil || result.Evidence.GroupID != result.CallID || len(result.Evidence.Artifacts) != 4 || result.Evidence.PrimaryArtifactID == "" {
 		t.Fatalf("browser evidence manifest is incomplete: %+v", result.Evidence)
+	}
+}
+
+func TestProtectReportsInvalidBrowserJSON(t *testing.T) {
+	// Given: browser evidence capture was requested but stdout is not valid browser JSON.
+	store, err := artifactstore.New()
+	if err != nil {
+		t.Fatalf("create artifact store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	result := &executor.Result{Stdout: "not-json"}
+
+	// When: the browser result crosses the evidence boundary.
+	Protect(store, result, dto.BrowserRequest{IncludeDOM: true})
+
+	// Then: the result remains usable and carries the established extraction warning.
+	if len(result.Warnings) == 0 || !strings.Contains(result.Warnings[0], "invalid browser JSON") || result.Stdout != "not-json" {
+		t.Fatalf("unexpected invalid browser result: %+v", result)
 	}
 }
 
@@ -83,7 +101,7 @@ func TestProtectResultPreservesBrowserEvidenceByDefault(t *testing.T) {
 	request := dto.BrowserRequest{IncludeDOM: true, CaptureNetwork: true}
 
 	// When: the final result and related evidence are retained without redaction values.
-	protectResult(store, result, request)
+	Protect(store, result, request)
 
 	// Then: raw DOM and network values remain and their artifact state declares that fact.
 	for _, relation := range []dto.ArtifactRelation{dto.ArtifactRelationBrowserDOM, dto.ArtifactRelationBrowserNetwork} {

@@ -11,6 +11,7 @@ import (
 	"github.com/found-cake/kali-mcp-go/internal/admission"
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -156,7 +157,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())
 		}
 	}
-	protectResult(p.artifactStore, result, p.request)
+	results.Protect(p.artifactStore, result, p.request)
 }
 
 func probeTargetHealth(ctx context.Context, target string) error {

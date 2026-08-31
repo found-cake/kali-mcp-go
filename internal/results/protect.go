@@ -1,4 +1,4 @@
-package main
+package results
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func protectResult(store *artifactstore.Store, result *executor.Result, request any) {
+func Protect(store *artifactstore.Store, result *executor.Result, request any) {
 	if result == nil {
 		return
 	}
@@ -58,7 +58,7 @@ func artifactRedactionState(values []string) dto.ArtifactRedactionState {
 	return dto.ArtifactRedacted
 }
 
-func protectStream(ctx context.Context, lines <-chan executor.Line, request any) <-chan executor.Line {
+func ProtectStream(ctx context.Context, lines <-chan executor.Line, request any) <-chan executor.Line {
 	secrets := tools.RequestSecrets(request)
 	browserRequest, protectBrowser := request.(dto.BrowserRequest)
 	if len(secrets) == 0 && (!protectBrowser || (!browserRequest.CaptureNetwork && !browserRequest.IncludeDOM)) {

@@ -1,4 +1,4 @@
-package main
+package results
 
 import (
 	"strings"
@@ -25,7 +25,7 @@ func TestProtectResultRedactsBeforeArtifactStorage(t *testing.T) {
 	request := dto.CommandRequest{RedactValues: []string{"private-value"}}
 
 	// When: the result is protected and retained.
-	protectResult(store, result, request)
+	Protect(store, result, request)
 	if len(result.Artifacts) != 1 {
 		t.Fatalf("expected one artifact: %+v", result.Artifacts)
 	}
@@ -40,5 +40,25 @@ func TestProtectResultRedactsBeforeArtifactStorage(t *testing.T) {
 	// Then: neither inline output nor the artifact contains the secret.
 	if strings.Contains(result.Stdout, "private-value") || strings.Contains(result.Progress.LastObservedOutput, "private-value") || strings.Contains(string(payload), "private-value") {
 		t.Fatalf("secret remains in protected result: stdout=%q artifact=%s", result.Stdout, payload)
+	}
+}
+
+func TestProtectReportsArtifactStoreFailure(t *testing.T) {
+	// Given: an artifact store whose backing directory has already closed.
+	store, err := artifactstore.New()
+	if err != nil {
+		t.Fatalf("create artifact store: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close artifact store: %v", err)
+	}
+	result := &executor.Result{Stdout: "raw evidence"}
+
+	// When: a result is protected for retention.
+	Protect(store, result, dto.CommandRequest{})
+
+	// Then: inline evidence remains available and the storage failure is explicit.
+	if result.Stdout != "raw evidence" || len(result.Artifacts) != 0 || len(result.Warnings) == 0 || !strings.Contains(result.Warnings[0], "result artifact unavailable") {
+		t.Fatalf("unexpected failed artifact result: %+v", result)
 	}
 }

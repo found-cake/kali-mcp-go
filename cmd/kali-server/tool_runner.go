@@ -68,7 +68,7 @@ func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 	}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, plan.timeout, plan.args[0], plan.args[1:]...)
-	lines = protectStream(execCtx, lines, plan.request)
+	lines = results.ProtectStream(execCtx, lines, plan.request)
 	var breakerTripped *atomic.Bool
 	if plan.options.Max5xxResponses > 0 {
 		lines, breakerTripped = streaming.MonitorFiveXXResponses(lines, plan.options.Max5xxResponses, cancel)

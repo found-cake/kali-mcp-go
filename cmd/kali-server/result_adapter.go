@@ -7,6 +7,6 @@ import (
 )
 
 func writeToolResult(c fiber.Ctx, result *executor.Result, request any) error {
-	protectResult(artifactStoreFromContext(c), result, request)
+	results.Protect(artifactStoreFromContext(c), result, request)
 	return c.JSON(results.ToToolResult(result))
 }

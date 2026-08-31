@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -39,12 +40,12 @@ func handleCommandStream(c fiber.Ctx) error {
 	timeout := commandTimeout(req.Timeout)
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
-	lines = protectStream(execCtx, lines, req)
+	lines = results.ProtectStream(execCtx, lines, req)
 	callID := callIDFromContext(c)
 	artifacts := artifactStoreFromContext(c)
 	done = annotateResult(done, func(result *executor.Result) {
 		result.CallID = callID
-		protectResult(artifacts, result, req)
+		results.Protect(artifacts, result, req)
 	})
 	release := retainExecutionLease(c)
 	return sendToolStreamWithCancel(c, lines, done, cancel, release)
@@ -156,7 +157,7 @@ func handleRetireStream(c fiber.Ctx) error {
 	scanPlan.args = retirePlan.Args()
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
-	lines = protectStream(execCtx, lines, req)
+	lines = results.ProtectStream(execCtx, lines, req)
 	done = annotateResult(done, func(result *executor.Result) {
 		scanPlan.annotate(result)
 	})

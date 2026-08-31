@@ -1,4 +1,4 @@
-package main
+package results
 
 import (
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
-	"github.com/gofiber/fiber/v3"
 )
 
 const maximumBrowserScreenshotBytes = 512 * 1024
@@ -126,7 +125,7 @@ func protectBrowserDOM(store *artifactstore.Store, result *executor.Result, repo
 	}
 	redactedDOM := tools.RedactText(report.DOM, secrets)
 	reference, err := store.Save(artifactstore.Content{
-		Kind: "browser-dom-html", MediaType: fiber.MIMETextHTML, Encoding: dto.ArtifactEncodingUTF8,
+		Kind: "browser-dom-html", MediaType: mediaTypeTextHTML, Encoding: dto.ArtifactEncodingUTF8,
 		RedactionState: artifactRedactionState(secrets), SourceCallID: result.CallID,
 		Relation: dto.ArtifactRelationBrowserDOM, Payload: []byte(redactedDOM),
 	}, time.Now().UTC())
@@ -179,7 +178,7 @@ func protectBrowserNetwork(store *artifactstore.Store, result *executor.Result, 
 		return
 	}
 	reference, err := store.Save(artifactstore.Content{
-		Kind: "browser-network-json", MediaType: fiber.MIMEApplicationJSON, Encoding: dto.ArtifactEncodingUTF8,
+		Kind: "browser-network-json", MediaType: mediaTypeApplicationJSON, Encoding: dto.ArtifactEncodingUTF8,
 		RedactionState: artifactRedactionState(secrets), SourceCallID: result.CallID,
 		Relation: dto.ArtifactRelationBrowserNetwork, Payload: payload,
 	}, time.Now().UTC())
