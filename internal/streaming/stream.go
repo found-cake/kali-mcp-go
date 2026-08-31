@@ -1,7 +1,6 @@
-package main
+package streaming
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,62 +9,62 @@ import (
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
-	"github.com/gofiber/fiber/v3"
 )
 
-type streamTicker interface {
+type ticker interface {
 	Chan() <-chan time.Time
 	Stop()
 }
 
-type streamWriter interface {
+type Writer interface {
 	WriteString(s string) (int, error)
 	Flush() error
 }
 
-type realStreamTicker struct {
+type realTicker struct {
 	*time.Ticker
 }
 
-func (t *realStreamTicker) Chan() <-chan time.Time {
+func (t *realTicker) Chan() <-chan time.Time {
 	return t.C
 }
 
-func newStreamTicker(interval time.Duration) streamTicker {
-	return &realStreamTicker{Ticker: time.NewTicker(interval)}
+func newTicker(interval time.Duration) ticker {
+	return &realTicker{Ticker: time.NewTicker(interval)}
 }
 
-func sendToolStreamWithCancel(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, cleanups ...func()) error {
-	return sendToolStreamWithTicker(c, lines, done, cancel, func() streamTicker {
-		return newStreamTicker(streamHeartbeatInterval)
-	}, cleanups...)
+type Config struct {
+	CallID            string
+	Lines             <-chan executor.Line
+	Done              <-chan *executor.Result
+	Cancel            context.CancelFunc
+	HeartbeatInterval time.Duration
+	Cleanups          []func()
 }
 
-func sendToolStreamWithTicker(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker, cleanups ...func()) error {
-	c.Set("Content-Type", "text/event-stream")
-	c.Set("Cache-Control", "no-cache")
-	c.Set("X-Accel-Buffering", "no")
-	callID := callIDFromContext(c)
-
-	return c.SendStreamWriter(func(w *bufio.Writer) {
-		streamRun{lines: lines, done: done, cancel: cancel, tickerFactory: tickerFactory, cleanups: cleanups, callID: callID}.run(w)
+func Run(writer Writer, config Config) {
+	runWithTicker(writer, config, func() ticker {
+		return newTicker(config.HeartbeatInterval)
 	})
 }
 
-func runSendToolStream(w streamWriter, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, tickerFactory func() streamTicker, cleanups ...func()) {
-	streamRun{lines: lines, done: done, cancel: cancel, tickerFactory: tickerFactory, cleanups: cleanups}.run(w)
+func runWithTicker(writer Writer, config Config, tickerFactory func() ticker) {
+	streamRun{
+		lines: config.Lines, done: config.Done, cancel: config.Cancel,
+		tickerFactory: tickerFactory, cleanups: config.Cleanups, callID: config.CallID,
+	}.run(writer)
 }
 
 type streamRun struct {
 	lines         <-chan executor.Line
 	done          <-chan *executor.Result
 	cancel        context.CancelFunc
-	tickerFactory func() streamTicker
+	tickerFactory func() ticker
 	cleanups      []func()
 	callID        string
 }
 
-func (s streamRun) run(w streamWriter) {
+func (s streamRun) run(w Writer) {
 	// Register in reverse so deferred execution preserves the caller's cleanup order.
 	for i := len(s.cleanups) - 1; i >= 0; i-- {
 		if s.cleanups[i] != nil {
@@ -167,7 +166,7 @@ func (s streamRun) run(w streamWriter) {
 	}
 }
 
-func writeStreamPayload(w streamWriter, payload []byte) error {
+func writeStreamPayload(w Writer, payload []byte) error {
 	if _, err := w.WriteString("data: " + string(payload) + "\n\n"); err != nil {
 		return err
 	}
@@ -182,7 +181,7 @@ func drainStreamLines(lines <-chan executor.Line) {
 	}
 }
 
-func writeStreamDoneFallback(w streamWriter, message string) {
+func writeStreamDoneFallback(w Writer, message string) {
 	returnCode := -1
 	payload, err := json.Marshal(dto.StreamEvent{Done: true, ReturnCode: &returnCode, Error: message})
 	if err != nil {

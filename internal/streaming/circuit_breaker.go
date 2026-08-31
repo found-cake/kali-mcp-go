@@ -1,4 +1,4 @@
-package main
+package streaming
 
 import (
 	"encoding/json"
@@ -26,7 +26,7 @@ func observeFiveXXResponses(statuses <-chan streamStatus, threshold int, cancel 
 	return false
 }
 
-func monitorFiveXXResponses(lines <-chan executor.Line, threshold int, cancel func()) (<-chan executor.Line, *atomic.Bool) {
+func MonitorFiveXXResponses(lines <-chan executor.Line, threshold int, cancel func()) (<-chan executor.Line, *atomic.Bool) {
 	output := make(chan executor.Line, cap(lines))
 	tripped := &atomic.Bool{}
 	go func() {

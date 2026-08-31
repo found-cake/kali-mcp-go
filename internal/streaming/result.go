@@ -1,4 +1,4 @@
-package main
+package streaming
 
 import (
 	"encoding/json"
@@ -21,7 +21,7 @@ func terminalStreamError(result *executor.Result, streamedStderr string) string 
 	return strings.TrimLeft(terminalErr, "\n")
 }
 
-func writeStreamDoneEvent(w streamWriter, result *executor.Result, streamedStderr string) {
+func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr string) {
 	if result == nil {
 		writeStreamDoneFallback(w, "internal error: missing stream result")
 		return

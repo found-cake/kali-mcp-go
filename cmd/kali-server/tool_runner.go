@@ -6,6 +6,7 @@ import (
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/results"
+	"github.com/found-cake/kali-mcp-go/internal/streaming"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
@@ -70,7 +71,7 @@ func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 	lines = protectStream(execCtx, lines, plan.request)
 	var breakerTripped *atomic.Bool
 	if plan.options.Max5xxResponses > 0 {
-		lines, breakerTripped = monitorFiveXXResponses(lines, plan.options.Max5xxResponses, cancel)
+		lines, breakerTripped = streaming.MonitorFiveXXResponses(lines, plan.options.Max5xxResponses, cancel)
 	}
 	done = annotateResult(done, func(result *executor.Result) {
 		if breakerTripped != nil && breakerTripped.Load() {

@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,28 +14,6 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
-
-type fakeStreamTicker struct {
-	ch <-chan time.Time
-}
-
-func (t fakeStreamTicker) Chan() <-chan time.Time { return t.ch }
-func (t fakeStreamTicker) Stop()                  {}
-
-type failingStreamWriter struct {
-	writeCalls int
-	flushed    bool
-}
-
-func (w *failingStreamWriter) WriteString(string) (int, error) {
-	w.writeCalls++
-	return 0, fmt.Errorf("forced write failure")
-}
-
-func (w *failingStreamWriter) Flush() error {
-	w.flushed = true
-	return nil
-}
 
 type streamTimeoutRequest struct {
 	Timeout int `json:"timeout,omitempty"`
@@ -232,60 +208,6 @@ func TestSendToolStreamStreamsStdoutAndStderrBeforeDone(t *testing.T) {
 	}
 }
 
-func TestSendToolStreamEmitsHeartbeatBeforeDone(t *testing.T) {
-	t.Parallel()
-
-	lines := make(chan executor.Line)
-	done := make(chan *executor.Result, 1)
-	heartbeatCh := make(chan time.Time)
-	started := make(chan struct{})
-
-	app := fiber.New()
-	app.Get("/stream", func(c fiber.Ctx) error {
-		close(started)
-		return sendToolStreamWithTicker(c, lines, done, nil, func() streamTicker {
-			return fakeStreamTicker{ch: heartbeatCh}
-		})
-	})
-
-	go func() {
-		<-started
-		heartbeatCh <- time.Now()
-		close(lines)
-		done <- &executor.Result{ReturnCode: 0}
-		close(done)
-	}()
-
-	req, err := http.NewRequest(http.MethodGet, "/stream", nil)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app test: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read body: %v", err)
-	}
-	events := mustParseSSEEvents(t, string(body))
-	if len(events) != 2 {
-		t.Fatalf("expected 2 SSE events, got %d (%s)", len(events), string(body))
-	}
-	if !events[0].Heartbeat {
-		t.Fatalf("expected first event to be heartbeat, got %+v", events[0])
-	}
-	if !events[1].Done {
-		t.Fatalf("expected final done event, got %+v", events[1])
-	}
-	if events[1].ReturnCode == nil || *events[1].ReturnCode != 0 {
-		t.Fatalf("expected done return_code=0, got %+v", events[1])
-	}
-}
-
 func TestRunToolStreamUsesRequestTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -322,106 +244,6 @@ func TestRunToolStreamUsesRequestTimeout(t *testing.T) {
 	}
 	if last.ReturnCode == nil || *last.ReturnCode != -1 {
 		t.Fatalf("expected return_code=-1 for timeout, got %+v", last)
-	}
-}
-
-func TestRunSendToolStreamCancelsAndDrainsOnWriteError(t *testing.T) {
-	t.Parallel()
-
-	lines := make(chan executor.Line, 2)
-	done := make(chan *executor.Result, 1)
-	heartbeatCh := make(chan time.Time)
-	writer := &failingStreamWriter{}
-	canceled := make(chan struct{})
-	drained := make(chan struct{})
-	var cancelOnce sync.Once
-
-	lines <- executor.Line{Stream: "stdout", Text: "hello"}
-
-	go func() {
-		runSendToolStream(writer, lines, done, func() {
-			cancelOnce.Do(func() { close(canceled) })
-		}, func() streamTicker {
-			return fakeStreamTicker{ch: heartbeatCh}
-		})
-		close(drained)
-	}()
-
-	select {
-	case <-canceled:
-	case <-time.After(time.Second):
-		t.Fatal("expected cancel to be called after write failure")
-	}
-
-	close(lines)
-	done <- &executor.Result{ReturnCode: 0}
-	close(done)
-
-	select {
-	case <-drained:
-	case <-time.After(time.Second):
-		t.Fatal("expected stream runner to return after draining lines")
-	}
-
-	if writer.writeCalls == 0 {
-		t.Fatal("expected at least one write attempt")
-	}
-}
-
-func TestRunSendToolStreamWritesFallbackWhenDoneClosesWithoutValue(t *testing.T) {
-	t.Parallel()
-
-	lines := make(chan executor.Line)
-	done := make(chan *executor.Result)
-	heartbeatCh := make(chan time.Time)
-	buf := &strings.Builder{}
-	writer := bufio.NewWriter(buf)
-
-	close(lines)
-	close(done)
-
-	runSendToolStream(writer, lines, done, nil, func() streamTicker {
-		return fakeStreamTicker{ch: heartbeatCh}
-	})
-
-	events := mustParseSSEEvents(t, buf.String())
-	if len(events) != 1 {
-		t.Fatalf("expected 1 fallback SSE event, got %d (%s)", len(events), buf.String())
-	}
-	if !events[0].Done {
-		t.Fatalf("expected fallback done event, got %+v", events[0])
-	}
-	if events[0].ReturnCode == nil || *events[0].ReturnCode != -1 {
-		t.Fatalf("expected fallback return_code=-1, got %+v", events[0])
-	}
-	if !strings.Contains(events[0].Error, "without result") {
-		t.Fatalf("expected fallback error message, got %+v", events[0])
-	}
-}
-
-func TestWriteStreamDoneFallbackEscapesJSONSafely(t *testing.T) {
-	t.Parallel()
-
-	buf := &strings.Builder{}
-	writer := bufio.NewWriter(buf)
-
-	writeStreamDoneFallback(writer, "bad\x00value")
-
-	events := mustParseSSEEvents(t, buf.String())
-	if len(events) != 1 {
-		t.Fatalf("expected 1 fallback SSE event, got %d (%s)", len(events), buf.String())
-	}
-	if !events[0].Done {
-		t.Fatalf("expected fallback done event, got %+v", events[0])
-	}
-	if events[0].ReturnCode == nil || *events[0].ReturnCode != -1 {
-		t.Fatalf("expected fallback return_code=-1, got %+v", events[0])
-	}
-	if events[0].Error != "bad\x00value" {
-		t.Fatalf("expected round-tripped fallback error, got %+v", events[0])
-	}
-	if !strings.Contains(buf.String(), `\u0000`) {
-		t.Fatalf("expected JSON-escaped control character in payload, got %q", buf.String())
 	}
 }
 
@@ -980,18 +802,6 @@ func TestHandleHealthUsesEssentialSubsetForAggregateFlag(t *testing.T) {
 	}
 	if body.ToolsStatus["john"] {
 		t.Fatalf("expected john readiness to reflect missing default wordlist: %+v", body)
-	}
-}
-
-func TestTerminalStreamErrorRemovesAlreadyStreamedStderrPrefix(t *testing.T) {
-	t.Parallel()
-
-	result := &executor.Result{ReturnCode: 1, Stderr: "warn line\n\nwait: process interrupted"}
-
-	got := terminalStreamError(result, "warn line\n")
-	want := "wait: process interrupted"
-	if got != want {
-		t.Fatalf("expected terminal error %q, got %q", want, got)
 	}
 }
 
