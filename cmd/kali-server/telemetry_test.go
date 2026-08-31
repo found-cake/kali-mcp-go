@@ -68,7 +68,7 @@ func TestToolCallTelemetryCorrelatesEverySSEEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
-	events := mustParseSSEEvents(t, string(payload))
+	events := parseTelemetrySSEEvents(t, string(payload))
 
 	// Then every event and the response header use the same call ID.
 	callID := response.Header.Get(dto.CallIDHeader)
@@ -86,6 +86,25 @@ func TestToolCallTelemetryCorrelatesEverySSEEvent(t *testing.T) {
 	if events[2].Progress.Phase != dto.ProgressCompleted || events[2].Progress.ObservedOutputItems != 2 || events[2].Progress.ResumeSupported {
 		t.Fatalf("unexpected final stream progress: %+v", events[2].Progress)
 	}
+}
+
+func parseTelemetrySSEEvents(t *testing.T, body string) []dto.StreamEvent {
+	t.Helper()
+
+	chunks := strings.Split(strings.TrimSpace(body), "\n\n")
+	events := make([]dto.StreamEvent, 0, len(chunks))
+	for _, chunk := range chunks {
+		chunk = strings.TrimSpace(chunk)
+		if !strings.HasPrefix(chunk, "data: ") {
+			t.Fatalf("unexpected SSE chunk %q", chunk)
+		}
+		var event dto.StreamEvent
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(chunk, "data: ")), &event); err != nil {
+			t.Fatalf("decode SSE event: %v", err)
+		}
+		events = append(events, event)
+	}
+	return events
 }
 
 func TestRegisterRoutesBearerAuthentication(t *testing.T) {

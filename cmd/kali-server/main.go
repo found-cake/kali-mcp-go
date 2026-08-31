@@ -13,6 +13,7 @@ import (
 	"time"
 
 	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
+	"github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/toolapi"
 	"github.com/found-cake/kali-mcp-go/internal/admission"
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -104,37 +105,7 @@ func newApp(apiToken string, debug bool, maxConcurrentExecutions int, print http
 
 func registerRoutes(app *fiber.App, apiToken string, limiter *admission.Limiter) {
 	api := app.Group("/api", httpapi.BearerAuthMiddleware(apiToken))
-
-	api.Post("/command", httpapi.WithExecutionLimit(limiter, handleCommand))
-	api.Post("/command/stream", httpapi.WithExecutionLimit(limiter, handleCommandStream))
-	api.Get("/tools/capabilities", handleScanCapabilities)
-	api.Post("/tools/resolve-target", httpapi.WithExecutionLimit(limiter, handleResolveTarget))
-	api.Post("/tools/http-request", httpapi.WithExecutionLimit(limiter, handleHTTPRequest))
 	api.Get("/artifacts/:id", httpapi.HandleGetArtifact)
 	api.Get("/artifacts/:id/page", httpapi.HandleGetArtifactPage)
-
-	api.Post("/tools/gobuster", httpapi.WithExecutionLimit(limiter, handleGobuster))
-	api.Post("/tools/gobuster/stream", httpapi.WithExecutionLimit(limiter, handleGobusterStream))
-	api.Post("/tools/nmap/stream", httpapi.WithExecutionLimit(limiter, handleNmapStream))
-	api.Post("/tools/dirb/stream", httpapi.WithExecutionLimit(limiter, handleDirbStream))
-	api.Post("/tools/nikto/stream", httpapi.WithExecutionLimit(limiter, handleNiktoStream))
-	api.Post("/tools/wpscan/stream", httpapi.WithExecutionLimit(limiter, handleWPScanStream))
-	api.Post("/tools/enum4linux/stream", httpapi.WithExecutionLimit(limiter, handleEnum4linuxStream))
-	api.Post("/tools/sqlmap/stream", httpapi.WithExecutionLimit(limiter, handleSQLMapStream))
-	api.Post("/tools/tshark/stream", httpapi.WithExecutionLimit(limiter, handleTsharkStream))
-	api.Post("/tools/metasploit", httpapi.WithExecutionLimit(limiter, handleMetasploit))
-	api.Post("/tools/hydra", httpapi.WithExecutionLimit(limiter, handleHydra))
-	api.Post("/tools/hydra/stream", httpapi.WithExecutionLimit(limiter, handleHydraStream))
-	api.Post("/tools/john", httpapi.WithExecutionLimit(limiter, handleJohn))
-	api.Post("/tools/ffuf/stream", httpapi.WithExecutionLimit(limiter, handleFFUFStream))
-	api.Post("/tools/feroxbuster/stream", httpapi.WithExecutionLimit(limiter, handleFeroxbusterStream))
-	api.Post("/tools/nuclei/stream", httpapi.WithExecutionLimit(limiter, handleNucleiStream))
-	api.Post("/tools/whatweb/stream", httpapi.WithExecutionLimit(limiter, handleWhatWebStream))
-	api.Post("/tools/jwt/stream", httpapi.WithExecutionLimit(limiter, handleJWTStream))
-	api.Post("/tools/dalfox/stream", httpapi.WithExecutionLimit(limiter, handleDalfoxStream))
-	api.Post("/tools/browser/stream", httpapi.WithExecutionLimit(limiter, handleBrowserStream))
-	api.Post("/tools/retire/stream", httpapi.WithExecutionLimit(limiter, handleRetireStream))
-	api.Post("/tools/osv/stream", httpapi.WithExecutionLimit(limiter, handleOSVStream))
-
-	app.Get("/health", handleHealth)
+	toolapi.Mount(app, api, limiter)
 }

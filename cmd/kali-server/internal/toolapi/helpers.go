@@ -1,4 +1,4 @@
-package main
+package toolapi
 
 import (
 	"github.com/found-cake/kali-mcp-go/internal/tools"

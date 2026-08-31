@@ -1,6 +1,7 @@
-package main
+package toolapi
 
 import (
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/gofiber/fiber/v3"
 )
