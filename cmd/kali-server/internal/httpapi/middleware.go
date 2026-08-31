@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"crypto/rand"
@@ -29,7 +29,9 @@ type callTelemetryRecord struct {
 	HTTPStatus int       `json:"http_status"`
 }
 
-func debugRequestLogMiddleware(print logPrinter) fiber.Handler {
+type LogPrinter func(format string, args ...any)
+
+func DebugRequestLogMiddleware(print LogPrinter) fiber.Handler {
 	if print == nil {
 		print = func(string, ...any) {}
 	}
@@ -42,7 +44,7 @@ func debugRequestLogMiddleware(print logPrinter) fiber.Handler {
 	}
 }
 
-func bearerAuthMiddleware(apiToken string) fiber.Handler {
+func BearerAuthMiddleware(apiToken string) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		authHeader := strings.TrimSpace(c.Get(fiber.HeaderAuthorization))
 		const prefix = "Bearer "
@@ -60,19 +62,19 @@ func bearerAuthMiddleware(apiToken string) fiber.Handler {
 	}
 }
 
-func apiTokenFromContext(c fiber.Ctx) string {
+func APIToken(c fiber.Ctx) string {
 	value, _ := c.Locals(apiTokenLocalKey).(string)
 	return value
 }
 
-func callTelemetryMiddleware(print logPrinter) fiber.Handler {
+func CallTelemetryMiddleware(print LogPrinter) fiber.Handler {
 	if print == nil {
 		print = func(string, ...any) {}
 	}
 	return func(c fiber.Ctx) error {
 		callID, err := randomCallID()
 		if err != nil {
-			return internalServerError(c, "failed to generate call ID")
+			return InternalServerError(c, "failed to generate call ID")
 		}
 		startedAt := time.Now().UTC()
 		c.Locals(callIDLocalKey, callID)
@@ -99,7 +101,7 @@ func randomCallID() (string, error) {
 	return "call_" + hex.EncodeToString(raw), nil
 }
 
-func callIDFromContext(c fiber.Ctx) string {
+func CallID(c fiber.Ctx) string {
 	callID, _ := c.Locals(callIDLocalKey).(string)
 	return callID
 }

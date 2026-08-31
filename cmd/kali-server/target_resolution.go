@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -12,22 +13,22 @@ import (
 )
 
 func handleResolveTarget(c fiber.Ctx) error {
-	request, err := parseRequest(c, validateResolveTargetRequest)
+	request, err := httpapi.ParseRequest(c, validateResolveTargetRequest)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	result, err := tools.ResolveTarget(c.Context(), request)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
-	result.CallID = callIDFromContext(c)
+	result.CallID = httpapi.CallID(c)
 	lifetime, err := targeting.Lifetime(request.ValidForSeconds)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	now := time.Now().UTC()
-	if err := targeting.AttachResolution(apiTokenFromContext(c), result, now.Add(lifetime)); err != nil {
-		return internalServerError(c, err.Error())
+	if err := targeting.AttachResolution(httpapi.APIToken(c), result, now.Add(lifetime)); err != nil {
+		return httpapi.InternalServerError(c, err.Error())
 	}
 	if result.RecommendationBasis == "" {
 		result.RecommendationBasis = "explicit_selection_required"

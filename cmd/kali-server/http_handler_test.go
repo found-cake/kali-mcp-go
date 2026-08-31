@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 func TestHTTPRequestRejectsMalformedBody(t *testing.T) {
 	// Given: the authenticated HTTP tool route and malformed JSON input.
-	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, t.Logf)
+	app := newApp("secret-token", false, httpapi.DefaultMaxConcurrentExecutions, t.Logf)
 	t.Cleanup(func() { _ = app.Shutdown() })
 	request, err := http.NewRequest(http.MethodPost, "/api/tools/http-request", strings.NewReader(`{`))
 	if err != nil {
@@ -63,7 +64,7 @@ func TestHTTPRequestUsesTargetContextAndPreservesResponseByDefault(t *testing.T)
 	if err := targeting.AttachResolution("secret-token", &resolution, now.Add(time.Minute)); err != nil {
 		t.Fatalf("attach target context: %v", err)
 	}
-	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, t.Logf)
+	app := newApp("secret-token", false, httpapi.DefaultMaxConcurrentExecutions, t.Logf)
 	body, err := json.Marshal(dto.HTTPRequest{
 		ScanOptions: dto.ScanOptions{TargetContext: resolution.Candidates[0].TargetContext},
 		Method:      http.MethodPost,

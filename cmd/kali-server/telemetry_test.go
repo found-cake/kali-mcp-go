@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
@@ -16,7 +17,7 @@ func TestToolCallTelemetryCorrelatesJSONResult(t *testing.T) {
 	t.Parallel()
 
 	// Given a server with always-on structured call telemetry.
-	app := newApp("telemetry-token", false, defaultMaxConcurrentExecutions, nil)
+	app := newApp("telemetry-token", false, httpapi.DefaultMaxConcurrentExecutions, nil)
 	request, err := http.NewRequest(http.MethodPost, "/api/command", strings.NewReader(`{"command":"printf telemetry"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
@@ -49,7 +50,7 @@ func TestToolCallTelemetryCorrelatesEverySSEEvent(t *testing.T) {
 	t.Parallel()
 
 	// Given a streaming tool call routed through telemetry middleware.
-	app := newApp("telemetry-token", false, defaultMaxConcurrentExecutions, nil)
+	app := newApp("telemetry-token", false, httpapi.DefaultMaxConcurrentExecutions, nil)
 	request, err := http.NewRequest(http.MethodPost, "/api/command/stream", strings.NewReader(`{"command":"printf 'first\\nsecond\\n'"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
@@ -107,7 +108,7 @@ func TestRegisterRoutesBearerAuthentication(t *testing.T) {
 
 			// Given: a protected tool route and one bearer-token variant.
 			app := fiber.New()
-			registerRoutes(app, "secret-token", newExecutionLimiter(defaultMaxConcurrentExecutions))
+			registerRoutes(app, "secret-token", httpapi.NewExecutionLimiter(httpapi.DefaultMaxConcurrentExecutions))
 			request, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(test.body))
 			if err != nil {
 				t.Fatalf("new request: %v", err)
@@ -150,7 +151,7 @@ func TestNewAppDebugLogging(t *testing.T) {
 
 			// Given: an application with captured logging output.
 			var lines []string
-			app := newApp("secret-token", test.debug, defaultMaxConcurrentExecutions, func(format string, args ...any) {
+			app := newApp("secret-token", test.debug, httpapi.DefaultMaxConcurrentExecutions, func(format string, args ...any) {
 				lines = append(lines, fmt.Sprintf(format, args...))
 			})
 			request, err := http.NewRequest(http.MethodPost, "/api/tools/nmap/stream", strings.NewReader(`{"target":"127.0.0.1"}`))
@@ -170,7 +171,11 @@ func TestNewAppDebugLogging(t *testing.T) {
 			if response.StatusCode != fiber.StatusUnauthorized || len(lines) != test.lineCount {
 				t.Fatalf("unexpected logging result: status=%d lines=%v", response.StatusCode, lines)
 			}
-			var telemetry callTelemetryRecord
+			var telemetry struct {
+				CallID     string `json:"call_id"`
+				Operation  string `json:"operation"`
+				HTTPStatus int    `json:"http_status"`
+			}
 			if err := json.Unmarshal([]byte(lines[0]), &telemetry); err != nil {
 				t.Fatalf("decode telemetry: %v", err)
 			}
@@ -188,7 +193,7 @@ func TestNewAppSetsStreamingTimeouts(t *testing.T) {
 	t.Parallel()
 
 	// Given: a server built with default runtime settings.
-	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, nil)
+	app := newApp("secret-token", false, httpapi.DefaultMaxConcurrentExecutions, nil)
 
 	// When: Fiber exposes its effective timeout configuration.
 	config := app.Config()

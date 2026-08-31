@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/admission"
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
@@ -31,9 +32,9 @@ var healthHTTPClient = &http.Client{
 
 func scanPreparationError(c fiber.Ctx, err error) error {
 	if errors.Is(err, admission.ErrGlobalCapacityExceeded) || errors.Is(err, admission.ErrTargetCapacityExceeded) {
-		return serviceUnavailable(c, err.Error())
+		return httpapi.ServiceUnavailable(c, err.Error())
 	}
-	return badRequest(c, err.Error())
+	return httpapi.BadRequest(c, err.Error())
 }
 
 type scanExecutionPlan struct {
@@ -73,7 +74,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if err != nil {
 		return nil, err
 	}
-	provenance, err := targeting.ResolveProvenance(request, apiTokenFromContext(c), time.Now().UTC())
+	provenance, err := targeting.ResolveProvenance(request, httpapi.APIToken(c), time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +91,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		target = provenance.Selected
 	}
 	release := func() {}
-	if scheduler := schedulerFromContext(c); scheduler != nil {
+	if scheduler := httpapi.Scheduler(c); scheduler != nil {
 		release, err = scheduler.Acquire(target, scanWeight(controlledArgs[0]))
 		if err != nil {
 			return nil, err
@@ -129,11 +130,11 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		}
 	}
 	return &scanExecutionPlan{
-		callID: callIDFromContext(c),
+		callID: httpapi.CallID(c),
 		args:   controlledArgs, options: effective, target: provenance, timeout: timeout,
 		controls: tools.ScanControlApplication(args[0], options, effective),
 		release:  release, healthURL: effective.HealthURL, request: request, context: c.Context(),
-		artifactStore:   artifactStoreFromContext(c),
+		artifactStore:   httpapi.ArtifactStore(c),
 		dryRun:          dryRun,
 		timeoutPlanning: timeoutPlanning,
 	}, nil

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -13,13 +14,13 @@ import (
 )
 
 func handleMetasploit(c fiber.Ctx) error {
-	request, err := parseRequest(c, validateMetasploitRequest)
+	request, err := httpapi.ParseRequest(c, validateMetasploitRequest)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	rcFile, err := executor.WriteTemp("msf", tools.MetasploitScript(request))
 	if err != nil {
-		return internalServerError(c, err.Error())
+		return httpapi.InternalServerError(c, err.Error())
 	}
 	defer os.Remove(rcFile)
 	plan, err := prepareScanExecution(c, request, tools.MetasploitArgs(rcFile))

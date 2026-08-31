@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -81,10 +82,7 @@ func signedHighImpactContext(t *testing.T) string {
 func postHighImpactRequest[T any](t *testing.T, path string, handler fiber.Handler, body T) dto.ToolResult {
 	t.Helper()
 	app := fiber.New()
-	app.Use(func(c fiber.Ctx) error {
-		c.Locals(apiTokenLocalKey, "test-secret")
-		return c.Next()
-	})
+	app.Use(httpapi.BearerAuthMiddleware("test-secret"))
 	app.Post(path, handler)
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -95,6 +93,7 @@ func postHighImpactRequest[T any](t *testing.T, path string, handler fiber.Handl
 		t.Fatalf("create request: %v", err)
 	}
 	request.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	request.Header.Set(fiber.HeaderAuthorization, "Bearer test-secret")
 	response, err := app.Test(request)
 	if err != nil {
 		t.Fatalf("call handler: %v", err)

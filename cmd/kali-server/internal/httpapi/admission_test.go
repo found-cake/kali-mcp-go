@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 
 func TestNewExecutionLimiterUsesExplicitValue(t *testing.T) {
 	// Given: an explicitly configured execution capacity.
-	limiter := newExecutionLimiter(30)
+	limiter := NewExecutionLimiter(30)
 
 	// When: callers acquire every configured slot.
 	for range 30 {
@@ -32,10 +32,10 @@ func TestNewExecutionLimiterUsesExplicitValue(t *testing.T) {
 
 func TestNewExecutionLimiterFallsBackToDefaultForInvalidValue(t *testing.T) {
 	// Given: a nonpositive server configuration.
-	limiter := newExecutionLimiter(0)
+	limiter := NewExecutionLimiter(0)
 
 	// When: callers acquire the documented default number of slots.
-	for range defaultMaxConcurrentExecutions {
+	for range DefaultMaxConcurrentExecutions {
 		if !limiter.TryAcquire() {
 			t.Fatal("default limiter capacity was exhausted early")
 		}
@@ -49,12 +49,12 @@ func TestNewExecutionLimiterFallsBackToDefaultForInvalidValue(t *testing.T) {
 
 func TestWithExecutionLimitRejectsWhenServerIsBusy(t *testing.T) {
 	// Given: one request already occupying the only execution slot.
-	limiter := newExecutionLimiter(1)
+	limiter := NewExecutionLimiter(1)
 	app := fiber.New()
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var startedOnce sync.Once
-	app.Get("/limited", withExecutionLimit(limiter, func(c fiber.Ctx) error {
+	app.Get("/limited", WithExecutionLimit(limiter, func(c fiber.Ctx) error {
 		startedOnce.Do(func() { close(started) })
 		<-release
 		return c.SendStatus(fiber.StatusOK)
@@ -117,23 +117,23 @@ func TestWithExecutionLimitRejectsWhenServerIsBusy(t *testing.T) {
 
 func TestWithExecutionLimitRetainsLeaseForStreamingResponses(t *testing.T) {
 	// Given: one streaming response retaining the only execution slot.
-	limiter := newExecutionLimiter(1)
+	limiter := NewExecutionLimiter(1)
 	app := fiber.New()
 	started := make(chan struct{})
 	streamRelease := make(chan struct{})
 	var startedOnce sync.Once
-	app.Get("/limited-stream", withExecutionLimit(limiter, func(c fiber.Ctx) error {
+	app.Get("/limited-stream", WithExecutionLimit(limiter, func(c fiber.Ctx) error {
 		startedOnce.Do(func() { close(started) })
 		lines := make(chan executor.Line)
 		done := make(chan *executor.Result, 1)
-		release := retainExecutionLease(c)
+		release := RetainExecutionLease(c)
 		go func() {
 			<-streamRelease
 			close(lines)
 			done <- &executor.Result{ReturnCode: 0}
 			close(done)
 		}()
-		return sendToolStreamWithCancel(c, lines, done, nil, release)
+		return SendToolStream(c, lines, done, nil, release)
 	}))
 	firstRespCh := make(chan *http.Response, 1)
 	firstErrCh := make(chan error, 1)
@@ -193,7 +193,7 @@ func TestWithExecutionLimitRetainsLeaseForStreamingResponses(t *testing.T) {
 
 func TestExecutionLimiterReleasePanicsOnOverRelease(t *testing.T) {
 	// Given: an empty execution limiter.
-	limiter := newExecutionLimiter(1)
+	limiter := NewExecutionLimiter(1)
 
 	// When: the adapter releases without a matching acquisition.
 	defer func() {

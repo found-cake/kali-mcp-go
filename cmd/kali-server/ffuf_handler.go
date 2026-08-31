@@ -6,13 +6,13 @@ import (
 )
 
 func handleFFUFStream(c fiber.Ctx) error {
-	request, err := parseRequest(c, validateFFUFRequest)
+	request, err := httpapi.ParseRequest(c, validateFFUFRequest)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	args, err := tools.FFUFArgs(request)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	plan, err := prepareScanExecution(c, request, args)
 	if err != nil {
@@ -21,12 +21,12 @@ func handleFFUFStream(c fiber.Ctx) error {
 	baseline, err := tools.MeasureSPABaseline(c.Context(), request.URL)
 	if err != nil {
 		plan.release()
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	plan.args, err = tools.ApplyFFUFBaseline(plan.args, baseline)
 	if err != nil {
 		plan.release()
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	plan.spaBaseline = &baseline
 	plan.falsePositiveRisk = "high"

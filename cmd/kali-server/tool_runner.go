@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/streaming"
@@ -33,16 +34,16 @@ type toolExecutionSpec[T any] struct {
 }
 
 func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute func(*scanExecutionPlan) error) error {
-	request, err := parseRequest(c, spec.validate)
+	request, err := httpapi.ParseRequest(c, spec.validate)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	args, err := spec.argsFor(request)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	if len(args) == 0 {
-		return internalServerError(c, "internal error: no command generated")
+		return httpapi.InternalServerError(c, "internal error: no command generated")
 	}
 	plan, err := prepareScanExecution(c, request, args)
 	if err != nil {
@@ -63,8 +64,8 @@ func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 		done := make(chan *executor.Result, 1)
 		done <- result
 		close(done)
-		release := retainExecutionLease(c)
-		return sendToolStreamWithCancel(c, lines, done, func() {}, release, plan.release)
+		release := httpapi.RetainExecutionLease(c)
+		return httpapi.SendToolStream(c, lines, done, func() {}, release, plan.release)
 	}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, plan.timeout, plan.args[0], plan.args[1:]...)
@@ -81,8 +82,8 @@ func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 		}
 		plan.annotate(result)
 	})
-	release := retainExecutionLease(c)
-	return sendToolStreamWithCancel(c, lines, done, cancel, release, plan.release)
+	release := httpapi.RetainExecutionLease(c)
+	return httpapi.SendToolStream(c, lines, done, cancel, release, plan.release)
 }
 
 func executeOrPreview(ctx context.Context, plan *scanExecutionPlan) *executor.Result {

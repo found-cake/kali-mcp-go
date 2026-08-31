@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"testing"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
@@ -20,7 +21,7 @@ func TestResolveTargetRouteReportsReachableRuntimeCandidate(t *testing.T) {
 	defer listener.Close()
 	go acceptResolverConnections(listener)
 	port := listener.Addr().(*net.TCPAddr).Port
-	app := newApp("secret-token", false, defaultMaxConcurrentExecutions, t.Logf)
+	app := newApp("secret-token", false, httpapi.DefaultMaxConcurrentExecutions, t.Logf)
 	body, err := json.Marshal(dto.ResolveTargetRequest{
 		Target:                     fmt.Sprintf("127.0.0.1:%d", port),
 		ConnectTimeoutMilliseconds: 100,

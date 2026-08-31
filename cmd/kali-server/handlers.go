@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -12,43 +13,43 @@ import (
 )
 
 func handleCommand(c fiber.Ctx) error {
-	req, err := parseRequest(c, func(r dto.CommandRequest) error {
+	req, err := httpapi.ParseRequest(c, func(r dto.CommandRequest) error {
 		if r.Command == "" {
 			return fmt.Errorf("command is required")
 		}
 		return nil
 	})
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	timeout := commandTimeout(req.Timeout)
 	result := executor.RunShell(c.Context(), timeout, req.Command)
-	result.CallID = callIDFromContext(c)
-	return writeToolResult(c, result, req)
+	result.CallID = httpapi.CallID(c)
+	return httpapi.WriteToolResult(c, result, req)
 }
 
 func handleCommandStream(c fiber.Ctx) error {
-	req, err := parseRequest(c, func(r dto.CommandRequest) error {
+	req, err := httpapi.ParseRequest(c, func(r dto.CommandRequest) error {
 		if r.Command == "" {
 			return fmt.Errorf("command is required")
 		}
 		return nil
 	})
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	timeout := commandTimeout(req.Timeout)
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
 	lines = results.ProtectStream(execCtx, lines, req)
-	callID := callIDFromContext(c)
-	artifacts := artifactStoreFromContext(c)
+	callID := httpapi.CallID(c)
+	artifacts := httpapi.ArtifactStore(c)
 	done = annotateResult(done, func(result *executor.Result) {
 		result.CallID = callID
 		results.Protect(artifacts, result, req)
 	})
-	release := retainExecutionLease(c)
-	return sendToolStreamWithCancel(c, lines, done, cancel, release)
+	release := httpapi.RetainExecutionLease(c)
+	return httpapi.SendToolStream(c, lines, done, cancel, release)
 }
 
 func handleNmapStream(c fiber.Ctx) error {
@@ -92,23 +93,23 @@ func handleHydraStream(c fiber.Ctx) error {
 }
 
 func handleJohn(c fiber.Ctx) error {
-	req, err := parseRequest(c, validateJohnRequest)
+	req, err := httpapi.ParseRequest(c, validateJohnRequest)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	plan, err := tools.PrepareJohn(req)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	defer plan.Cleanup()
 	args := plan.Args()
 	result := executor.RunExec(c.Context(), commandTimeout(req.Timeout), args[0], args[1:]...)
-	result.CallID = callIDFromContext(c)
+	result.CallID = httpapi.CallID(c)
 	if req.MaskPlaintext {
 		result.Stdout = tools.RedactJohnOutput(result.Stdout)
 		result.Stderr = tools.RedactJohnOutput(result.Stderr)
 	}
-	return writeToolResult(c, result, req)
+	return httpapi.WriteToolResult(c, result, req)
 }
 
 func handleFeroxbusterStream(c fiber.Ctx) error {
@@ -141,9 +142,9 @@ func handleDalfoxStream(c fiber.Ctx) error {
 }
 
 func handleRetireStream(c fiber.Ctx) error {
-	req, err := parseRequest(c, validateRetireRequest)
+	req, err := httpapi.ParseRequest(c, validateRetireRequest)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	scanPlan, err := prepareScanExecution(c, req, []string{"retire"})
 	if err != nil {
@@ -152,7 +153,7 @@ func handleRetireStream(c fiber.Ctx) error {
 	retirePlan, err := tools.PrepareRetire(c.Context(), req)
 	if err != nil {
 		scanPlan.release()
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	scanPlan.args = retirePlan.Args()
 	execCtx, cancel := context.WithCancel(c.Context())
@@ -161,8 +162,8 @@ func handleRetireStream(c fiber.Ctx) error {
 	done = annotateResult(done, func(result *executor.Result) {
 		scanPlan.annotate(result)
 	})
-	release := retainExecutionLease(c)
-	return sendToolStreamWithCancel(c, lines, done, cancel, release, scanPlan.release, retirePlan.Cleanup)
+	release := httpapi.RetainExecutionLease(c)
+	return httpapi.SendToolStream(c, lines, done, cancel, release, scanPlan.release, retirePlan.Cleanup)
 }
 
 func handleOSVStream(c fiber.Ctx) error {
@@ -185,7 +186,7 @@ func annotateResult(done <-chan *executor.Result, annotate func(*executor.Result
 
 func handleScanCapabilities(c fiber.Ctx) error {
 	result := tools.ScanCapabilities(executor.Which)
-	result.CallID = callIDFromContext(c)
+	result.CallID = httpapi.CallID(c)
 	return c.JSON(result)
 }
 
@@ -200,7 +201,7 @@ func handleHealth(c fiber.Ctx) error {
 	}
 
 	return c.JSON(dto.HealthResult{
-		CallID:                     callIDFromContext(c),
+		CallID:                     httpapi.CallID(c),
 		Status:                     healthStatus,
 		Message:                    message,
 		ToolsStatus:                status,

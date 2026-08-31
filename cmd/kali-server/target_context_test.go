@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -18,7 +19,7 @@ func TestPrepareScanExecutionRequiresVerifiedContextForCredentialAttack(t *testi
 			Target: "192.0.2.10", Service: "ssh", Username: "root", Password: "test",
 		}, []string{"hydra", "192.0.2.10", "ssh"})
 		if err != nil {
-			return badRequest(c, err.Error())
+			return httpapi.BadRequest(c, err.Error())
 		}
 		defer plan.release()
 		return c.SendStatus(fiber.StatusNoContent)

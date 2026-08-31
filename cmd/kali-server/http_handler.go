@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/httpexec"
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -10,19 +11,19 @@ import (
 )
 
 func handleHTTPRequest(c fiber.Ctx) error {
-	request, err := parseRequest(c, httpexec.Validate)
+	request, err := httpapi.ParseRequest(c, httpexec.Validate)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	if err := tools.ValidateScanProfile("http-request", request.ScanOptions); err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
-	provenance, err := targeting.ResolveProvenance(request, apiTokenFromContext(c), time.Now().UTC())
+	provenance, err := targeting.ResolveProvenance(request, httpapi.APIToken(c), time.Now().UTC())
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	release := func() {}
-	if scheduler := schedulerFromContext(c); scheduler != nil {
+	if scheduler := httpapi.Scheduler(c); scheduler != nil {
 		release, err = scheduler.Acquire(request.URL, 1)
 		if err != nil {
 			return scanPreparationError(c, err)
@@ -30,7 +31,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	}
 	defer release()
 	result := httpexec.Execute(c.Context(), httpexec.Input{
-		CallID: callIDFromContext(c), Request: request, Target: provenance,
+		CallID: httpapi.CallID(c), Request: request, Target: provenance,
 	})
-	return writeToolResult(c, result, request)
+	return httpapi.WriteToolResult(c, result, request)
 }

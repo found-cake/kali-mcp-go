@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"sync"
@@ -7,7 +7,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-const defaultMaxConcurrentExecutions = 10
+const DefaultMaxConcurrentExecutions = 10
 
 type executionLease struct {
 	release  func()
@@ -16,21 +16,21 @@ type executionLease struct {
 
 const executionLeaseKey = "execution-lease"
 
-func newExecutionLimiter(maxConcurrent int) *admission.Limiter {
+func NewExecutionLimiter(maxConcurrent int) *admission.Limiter {
 	if maxConcurrent <= 0 {
-		maxConcurrent = defaultMaxConcurrentExecutions
+		maxConcurrent = DefaultMaxConcurrentExecutions
 	}
 	return admission.NewLimiter(maxConcurrent)
 }
 
-func withExecutionLimit(limiter *admission.Limiter, next fiber.Handler) fiber.Handler {
+func WithExecutionLimit(limiter *admission.Limiter, next fiber.Handler) fiber.Handler {
 	if limiter == nil {
 		return next
 	}
 
 	return func(c fiber.Ctx) error {
 		if !limiter.TryAcquire() {
-			return serviceUnavailable(c, "server busy: too many concurrent executions")
+			return ServiceUnavailable(c, "server busy: too many concurrent executions")
 		}
 
 		lease := &executionLease{release: limiter.Release}
@@ -45,7 +45,7 @@ func withExecutionLimit(limiter *admission.Limiter, next fiber.Handler) fiber.Ha
 	}
 }
 
-func retainExecutionLease(c fiber.Ctx) func() {
+func RetainExecutionLease(c fiber.Ctx) func() {
 	lease, ok := c.Locals(executionLeaseKey).(*executionLease)
 	if !ok || lease == nil || lease.retained {
 		return nil

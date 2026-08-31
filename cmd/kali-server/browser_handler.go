@@ -3,18 +3,19 @@ package main
 import (
 	"os"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/gofiber/fiber/v3"
 )
 
 func handleBrowserStream(c fiber.Ctx) error {
-	request, err := parseRequest(c, validateBrowserRequest)
+	request, err := httpapi.ParseRequest(c, validateBrowserRequest)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	args, err := tools.BrowserArgs(request)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	plan, err := prepareScanExecution(c, request, args)
 	if err != nil {
@@ -24,7 +25,7 @@ func handleBrowserStream(c fiber.Ctx) error {
 		path, pathErr := newBrowserScreenshotPath()
 		if pathErr != nil {
 			plan.release()
-			return internalServerError(c, pathErr.Error())
+			return httpapi.InternalServerError(c, pathErr.Error())
 		}
 		plan.args = append(plan.args, "--screenshot-path", path)
 		plan.browserScreenshotPath = path

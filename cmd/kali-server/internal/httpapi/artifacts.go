@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"errors"
@@ -12,20 +12,20 @@ import (
 
 const artifactStoreLocalKey = "artifact-store"
 
-func artifactStoreMiddleware(store *artifactstore.Store) fiber.Handler {
+func ArtifactStoreMiddleware(store *artifactstore.Store) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		c.Locals(artifactStoreLocalKey, store)
 		return c.Next()
 	}
 }
 
-func artifactStoreFromContext(c fiber.Ctx) *artifactstore.Store {
+func ArtifactStore(c fiber.Ctx) *artifactstore.Store {
 	store, _ := c.Locals(artifactStoreLocalKey).(*artifactstore.Store)
 	return store
 }
 
-func handleGetArtifact(c fiber.Ctx) error {
-	reference, payload, err := artifactStoreFromContext(c).Read(c.Params("id"), time.Now().UTC())
+func HandleGetArtifact(c fiber.Ctx) error {
+	reference, payload, err := ArtifactStore(c).Read(c.Params("id"), time.Now().UTC())
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": artifactstore.ErrNotFound.Error()})
 	}
@@ -33,16 +33,16 @@ func handleGetArtifact(c fiber.Ctx) error {
 	return c.Send(payload)
 }
 
-func handleGetArtifactPage(c fiber.Ctx) error {
+func HandleGetArtifactPage(c fiber.Ctx) error {
 	offset, err := strconv.ParseInt(c.Query("offset", "0"), 10, 64)
 	if err != nil {
-		return badRequest(c, "offset must be an integer")
+		return BadRequest(c, "offset must be an integer")
 	}
 	limit, err := strconv.Atoi(c.Query("limit", "0"))
 	if err != nil {
-		return badRequest(c, "limit must be an integer")
+		return BadRequest(c, "limit must be an integer")
 	}
-	page, err := artifactStoreFromContext(c).ReadPage(dto.ArtifactReadRequest{
+	page, err := ArtifactStore(c).ReadPage(dto.ArtifactReadRequest{
 		ArtifactID: c.Params("id"),
 		Offset:     offset,
 		Limit:      limit,
@@ -51,8 +51,8 @@ func handleGetArtifactPage(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": artifactstore.ErrNotFound.Error()})
 	}
 	if err != nil {
-		return badRequest(c, artifactstore.ErrInvalidPage.Error())
+		return BadRequest(c, artifactstore.ErrInvalidPage.Error())
 	}
-	page.CallID = callIDFromContext(c)
+	page.CallID = CallID(c)
 	return c.JSON(page)
 }

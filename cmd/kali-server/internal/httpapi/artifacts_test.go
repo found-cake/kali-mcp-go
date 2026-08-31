@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"encoding/json"
@@ -163,10 +163,10 @@ func newArtifactHandlerTestApp(t *testing.T) (*fiber.App, *artifactstore.Store) 
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	app := fiber.New()
-	app.Use(callTelemetryMiddleware(t.Logf))
-	app.Use(artifactStoreMiddleware(store))
-	api := app.Group("/api", bearerAuthMiddleware("test-token"))
-	api.Get("/artifacts/:id", handleGetArtifact)
-	api.Get("/artifacts/:id/page", handleGetArtifactPage)
+	app.Use(CallTelemetryMiddleware(t.Logf))
+	app.Use(ArtifactStoreMiddleware(store))
+	api := app.Group("/api", BearerAuthMiddleware("test-token"))
+	api.Get("/artifacts/:id", HandleGetArtifact)
+	api.Get("/artifacts/:id/page", HandleGetArtifactPage)
 	return app, store
 }

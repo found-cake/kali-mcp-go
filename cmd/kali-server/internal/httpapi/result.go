@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"github.com/found-cake/kali-mcp-go/internal/executor"
@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func writeToolResult(c fiber.Ctx, result *executor.Result, request any) error {
-	results.Protect(artifactStoreFromContext(c), result, request)
+func WriteToolResult(c fiber.Ctx, result *executor.Result, request any) error {
+	results.Protect(ArtifactStore(c), result, request)
 	return c.JSON(results.ToToolResult(result))
 }

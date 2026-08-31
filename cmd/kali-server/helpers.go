@@ -1,12 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"time"
-
-	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
-	"github.com/gofiber/fiber/v3"
 )
 
 func toolStatus(lookup func(string) bool) map[string]bool {
@@ -36,40 +31,4 @@ func allEssentialToolsAvailable(status map[string]bool) bool {
 		}
 	}
 	return true
-}
-
-func badRequest(c fiber.Ctx, msg string) error {
-	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": msg})
-}
-
-func internalServerError(c fiber.Ctx, msg string) error {
-	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": msg})
-}
-
-func serviceUnavailable(c fiber.Ctx, msg string) error {
-	return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": msg})
-}
-
-func bindJSON(c fiber.Ctx, dst any) error {
-	return c.Bind().Body(dst)
-}
-
-func parseRequest[T any](c fiber.Ctx, validate func(T) error) (T, error) {
-	var req T
-	bindErr := bindJSON(c, &req)
-	if bindErr != nil {
-		return req, fmt.Errorf("invalid request body")
-	}
-	if err := tools.ValidateRequestSecrets(req); err != nil {
-		return req, err
-	}
-	resolved, err := targeting.ApplyContext(apiTokenFromContext(c), req, time.Now().UTC())
-	if err != nil {
-		return req, err
-	}
-	req = resolved
-	if err := validate(req); err != nil {
-		return req, err
-	}
-	return req, nil
 }

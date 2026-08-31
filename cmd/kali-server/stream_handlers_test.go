@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -94,7 +95,7 @@ func TestSendToolStreamStreamsStdoutAndStderrBeforeDone(t *testing.T) {
 	close(done)
 	app := fiber.New()
 	app.Get("/stream", func(c fiber.Ctx) error {
-		return sendToolStreamWithCancel(c, lines, done, nil)
+		return httpapi.SendToolStream(c, lines, done, nil)
 	})
 
 	// When: the channels are adapted into an HTTP stream.

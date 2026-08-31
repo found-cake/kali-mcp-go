@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -11,13 +12,13 @@ import (
 )
 
 func handleSQLMapStream(c fiber.Ctx) error {
-	req, err := parseRequest(c, validateSQLMapRequest)
+	req, err := httpapi.ParseRequest(c, validateSQLMapRequest)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	sqlmapPlan, err := tools.PrepareSQLMap(req)
 	if err != nil {
-		return badRequest(c, err.Error())
+		return httpapi.BadRequest(c, err.Error())
 	}
 	args := sqlmapPlan.Args()
 	scanPlan, err := prepareScanExecution(c, req, args)
@@ -36,6 +37,6 @@ func handleSQLMapStream(c fiber.Ctx) error {
 		result.SQLMapAnalysis = &analysis
 		scanPlan.annotate(result)
 	})
-	release := retainExecutionLease(c)
-	return sendToolStreamWithCancel(c, lines, done, cancel, release, scanPlan.release, sqlmapPlan.Cleanup)
+	release := httpapi.RetainExecutionLease(c)
+	return httpapi.SendToolStream(c, lines, done, cancel, release, scanPlan.release, sqlmapPlan.Cleanup)
 }
