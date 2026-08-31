@@ -8,6 +8,7 @@ import (
 
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
@@ -31,7 +32,7 @@ func attachResultArtifact(store *artifactstore.Store, result *executor.Result, s
 		return
 	}
 	rebuildEvidenceManifest(result)
-	payload, err := json.MarshalIndent(toAPIResult(result), "", "  ")
+	payload, err := json.MarshalIndent(results.ToToolResult(result), "", "  ")
 	if err != nil {
 		result.Warnings = append(result.Warnings, "result artifact unavailable: encode artifact: "+err.Error())
 		return

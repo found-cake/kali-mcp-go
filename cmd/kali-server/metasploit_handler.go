@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
@@ -28,7 +29,7 @@ func handleMetasploit(c fiber.Ctx) error {
 	defer plan.release()
 	result := executeOrPreview(c.Context(), plan)
 	plan.annotate(result)
-	return c.JSON(toAPIResult(result))
+	return c.JSON(results.ToToolResult(result))
 }
 
 func validateMetasploitRequest(request dto.MetasploitRequest) error {

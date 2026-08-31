@@ -197,6 +197,5 @@ func sendHTTPRequestResult(c fiber.Ctx, result *executor.Result, request dto.HTT
 		}
 	}
 	result.FinalizeProgress()
-	protectResult(artifactStoreFromContext(c), result, request)
-	return c.JSON(toAPIResult(result))
+	return writeToolResult(c, result, request)
 }

@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
@@ -14,7 +15,7 @@ func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]stri
 		defer plan.release()
 		result := executeOrPreview(c.Context(), plan)
 		plan.annotate(result)
-		return c.JSON(toAPIResult(result))
+		return c.JSON(results.ToToolResult(result))
 	})
 }
 

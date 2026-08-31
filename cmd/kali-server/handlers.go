@@ -23,8 +23,7 @@ func handleCommand(c fiber.Ctx) error {
 	timeout := commandTimeout(req.Timeout)
 	result := executor.RunShell(c.Context(), timeout, req.Command)
 	result.CallID = callIDFromContext(c)
-	protectResult(artifactStoreFromContext(c), result, req)
-	return c.JSON(toAPIResult(result))
+	return writeToolResult(c, result, req)
 }
 
 func handleCommandStream(c fiber.Ctx) error {
@@ -108,8 +107,7 @@ func handleJohn(c fiber.Ctx) error {
 		result.Stdout = tools.RedactJohnOutput(result.Stdout)
 		result.Stderr = tools.RedactJohnOutput(result.Stderr)
 	}
-	protectResult(artifactStoreFromContext(c), result, req)
-	return c.JSON(toAPIResult(result))
+	return writeToolResult(c, result, req)
 }
 
 func handleFeroxbusterStream(c fiber.Ctx) error {
