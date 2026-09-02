@@ -107,11 +107,12 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	startedAt := time.Now().UTC()
 	progress := newOutputProgress()
+	tool := commandTool(cmdSpec.name, cmdSpec.args)
 	result := &Result{
 		ReturnCode:   -1,
 		StartedAt:    startedAt,
-		Tool:         cmdSpec.name,
-		ToolVersion:  toolVersion(ctx, cmdSpec.name),
+		Tool:         tool,
+		ToolVersion:  toolVersion(ctx, tool),
 		ArgvRedacted: redactArgs(cmdSpec.name, cmdSpec.args),
 		Timeout:      timeout,
 	}

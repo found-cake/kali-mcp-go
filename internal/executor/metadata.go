@@ -20,9 +20,8 @@ func toolVersion(ctx context.Context, name string) string {
 	defer cancel()
 	output, err := exec.CommandContext(versionCtx, name, versionArguments(name)...).CombinedOutput()
 	version := "unknown"
-	trimmed := strings.TrimSpace(string(output))
-	if err == nil && trimmed != "" {
-		version, _, _ = strings.Cut(trimmed, "\n")
+	if err == nil {
+		version = versionLine(name, string(output))
 	}
 	versionCache.Store(name, version)
 	return version
@@ -34,13 +33,55 @@ func versionArguments(name string) []string {
 		return []string{"-V"}
 	case "nuclei":
 		return []string{"-version"}
-	case "gobuster":
-		return []string{"version"}
+	case "enum4linux":
+		return []string{"-h"}
 	case "nikto":
 		return []string{"-Version"}
+	case "john":
+		return []string{"--list=build-info"}
 	default:
 		return []string{"--version"}
 	}
+}
+
+func commandTool(name string, args []string) string {
+	if name != "env" {
+		return name
+	}
+	for _, arg := range args {
+		if arg == "john" {
+			return arg
+		}
+	}
+	return name
+}
+
+func versionLine(name, output string) string {
+	fallback := "unknown"
+	for line := range strings.SplitSeq(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if fallback == "unknown" {
+			fallback = line
+		}
+		switch name {
+		case "john":
+			if strings.HasPrefix(line, "Version:") {
+				return line
+			}
+		case "tshark":
+			if strings.HasPrefix(line, "TShark (Wireshark)") {
+				return line
+			}
+		case "wpscan":
+			if strings.HasPrefix(line, "Current Version:") {
+				return line
+			}
+		}
+	}
+	return fallback
 }
 
 func redactArgs(name string, args []string) []string {
