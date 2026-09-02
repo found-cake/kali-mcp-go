@@ -292,6 +292,30 @@ docker run --rm -i \
 
 Use `/workspace/...` in tool requests. Add the same host mapping, mount, or network options when creating a persistent container.
 
+#### Chromium sandbox
+
+`browser_check` always launches Chromium as the dedicated `kali-browser` user with the browser sandbox enabled. Docker must therefore allow Chromium's user-namespace syscalls. The repository includes Playwright's Docker seccomp profile as `chromium-seccomp.json`.
+
+Add the profile and shared IPC options to the initial `docker run` command when browser verification is needed:
+
+```bash
+docker run --pull=always --rm -i \
+  --init \
+  --ipc=host \
+  --security-opt "seccomp=$PWD/chromium-seccomp.json" \
+  ghcr.io/found-cake/kali-mcp-go:latest \
+  --timeout 3600
+```
+
+If you use the published image without cloning the repository, download the matching profile first:
+
+```bash
+curl -fsSLo chromium-seccomp.json \
+  https://raw.githubusercontent.com/found-cake/kali-mcp-go/master/chromium-seccomp.json
+```
+
+Use an absolute profile path in JSON/TOML MCP host configurations because shell variables such as `$PWD` are not expanded there. Without the namespace-enabled profile, `browser_check` fails closed instead of disabling the Chromium sandbox. Other tools remain available.
+
 #### Nmap capabilities
 
 TCP connect scans such as `-sT -Pn` work with Docker's default capabilities. Add `--cap-add NET_RAW --cap-add NET_ADMIN` only when a scan actually needs raw sockets. If Nmap cannot start, first check its binary permissions and file capabilities, mount options, and seccomp/AppArmor policy.
@@ -325,7 +349,9 @@ For long scans, the MCP host timeout must be at least as large as `mcp-client --
 |---|---|---|
 | `KALI_MCP_API_TOKEN` | both | Bearer token for API authentication; required for separate processes, optional in Docker mode because the entrypoint generates one when omitted |
 | `KALI_MCP_DIR_WORDLIST` | kali-server | Override default dir wordlist (default: `/usr/share/wordlists/dirb/common.txt`) |
+| `KALI_MCP_SMALL_DIR_WORDLIST` | kali-server | Override the selectable small dir wordlist (default: `/usr/share/wordlists/dirb/small.txt`) |
 | `KALI_MCP_JOHN_WORDLIST` | kali-server | Override default John wordlist (default: `/usr/share/wordlists/rockyou.txt`) |
+| `KALI_MCP_NUCLEI_TEMPLATES` | kali-server | Nuclei template directory checked by `server_health` (Docker default: `/root/.local/nuclei-templates`) |
 
 > `ReadTimeout` is enforced for incoming request bodies, while streaming responses remain unrestricted by `WriteTimeout`.
 
@@ -420,7 +446,7 @@ Tool process failures and timeouts set MCP `isError`; a successful scan with no 
 
 Every HTTP call also emits one JSON telemetry record containing its `call_id`, MCP operation, path, start/end time, duration, and HTTP status. Target and credential values remain in the protected structured result rather than server logs.
 
-`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the retained sizes. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
+`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the retained sizes. HTTP response metadata, SQLMap differential analysis, and JWT structural analysis are also appended as one compact JSON summary for MCP hosts that do not surface structured content. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
 
 Progress checkpoints describe already observed output but are not server-side jobs. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without shared MCP session memory.
 ### Explicit target resolution
@@ -431,7 +457,7 @@ For a loopback target, call `resolve_target`, choose one returned candidate, and
 
 ### Safety profiles and budgets
 
-Dedicated scan requests accept a `profile` plus optional `max_requests`, `rate_limit`, `concurrency`, `health_url`, and `max_5xx_responses` controls. Available profiles are:
+Dedicated scan requests accept a `profile` plus optional `max_requests`, `rate_limit`, `concurrency`, `health_url`, and `max_5xx_responses` controls. `max_requests` is an estimated request-count budget used with `rate_limit` to derive an outer timeout; it is not an exact request counter. Available profiles are:
 
 Call `get_scan_capabilities` before composing a scan when profile compatibility or a wordlist path is uncertain. Its response uses MCP-facing tool names, reports the effective environment-configured defaults, and marks missing wordlist files unavailable. An explicitly supplied missing wordlist remains an error and is never silently replaced.
 
@@ -443,7 +469,7 @@ Call `get_scan_capabilities` before composing a scan when profile compatibility 
 | `browser-xss-confirm` | Browser-backed confirmation of a specific XSS candidate |
 | `explicit-custom` | Explicit caller-supplied controls within hard server limits |
 
-The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate, concurrency, and request-limit flags; the outer timeout also shrinks to the request/rate budget. When `health_url` is present, the server probes it before and after the run. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Nuclei DoS, fuzz, and interactsh selectors remain blocked unless `allow_unsafe` is explicitly enabled.
+The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate and concurrency flags, while the outer timeout shrinks to the estimated request/rate budget. `execution.timeout_planning.max_requests_hard_limit` remains `false` unless a tool can expose an authoritative request counter. When `health_url` is present, the server probes it before and after the run. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Nuclei DoS, fuzz, and interactsh selectors remain blocked unless `allow_unsafe` is explicitly enabled.
 
 ### Credential management
 
@@ -463,7 +489,7 @@ Use `http_request` instead of `execute_command` with curl for one-off validation
 
 ### Scan load, SPA baselines, and artifacts
 
-Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. Before FFUF starts, the server samples random missing paths and compares status, length, and normalized body hashes. A stable successful fallback is excluded by size, and every result includes the measured baseline plus `false_positive_risk`. An unstable fallback remains visible with a warning.
+Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. FFUF supports `request_timeout` for each HTTP request and `filter_status_codes` for explicit response filtering; these are separate from the outer scan `timeout`. `get_scan_capabilities` exposes both the common and small directory wordlists so the caller can select scan breadth explicitly. Before FFUF, Gobuster directory mode, or Feroxbuster starts, the server samples random missing paths and compares status, length, and normalized body hashes. A stable successful fallback is excluded by size, and every result includes the measured baseline plus `false_positive_risk`. An unstable fallback remains visible with a warning. Nuclei templates are installed when the Docker image is built, and `server_health` reports Nuclei unavailable if their checksum is missing without downloading anything. Nuclei preserves explicit template selection: omitting both `tags` and `templates` evaluates all locally installed safe templates and adds a scope warning instead of silently choosing a subset.
 
 John accepts either `hash_file` or an inline `hash`. Inline hashes and John state live under a temporary HOME that is deleted after the run. Set `mask_plaintext` to redact recovered plaintext from returned output. JWT Tool likewise starts from a clean temporary HOME seeded with its packaged configuration, then removes that workspace after each call.
 
