@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -36,9 +37,6 @@ type baselineSample struct {
 }
 
 func MeasureSPABaseline(ctx context.Context, target string) (dto.SPABaseline, error) {
-	if !strings.Contains(target, "FUZZ") {
-		return dto.SPABaseline{}, fmt.Errorf("FFUF target must contain FUZZ")
-	}
 	samples := make([]baselineSample, 0, spaBaselineSamples)
 	for range spaBaselineSamples {
 		randomBytes := make([]byte, 8)
@@ -46,7 +44,11 @@ func MeasureSPABaseline(ctx context.Context, target string) (dto.SPABaseline, er
 			return dto.SPABaseline{}, fmt.Errorf("generate baseline path: %w", err)
 		}
 		missingPath := ".kali-mcp-missing-" + hex.EncodeToString(randomBytes)
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.ReplaceAll(target, "FUZZ", missingPath), nil)
+		baselineURL, err := missingRouteURL(target, missingPath)
+		if err != nil {
+			return dto.SPABaseline{}, err
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, baselineURL, nil)
 		if err != nil {
 			return dto.SPABaseline{}, fmt.Errorf("create baseline request: %w", err)
 		}
@@ -84,6 +86,22 @@ func MeasureSPABaseline(ctx context.Context, target string) (dto.SPABaseline, er
 	}, nil
 }
 
+func missingRouteURL(target, missingPath string) (string, error) {
+	if strings.Contains(target, "FUZZ") {
+		return strings.ReplaceAll(target, "FUZZ", missingPath), nil
+	}
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return "", fmt.Errorf("parse SPA baseline target: %w", err)
+	}
+	if parsed.Host == "" || parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("SPA baseline target must be an absolute HTTP(S) URL")
+	}
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/") + "/" + missingPath
+	parsed.RawPath = ""
+	return parsed.String(), nil
+}
+
 func ApplyFFUFBaseline(args []string, baseline dto.SPABaseline) ([]string, error) {
 	if len(args) == 0 || args[0] != "ffuf" {
 		return nil, fmt.Errorf("FFUF command is required")
@@ -93,6 +111,28 @@ func ApplyFFUFBaseline(args []string, baseline dto.SPABaseline) ([]string, error
 		return result, nil
 	}
 	return append(result, "-fs", strconv.Itoa(baseline.ContentLength)), nil
+}
+
+func ApplyGobusterBaseline(args []string, baseline dto.SPABaseline) ([]string, error) {
+	if len(args) == 0 || args[0] != "gobuster" {
+		return nil, fmt.Errorf("Gobuster command is required")
+	}
+	result := append([]string(nil), args...)
+	if !baseline.Stable || baseline.ContentLength <= 0 || containsArg(result, "--exclude-length") {
+		return result, nil
+	}
+	return append(result, "--exclude-length", strconv.Itoa(baseline.ContentLength)), nil
+}
+
+func ApplyFeroxbusterBaseline(args []string, baseline dto.SPABaseline) ([]string, error) {
+	if len(args) == 0 || args[0] != "feroxbuster" {
+		return nil, fmt.Errorf("Feroxbuster command is required")
+	}
+	result := append([]string(nil), args...)
+	if !baseline.Stable || baseline.ContentLength <= 0 || containsArg(result, "--filter-size") {
+		return result, nil
+	}
+	return append(result, "--filter-size", strconv.Itoa(baseline.ContentLength)), nil
 }
 
 func containsArg(args []string, target string) bool {

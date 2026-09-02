@@ -30,7 +30,7 @@ func runToolStream[T dto.TimeoutRequest](c fiber.Ctx, validate func(T) error, ar
 type toolExecutionSpec[T any] struct {
 	validate func(T) error
 	argsFor  func(T) ([]string, error)
-	decorate func(T, *scanExecutionPlan)
+	decorate func(T, *scanExecutionPlan) error
 }
 
 func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute func(*scanExecutionPlan) error) error {
@@ -50,7 +50,10 @@ func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute fun
 		return scanPreparationError(c, err)
 	}
 	if spec.decorate != nil {
-		spec.decorate(request, plan)
+		if err := spec.decorate(request, plan); err != nil {
+			plan.release()
+			return httpapi.BadRequest(c, err.Error())
+		}
 	}
 	return execute(plan)
 }

@@ -57,11 +57,18 @@ func handleNmapStream(c fiber.Ctx) error {
 }
 
 func handleGobuster(c fiber.Ctx) error {
-	return runTool(c, validateGobusterRequest, tools.GobusterArgs)
+	return withPreparedTool(c, gobusterExecutionSpec(), func(plan *scanExecutionPlan) error {
+		defer plan.release()
+		result := executeOrPreview(c.Context(), plan)
+		plan.annotate(result)
+		return c.JSON(results.ToToolResult(result))
+	})
 }
 
 func handleGobusterStream(c fiber.Ctx) error {
-	return runToolStream(c, validateGobusterRequest, tools.GobusterArgs)
+	return withPreparedTool(c, gobusterExecutionSpec(), func(plan *scanExecutionPlan) error {
+		return executeStreamPlan(c, plan)
+	})
 }
 
 func handleDirbStream(c fiber.Ctx) error {
@@ -112,10 +119,6 @@ func handleJohn(c fiber.Ctx) error {
 	return httpapi.WriteToolResult(c, result, req)
 }
 
-func handleFeroxbusterStream(c fiber.Ctx) error {
-	return runToolStream(c, validateFeroxbusterRequest, tools.FeroxbusterArgs)
-}
-
 func handleNucleiStream(c fiber.Ctx) error {
 	return runToolStream(c, validateNucleiRequest, tools.NucleiArgs)
 }
@@ -128,9 +131,10 @@ func handleJWTStream(c fiber.Ctx) error {
 	return withPreparedTool(c, toolExecutionSpec[dto.JWTRequest]{
 		validate: validateJWTRequest,
 		argsFor:  tools.JWTToolArgs,
-		decorate: func(request dto.JWTRequest, plan *scanExecutionPlan) {
+		decorate: func(request dto.JWTRequest, plan *scanExecutionPlan) error {
 			analysis := tools.AnalyzeJWTStructure(request.Token)
 			plan.jwtAnalysis = &analysis
+			return nil
 		},
 	}, func(plan *scanExecutionPlan) error {
 		return executeStreamPlan(c, plan)
