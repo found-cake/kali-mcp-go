@@ -2,6 +2,7 @@ package dto
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -57,6 +58,42 @@ func TestToolResultFormat_exposes_evidence_artifact_identifiers(t *testing.T) {
 		if !strings.Contains(formatted, expected) {
 			t.Fatalf("evidence identifier %q missing from %q", expected, formatted)
 		}
+	}
+}
+
+func TestToolResultFormatAppendsStructuredAnalysisSummary(t *testing.T) {
+	// Given: one result carrying existing HTTP, SQLMap, and JWT metadata.
+	result := ToolResult{
+		ExecutionStatus:      ExecutionSucceeded,
+		FindingStatus:        FindingsInconclusive,
+		ClassificationReason: "sqlmap_manual_verification_recommended",
+		Stdout:               "raw output",
+		HTTPResponse: &HTTPResponseMetadata{
+			StatusCode: 200, FinalURL: "https://example.com/api", BodyBytes: 9000,
+			Summary: &HTTPBodySummary{BodySHA256: "digest", JSONKeys: []string{"token", "user"}},
+		},
+		SQLMapAnalysis: &SQLMapAnalysis{ManualVerificationRecommended: true, ManualVerificationReasons: []string{"server_error_responses_observed"}},
+		JWTAnalysis:    &JWTAnalysisMetadata{ParseStatus: JWTParsed, Algorithm: "RS256", ClaimNames: []string{"sub"}},
+	}
+
+	// When: the MCP-compatible text content is rendered.
+	formatted := result.Format()
+	lastLine := formatted[strings.LastIndex(formatted, "\n")+1:]
+	var summary inlineResultSummary
+	err := json.Unmarshal([]byte(lastLine), &summary)
+
+	// Then: the existing structured facts remain independently machine-readable.
+	if err != nil {
+		t.Fatalf("decode inline summary: %v\n%s", err, formatted)
+	}
+	if summary.HTTPResponse == nil || summary.HTTPResponse.StatusCode != 200 || !slices.Equal(summary.HTTPResponse.JSONKeys, []string{"token", "user"}) {
+		t.Fatalf("missing HTTP summary: %+v", summary.HTTPResponse)
+	}
+	if summary.SQLMapAnalysis == nil || !summary.SQLMapAnalysis.ManualVerificationRecommended {
+		t.Fatalf("missing SQLMap recommendation: %+v", summary.SQLMapAnalysis)
+	}
+	if summary.JWTStructure == nil || summary.JWTStructure.Algorithm != "RS256" || summary.Assessment.FindingStatus != FindingsInconclusive {
+		t.Fatalf("missing JWT or assessment summary: %+v", summary)
 	}
 }
 

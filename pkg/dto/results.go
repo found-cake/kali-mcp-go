@@ -1,9 +1,7 @@
 package dto
 
 import (
-	"fmt"
 	"net/http"
-	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -231,39 +229,6 @@ func (r *ToolResult) Finalize() {
 	if !r.Success && !r.PartialResults {
 		r.PartialResults = r.Stdout != "" || r.HTTPRequests != nil || r.Progress != nil && r.Progress.ObservedOutputItems > 0
 	}
-}
-
-func (r *ToolResult) Format() string {
-	var sb strings.Builder
-	if r.Stdout != "" {
-		sb.WriteString(r.Stdout)
-	}
-	if r.Stderr != "" {
-		if sb.Len() > 0 {
-			sb.WriteString("\n[stderr]\n")
-		}
-		sb.WriteString(r.Stderr)
-	}
-	if r.TimedOut {
-		if r.PartialResults || r.Stdout != "" || r.Stderr != "" {
-			sb.WriteString("\n\n[WARNING: timed out — partial results above]")
-		} else {
-			sb.WriteString("[WARNING: timed out with no output]")
-		}
-	}
-	if r.OutputTruncated {
-		sb.WriteString("\n\n[output truncated — read the result artifact for full retained output]")
-	}
-	if r.Evidence != nil && len(r.Evidence.Artifacts) > 0 {
-		fmt.Fprintf(&sb, "\n\n[evidence group: %s]", r.Evidence.GroupID)
-		for _, artifact := range r.Evidence.Artifacts {
-			fmt.Fprintf(&sb, "\n- %s (%s): %s", artifact.Relation, artifact.Kind, artifact.ID)
-		}
-	}
-	if sb.Len() == 0 {
-		sb.WriteString("(no output)")
-	}
-	return sb.String()
 }
 
 type HealthResult struct {
