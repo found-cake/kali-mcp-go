@@ -2,6 +2,13 @@
 
 const { chromium } = require("/usr/local/lib/node_modules/playwright");
 const { writeFile } = require("node:fs/promises");
+const {
+  browserLaunchOptions,
+  createBoundedCollector,
+  truncateEvidenceText,
+} = require("./browser-evidence.cjs");
+
+const maxEvidenceEvents = 100;
 
 function parseArgs(argv) {
   const options = { waitMs: 500, includeDom: false };
@@ -40,34 +47,26 @@ function parseArgs(argv) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
-    headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
+  const executablePath = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
+  const browser = await chromium.launch(browserLaunchOptions(executablePath));
   try {
     const page = await browser.newPage();
-    const dialogs = [];
-    const consoleMessages = [];
-    const pageErrors = [];
-    const network = [];
-    let networkTruncated = false;
+    const dialogs = createBoundedCollector(maxEvidenceEvents);
+    const consoleMessages = createBoundedCollector(maxEvidenceEvents);
+    const pageErrors = createBoundedCollector(maxEvidenceEvents);
+    const network = createBoundedCollector(maxEvidenceEvents);
     const recordNetwork = (event) => {
       if (!options.captureNetwork) return;
-      if (network.length >= 100) {
-        networkTruncated = true;
-        return;
-      }
-      network.push(event);
+      network.record(event);
     };
     page.on("dialog", async (dialog) => {
-      dialogs.push({ type: dialog.type(), message: dialog.message() });
+      dialogs.record({ type: dialog.type(), message: truncateEvidenceText(dialog.message(), 2048) });
       await dialog.dismiss();
     });
     page.on("console", (message) => {
-      consoleMessages.push({ type: message.type(), text: message.text() });
+      consoleMessages.record({ type: message.type(), text: truncateEvidenceText(message.text(), 4096) });
     });
-    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("pageerror", (error) => pageErrors.record(truncateEvidenceText(error.message, 4096)));
     page.on("response", (response) => {
       const request = response.request();
       recordNetwork({
@@ -97,12 +96,15 @@ async function main() {
       finalUrl: page.url(),
       status: response ? response.status() : null,
       title: await page.title(),
-      dialogs,
-      console: consoleMessages,
-      pageErrors,
+      dialogs: dialogs.items,
+      dialogsTruncated: dialogs.truncated,
+      console: consoleMessages.items,
+      consoleTruncated: consoleMessages.truncated,
+      pageErrors: pageErrors.items,
+      pageErrorsTruncated: pageErrors.truncated,
       networkCaptured: options.captureNetwork,
-      network,
-      networkTruncated,
+      network: network.items,
+      networkTruncated: network.truncated,
     };
     if (options.includeDom) {
       const dom = await page.content();

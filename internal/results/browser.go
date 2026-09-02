@@ -21,8 +21,11 @@ type browserReport struct {
 	Status               *int                  `json:"status"`
 	Title                string                `json:"title"`
 	Dialogs              []browserDialog       `json:"dialogs"`
+	DialogsTruncated     bool                  `json:"dialogsTruncated,omitempty"`
 	Console              []browserConsole      `json:"console"`
+	ConsoleTruncated     bool                  `json:"consoleTruncated,omitempty"`
 	PageErrors           []string              `json:"pageErrors"`
+	PageErrorsTruncated  bool                  `json:"pageErrorsTruncated,omitempty"`
 	DOM                  string                `json:"dom,omitempty"`
 	DOMTruncated         bool                  `json:"domTruncated,omitempty"`
 	DOMBytes             int                   `json:"domBytes,omitempty"`

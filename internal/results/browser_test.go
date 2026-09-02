@@ -2,6 +2,7 @@ package results
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -66,6 +67,35 @@ func TestProtectResultExtractsOptInBrowserEvidenceArtifacts(t *testing.T) {
 	}
 	if result.Evidence == nil || result.Evidence.GroupID != result.CallID || len(result.Evidence.Artifacts) != 4 || result.Evidence.PrimaryArtifactID == "" {
 		t.Fatalf("browser evidence manifest is incomplete: %+v", result.Evidence)
+	}
+}
+
+func TestProtectResultPreservesBrowserEvidenceTruncationFlags(t *testing.T) {
+	// Given: browser output whose bounded evidence collectors reached their limits.
+	store, err := artifactstore.New()
+	if err != nil {
+		t.Fatalf("create artifact store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("close artifact store: %v", err)
+		}
+	})
+	result := &executor.Result{
+		CallID: "call-browser-bounded", Tool: "browser-check", ReturnCode: 0,
+		Stdout: `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","status":200,"title":"Example","dialogs":[],"dialogsTruncated":true,"console":[],"consoleTruncated":true,"pageErrors":[],"pageErrorsTruncated":true,"networkCaptured":true,"network":[]}`,
+	}
+
+	// When: browser evidence is normalized for the MCP response.
+	protectBrowserEvidence(store, result, dto.BrowserRequest{CaptureNetwork: true})
+	var report browserReport
+	if err := json.Unmarshal([]byte(result.Stdout), &report); err != nil {
+		t.Fatalf("decode protected browser report: %v", err)
+	}
+
+	// Then: callers can distinguish complete empty collections from truncated ones.
+	if !report.DialogsTruncated || !report.ConsoleTruncated || !report.PageErrorsTruncated {
+		t.Fatalf("browser truncation metadata was dropped: %+v", report)
 	}
 }
 

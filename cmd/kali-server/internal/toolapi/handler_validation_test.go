@@ -40,6 +40,7 @@ func TestToolHandlerValidation(t *testing.T) {
 		{name: "hydra stream username conflict", path: "/hydra/stream", handler: handleHydraStream, body: `{"target":"127.0.0.1","service":"ssh","username":"root","username_file":"/tmp/users.txt","password":"toor"}`, message: "username and username_file cannot be used together"},
 		{name: "hydra stream password conflict", path: "/hydra/stream", handler: handleHydraStream, body: `{"target":"127.0.0.1","service":"ssh","username":"root","password":"toor","password_file":"/tmp/passwords.txt"}`, message: "password and password_file cannot be used together"},
 		{name: "nmap malformed additional arguments", path: "/nmap/stream", handler: handleNmapStream, body: `{"target":"127.0.0.1","additional_args":"--script \"bad"}`, message: "invalid additional_args"},
+		{name: "browser excessive wait", path: "/browser/stream", handler: handleBrowserStream, body: `{"url":"https://example.com","wait_milliseconds":30001}`, message: "wait_milliseconds must be between 0 and 30000"},
 	}
 
 	for _, test := range tests {

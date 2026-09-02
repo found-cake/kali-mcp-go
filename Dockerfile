@@ -59,6 +59,10 @@ RUN apt-get update \
     fi \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends chromium-sandbox \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN set -eux; \
     case "$TARGETARCH" in \
         amd64) dalfox_arch="x86_64"; osv_arch="amd64" ;; \
@@ -102,10 +106,11 @@ RUN set -eux; \
 COPY --from=build /out/kali-server /out/mcp-client /usr/local/bin/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY browser-check.cjs /usr/local/lib/kali-mcp/browser-check.cjs
+COPY browser-evidence.cjs /usr/local/lib/kali-mcp/browser-evidence.cjs
+COPY browser-launcher.sh /usr/local/bin/browser-check
 COPY jwt-tool.sh /usr/local/bin/jwt_tool
 
 RUN set -eux; \
-    printf '#!/usr/bin/env sh\nexec node /usr/local/lib/kali-mcp/browser-check.cjs "$@"\n' > /usr/local/bin/browser-check; \
     chmod 0755 /usr/local/bin/browser-check /usr/local/bin/jwt_tool; \
     dalfox --version; \
     dalfox scan --help 2>&1 | grep -q -- '--workers'; \
@@ -117,5 +122,12 @@ RUN set -eux; \
     playwright --version; \
     retire --version; \
     whatweb --version
+
+RUN set -eux; \
+    groupadd --system kali-browser; \
+    useradd --system --gid kali-browser --create-home --home-dir /home/kali-browser --shell /usr/sbin/nologin kali-browser; \
+    install -d -o root -g kali-browser -m 2710 /var/lib/kali-mcp/browser
+
+ENV KALI_MCP_BROWSER_OUTPUT_DIR=/var/lib/kali-mcp/browser
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

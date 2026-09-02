@@ -246,12 +246,14 @@ func validateDalfoxRequest(req dto.DalfoxRequest) error {
 	return nil
 }
 
+const maxBrowserWaitMilliseconds = 30_000
+
 func validateBrowserRequest(req dto.BrowserRequest) error {
 	if req.URL == "" {
 		return fmt.Errorf("url is required")
 	}
-	if req.WaitMilliseconds < 0 {
-		return fmt.Errorf("wait_milliseconds must not be negative")
+	if req.WaitMilliseconds < 0 || req.WaitMilliseconds > maxBrowserWaitMilliseconds {
+		return fmt.Errorf("wait_milliseconds must be between 0 and %d", maxBrowserWaitMilliseconds)
 	}
 	return nil
 }

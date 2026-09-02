@@ -1,12 +1,15 @@
 package toolapi
 
 import (
+	"errors"
 	"os"
 
 	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/gofiber/fiber/v3"
 )
+
+const browserOutputDirectoryEnv = "KALI_MCP_BROWSER_OUTPUT_DIR"
 
 func handleBrowserStream(c fiber.Ctx) error {
 	request, err := httpapi.ParseRequest(c, validateBrowserRequest)
@@ -39,14 +42,19 @@ func handleBrowserStream(c fiber.Ctx) error {
 }
 
 func newBrowserScreenshotPath() (string, error) {
-	file, err := os.CreateTemp("", "kali-mcp-browser-*.jpg")
+	directory := os.Getenv(browserOutputDirectoryEnv)
+	file, err := os.CreateTemp(directory, "kali-mcp-browser-*.jpg")
 	if err != nil {
 		return "", err
 	}
 	path := file.Name()
+	if directory != "" {
+		if err := file.Chmod(0o620); err != nil {
+			return "", errors.Join(err, file.Close(), os.Remove(path))
+		}
+	}
 	if err := file.Close(); err != nil {
-		_ = os.Remove(path)
-		return "", err
+		return "", errors.Join(err, os.Remove(path))
 	}
 	return path, nil
 }
