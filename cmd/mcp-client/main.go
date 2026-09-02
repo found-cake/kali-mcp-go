@@ -144,7 +144,11 @@ func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name string)
 	if err != nil {
 		return err
 	}
-	mcp.AddTool(srv, &mcp.Tool{Name: definition.Tool, Description: definition.Description}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
+	tool, err := executableMCPTool[T](definition)
+	if err != nil {
+		return err
+	}
+	mcp.AddTool(srv, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
 		r, err := kali.Stream(ctx, definition.Endpoint, in)
 		return textResult(definition.Tool, r, err)
 	})
@@ -156,7 +160,11 @@ func addPostTool[T any](srv *mcp.Server, kali *kaliclient.Client, name string) e
 	if err != nil {
 		return err
 	}
-	mcp.AddTool(srv, &mcp.Tool{Name: definition.Tool, Description: definition.Description}, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
+	tool, err := executableMCPTool[T](definition)
+	if err != nil {
+		return err
+	}
+	mcp.AddTool(srv, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
 		r, err := kali.Post(ctx, definition.Endpoint, in)
 		return textResult(definition.Tool, r, err)
 	})

@@ -62,6 +62,41 @@ func TestCapabilityRegistryMatchesExecutableMCPTools(t *testing.T) {
 	}
 }
 
+func TestToolSchemasExposeOnlySupportedScanControls(t *testing.T) {
+	t.Parallel()
+
+	// Given: the MCP schemas and the runtime capability registry.
+	capabilities := toolmeta.ScanCapabilities()
+	capabilityByTool := make(map[string]map[string]bool, len(capabilities.Tools))
+	for _, capability := range capabilities.Tools {
+		controls := make(map[string]bool, len(capability.Controls))
+		for _, control := range capability.Controls {
+			controls[string(control.Control)] = true
+		}
+		capabilityByTool[capability.Tool] = controls
+	}
+
+	// When: an orchestrator lists every executable MCP tool schema.
+	for _, tool := range listedTestTools(t) {
+		supported, executable := capabilityByTool[tool.Name]
+		if !executable {
+			continue
+		}
+		properties, ok := schemaProperties(tool.InputSchema)
+		if !ok {
+			t.Fatalf("tool %s has an invalid input schema", tool.Name)
+		}
+
+		// Then: every scan-control property agrees with the capability contract.
+		for _, control := range []string{"timeout", "rate_limit", "concurrency", "max_requests", "max_5xx_responses", "dry_run"} {
+			_, exposed := properties[control]
+			if exposed != supported[control] {
+				t.Fatalf("tool %s control %s schema exposure=%t capability support=%t", tool.Name, control, exposed, supported[control])
+			}
+		}
+	}
+}
+
 func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	t.Parallel()
 
