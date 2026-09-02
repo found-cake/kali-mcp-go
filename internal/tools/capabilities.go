@@ -97,6 +97,11 @@ func wordlistCapabilities() []dto.WordlistCapability {
 			defaultFor: []string{"gobuster_scan", "dirb_scan", "ffuf_scan", "feroxbuster_scan"},
 		}),
 		wordlistCapability(wordlistDefinition{
+			name:    "directory-discovery-small",
+			purpose: "bounded web path and content discovery",
+			path:    SmallDirWordlistPath(),
+		}),
+		wordlistCapability(wordlistDefinition{
 			name:       "password-audit",
 			purpose:    "password hash auditing",
 			path:       DefaultJohnWordlistPath(),

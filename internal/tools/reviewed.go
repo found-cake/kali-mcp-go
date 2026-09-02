@@ -17,6 +17,12 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 	if request.FilterSize != "" {
 		args = append(args, "-fs", request.FilterSize)
 	}
+	if request.RequestTimeout > 0 {
+		args = append(args, "-timeout", strconv.Itoa(request.RequestTimeout))
+	}
+	if request.FilterStatuses != "" {
+		args = append(args, "-fc", request.FilterStatuses)
+	}
 	if request.Recursion {
 		args = append(args, "-recursion")
 	}
@@ -42,7 +48,7 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 	if err := validateNucleiSafety(request); err != nil {
 		return nil, err
 	}
-	args := []string{"nuclei", "-u", request.Target, "-jsonl"}
+	args := []string{"nuclei", "-u", request.Target, "-jsonl", "-disable-update-check"}
 	if !request.AllowUnsafe {
 		args = append(args, "-etags", "dos,fuzz", "-no-interactsh")
 	}

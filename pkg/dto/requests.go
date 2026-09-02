@@ -112,6 +112,8 @@ type FFUFRequest struct {
 	URL            string `json:"url,omitempty" jsonschema:"target URL containing FUZZ; may extend the browser origin from target_context"`
 	Wordlist       string `json:"wordlist,omitempty" jsonschema:"path to wordlist file"`
 	FilterSize     string `json:"filter_size,omitempty" jsonschema:"response size or comma-separated sizes to exclude"`
+	RequestTimeout int    `json:"request_timeout,omitempty" jsonschema:"per-request HTTP timeout in seconds (default 10, maximum 300); distinct from the outer timeout"`
+	FilterStatuses string `json:"filter_status_codes,omitempty" jsonschema:"HTTP status codes or ranges to omit from findings, e.g. 404,500-599"`
 	Recursion      bool   `json:"recursion,omitempty" jsonschema:"enable recursive discovery"`
 	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra ffuf arguments"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
@@ -139,7 +141,7 @@ type NucleiRequest struct {
 	Templates      []string `json:"templates,omitempty" jsonschema:"specific template paths or IDs"`
 	AllowUnsafe    bool     `json:"allow_unsafe,omitempty" jsonschema:"allow DoS/fuzz and interactsh templates; false excludes them"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra nuclei arguments"`
-	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
+	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds; 0 derives it from request and rate budgets, while shorter explicit values are preserved with a warning"`
 }
 
 func (r NucleiRequest) GetRequestTimeout() int { return r.Timeout }

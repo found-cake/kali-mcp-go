@@ -93,3 +93,35 @@ func TestHandleHealthUsesEssentialSubsetForAggregateFlag(t *testing.T) {
 		t.Fatalf("unexpected degraded health: %+v", result)
 	}
 }
+
+func TestToolStatusTracksNucleiTemplateReadiness(t *testing.T) {
+	tests := []struct {
+		name          string
+		prepare       func(*testing.T) string
+		expectedReady bool
+	}{
+		{name: "missing", prepare: func(t *testing.T) string { return t.TempDir() }, expectedReady: false},
+		{name: "installed", prepare: func(t *testing.T) string {
+			directory := t.TempDir()
+			if err := os.WriteFile(directory+"/.checksum", []byte("ready"), 0o600); err != nil {
+				t.Fatalf("write template checksum: %v", err)
+			}
+			return directory
+		}, expectedReady: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Given: an installed Nuclei binary and a controlled template directory.
+			t.Setenv("KALI_MCP_NUCLEI_TEMPLATES", test.prepare(t))
+
+			// When: runtime readiness is calculated.
+			status := toolStatus(func(string) bool { return true })
+
+			// Then: Nuclei readiness includes its template installation state.
+			if status["nuclei"] != test.expectedReady {
+				t.Fatalf("unexpected Nuclei readiness: %v", status)
+			}
+		})
+	}
+}

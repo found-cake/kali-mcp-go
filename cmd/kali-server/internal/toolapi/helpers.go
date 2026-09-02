@@ -17,6 +17,8 @@ func toolStatus(lookup func(string) bool) map[string]bool {
 			ready = ready && dirWordlistReady
 		case "john":
 			ready = ready && johnWordlistReady
+		case "nuclei":
+			ready = ready && tools.NucleiTemplatesReady()
 		}
 		status[toolName] = ready
 	}

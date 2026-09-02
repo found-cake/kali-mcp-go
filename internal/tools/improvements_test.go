@@ -3,6 +3,7 @@ package tools
 import (
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,6 +18,28 @@ func TestNmapArgsPreservesLoopbackTarget(t *testing.T) {
 	want := []string{"nmap", "-sT", "-Pn", "127.0.0.1"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
+	}
+}
+
+func TestFFUFArgsAddsPerRequestTimeoutAndStatusFilter(t *testing.T) {
+	// Given: a bounded wordlist and explicit slow-response controls.
+	wordlist := t.TempDir() + "/paths.txt"
+	if err := os.WriteFile(wordlist, []byte("api\nadmin\n"), 0o600); err != nil {
+		t.Fatalf("write wordlist: %v", err)
+	}
+	request := dto.FFUFRequest{
+		URL:            "https://example.com/FUZZ",
+		Wordlist:       wordlist,
+		RequestTimeout: 2,
+		FilterStatuses: "500-599",
+	}
+
+	// When: FFUF arguments are built.
+	args, err := FFUFArgs(request)
+
+	// Then: the native per-request timeout and status filter are applied.
+	if err != nil || !slices.Contains(args, "-timeout") || !slices.Contains(args, "2") || !slices.Contains(args, "-fc") || !slices.Contains(args, "500-599") {
+		t.Fatalf("FFUF controls missing: args=%v err=%v", args, err)
 	}
 }
 
@@ -91,7 +114,7 @@ func TestNucleiArgsExcludeUnsafeTemplatesByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build nuclei args: %v", err)
 	}
-	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-etags", "dos,fuzz", "-no-interactsh"}
+	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-disable-update-check", "-etags", "dos,fuzz", "-no-interactsh"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}

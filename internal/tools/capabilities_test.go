@@ -83,3 +83,32 @@ func TestScanCapabilitiesReportConfiguredDefaultWordlists(t *testing.T) {
 		t.Fatalf("feroxbuster default missing: %+v", directory.DefaultFor)
 	}
 }
+
+func TestScanCapabilitiesExposeSmallDirectoryWordlist(t *testing.T) {
+	// Given: a configured small wordlist intended for bounded discovery.
+	wordlist, err := os.CreateTemp(t.TempDir(), "small-paths-*.txt")
+	if err != nil {
+		t.Fatalf("create wordlist: %v", err)
+	}
+	if _, err := wordlist.WriteString("api\nadmin\n"); err != nil {
+		t.Fatalf("write wordlist: %v", err)
+	}
+	if err := wordlist.Close(); err != nil {
+		t.Fatalf("close wordlist: %v", err)
+	}
+	t.Setenv("KALI_MCP_SMALL_DIR_WORDLIST", wordlist.Name())
+
+	// When: an orchestrator requests scan capabilities.
+	capabilities := ScanCapabilities()
+
+	// Then: the small wordlist path is independently selectable.
+	for _, capability := range capabilities.Wordlists {
+		if capability.Name == "directory-discovery-small" {
+			if capability.Path != wordlist.Name() || !capability.Available || capability.SizeBytes == 0 {
+				t.Fatalf("unexpected small wordlist: %+v", capability)
+			}
+			return
+		}
+	}
+	t.Fatal("small directory wordlist capability is missing")
+}

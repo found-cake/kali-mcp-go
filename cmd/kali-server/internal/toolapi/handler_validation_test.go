@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -68,6 +69,34 @@ func TestToolHandlerValidation(t *testing.T) {
 			// Then: validation rejects it with the expected reason.
 			if response.StatusCode != fiber.StatusBadRequest || !strings.Contains(string(body), test.message) {
 				t.Fatalf("expected 400 containing %q, got status=%d body=%s", test.message, response.StatusCode, body)
+			}
+		})
+	}
+}
+
+func TestValidateFFUFRequestRejectsInvalidHTTPControls(t *testing.T) {
+	t.Parallel()
+
+	// Given: FFUF requests with invalid per-request timeout or status filtering.
+	tests := []struct {
+		name    string
+		request dto.FFUFRequest
+		message string
+	}{
+		{name: "request timeout", request: dto.FFUFRequest{URL: "https://example.com/FUZZ", RequestTimeout: 301}, message: "request_timeout must be between 1 and 300"},
+		{name: "status range", request: dto.FFUFRequest{URL: "https://example.com/FUZZ", FilterStatuses: "500-700"}, message: "filter_status_codes must contain HTTP codes between 100 and 599"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			// When: the public request validator checks the controls.
+			err := validateFFUFRequest(test.request)
+
+			// Then: invalid values are rejected before FFUF starts.
+			if err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q, got %v", test.message, err)
 			}
 		})
 	}

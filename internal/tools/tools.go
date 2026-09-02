@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -10,8 +11,11 @@ import (
 const (
 	defaultDirWordlistEnv  = "KALI_MCP_DIR_WORDLIST"
 	defaultDirWordlist     = "/usr/share/wordlists/dirb/common.txt"
+	smallDirWordlistEnv    = "KALI_MCP_SMALL_DIR_WORDLIST"
+	smallDirWordlist       = "/usr/share/wordlists/dirb/small.txt"
 	defaultJohnWordlistEnv = "KALI_MCP_JOHN_WORDLIST"
 	defaultJohnWordlist    = "/usr/share/wordlists/rockyou.txt"
+	nucleiTemplatesEnv     = "KALI_MCP_NUCLEI_TEMPLATES"
 )
 
 func DefaultDirWordlistPath() string {
@@ -20,6 +24,26 @@ func DefaultDirWordlistPath() string {
 
 func DefaultJohnWordlistPath() string {
 	return defaultWordlistPath(defaultJohnWordlistEnv, defaultJohnWordlist)
+}
+
+func SmallDirWordlistPath() string {
+	return defaultWordlistPath(smallDirWordlistEnv, smallDirWordlist)
+}
+
+func NucleiTemplatesPath() string {
+	if path := strings.TrimSpace(os.Getenv(nucleiTemplatesEnv)); path != "" {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".local", "nuclei-templates")
+}
+
+func NucleiTemplatesReady() bool {
+	info, err := os.Stat(filepath.Join(NucleiTemplatesPath(), ".checksum"))
+	return err == nil && info.Mode().IsRegular() && info.Size() > 0
 }
 
 func WordlistExists(path string) bool {
