@@ -12,16 +12,20 @@ import (
 
 const artifactStoreLocalKey = "artifact-store"
 
+type artifactStoreLocal struct {
+	store *artifactstore.Store
+}
+
 func ArtifactStoreMiddleware(store *artifactstore.Store) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		c.Locals(artifactStoreLocalKey, store)
+		c.Locals(artifactStoreLocalKey, artifactStoreLocal{store: store})
 		return c.Next()
 	}
 }
 
 func ArtifactStore(c fiber.Ctx) *artifactstore.Store {
-	store, _ := c.Locals(artifactStoreLocalKey).(*artifactstore.Store)
-	return store
+	local, _ := c.Locals(artifactStoreLocalKey).(artifactStoreLocal)
+	return local.store
 }
 
 func HandleGetArtifact(c fiber.Ctx) error {

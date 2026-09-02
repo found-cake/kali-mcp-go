@@ -155,6 +155,34 @@ func TestArtifactPageHandlerMapsInvalidPageToBadRequest(t *testing.T) {
 	}
 }
 
+func TestArtifactStoreMiddlewareRetainsStoreAfterRequestCleanup(t *testing.T) {
+	// Given: a shared artifact store attached to more than one Fiber request.
+	app, store := newArtifactHandlerTestApp(t)
+	request, err := http.NewRequest(http.MethodGet, "/api/artifacts/missing", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer test-token")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("complete first request: %v", err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatalf("close first response: %v", err)
+	}
+
+	// When: a later tool call stores evidence after Fiber has reset request locals.
+	reference, err := store.Save(artifactstore.Content{
+		Kind: "evidence", MediaType: "text/plain", Encoding: dto.ArtifactEncodingUTF8,
+		RedactionState: dto.ArtifactSensitiveUnredacted, Payload: []byte("later evidence"),
+	}, time.Now().UTC())
+
+	// Then: request cleanup has not closed the application-owned store.
+	if err != nil || reference.ID == "" {
+		t.Fatalf("artifact store was closed during request cleanup: ref=%+v err=%v", reference, err)
+	}
+}
+
 func newArtifactHandlerTestApp(t *testing.T) (*fiber.App, *artifactstore.Store) {
 	t.Helper()
 	store, err := artifactstore.New()
