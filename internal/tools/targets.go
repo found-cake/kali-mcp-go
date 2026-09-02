@@ -1,20 +1,46 @@
 package tools
 
 import (
+	"context"
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
+const loopbackLookupTimeout = 500 * time.Millisecond
+
+type ipAddressResolver interface {
+	LookupIPAddr(context.Context, string) ([]net.IPAddr, error)
+}
+
 func isLoopbackHost(host string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), loopbackLookupTimeout)
+	defer cancel()
+	return isLoopbackHostWithResolver(ctx, net.DefaultResolver, host)
+}
+
+func isLoopbackHostWithResolver(ctx context.Context, resolver ipAddressResolver, host string) bool {
 	trimmed := strings.Trim(host, "[]")
 	if strings.EqualFold(trimmed, "localhost") {
 		return true
 	}
 	ip := net.ParseIP(trimmed)
-	return ip != nil && ip.IsLoopback()
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	addresses, err := resolver.LookupIPAddr(ctx, trimmed)
+	if err != nil {
+		return false
+	}
+	for _, address := range addresses {
+		if address.IP.IsLoopback() {
+			return true
+		}
+	}
+	return false
 }
 
 func TargetWarnings(request any) []string {
