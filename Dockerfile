@@ -26,6 +26,7 @@ RUN apt-get update \
         chromium \
         curl \
         dirb \
+        dnsutils \
         enum4linux \
         feroxbuster \
         ffuf \
@@ -58,6 +59,10 @@ RUN apt-get update \
         gzip -d /usr/share/wordlists/rockyou.txt.gz; \
     fi \
     && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    nuclei -update-templates; \
+    test -s /root/.local/nuclei-templates/.checksum
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends chromium-sandbox \
@@ -114,10 +119,12 @@ RUN set -eux; \
     chmod 0755 /usr/local/bin/browser-check /usr/local/bin/jwt_tool; \
     dalfox --version; \
     dalfox scan --help 2>&1 | grep -q -- '--workers'; \
+    dig -v; \
     ffuf -V; \
     feroxbuster --version; \
     jq --version; \
     nuclei -version; \
+    nuclei -templates-version; \
     osv-scanner --version; \
     playwright --version; \
     retire --version; \
@@ -128,6 +135,7 @@ RUN set -eux; \
     useradd --system --gid kali-browser --create-home --home-dir /home/kali-browser --shell /usr/sbin/nologin kali-browser; \
     install -d -o root -g kali-browser -m 2710 /var/lib/kali-mcp/browser
 
-ENV KALI_MCP_BROWSER_OUTPUT_DIR=/var/lib/kali-mcp/browser
+ENV KALI_MCP_BROWSER_OUTPUT_DIR=/var/lib/kali-mcp/browser \
+    KALI_MCP_NUCLEI_TEMPLATES=/root/.local/nuclei-templates
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
