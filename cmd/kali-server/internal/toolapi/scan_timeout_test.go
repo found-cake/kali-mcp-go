@@ -85,6 +85,86 @@ func TestPrepareScanExecution_adds_startup_grace_to_derived_request_budget(t *te
 	}
 }
 
+func TestPrepareScanExecution_warns_when_nuclei_timeout_is_below_estimated_budget(t *testing.T) {
+	// Given: an explicit one-minute Nuclei timeout with a one-hundred-second request estimate.
+	app := fiber.New()
+	var planTimeout time.Duration
+	var planning *dto.TimeoutPlanning
+	var warnings []string
+	app.Get("/prepare", func(c fiber.Ctx) error {
+		plan, err := prepareScanExecution(c, dto.NucleiRequest{
+			ScanOptions: dto.ScanOptions{MaxRequests: 1000, RateLimit: 10},
+			Target:      "https://example.com",
+			Tags:        "http",
+			Timeout:     60,
+		}, []string{"nuclei", "-u", "https://example.com"})
+		if err != nil {
+			return err
+		}
+		defer plan.release()
+		planTimeout = plan.timeout
+		planning = plan.timeoutPlanning
+		warnings = append(warnings, plan.extraWarnings...)
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	// When: the execution plan compares the explicit timeout with its calculated budget.
+	request, err := http.NewRequest(http.MethodGet, "/prepare", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("prepare request: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Then: the user limit remains authoritative while the shortfall is observable.
+	if response.StatusCode != fiber.StatusNoContent || planTimeout != 60*time.Second {
+		t.Fatalf("explicit timeout changed: status=%d timeout=%s", response.StatusCode, planTimeout)
+	}
+	if planning == nil || planning.Source != dto.TimeoutSourceRequest || planning.RequestBudgetEstimateMS != 100000 || planning.StartupGraceMS != 30000 {
+		t.Fatalf("unexpected timeout planning metadata: %+v", planning)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected one timeout budget warning, got %v", warnings)
+	}
+}
+
+func TestPrepareScanExecution_warns_when_nuclei_selector_is_omitted(t *testing.T) {
+	// Given: a bounded Nuclei request without tags or explicit templates.
+	app := fiber.New()
+	var warnings []string
+	app.Get("/prepare", func(c fiber.Ctx) error {
+		plan, err := prepareScanExecution(c, dto.NucleiRequest{
+			ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
+			Target:      "https://example.com",
+		}, []string{"nuclei", "-u", "https://example.com"})
+		if err != nil {
+			return err
+		}
+		defer plan.release()
+		warnings = append(warnings, plan.extraWarnings...)
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	// When: the execution plan is prepared.
+	request, err := http.NewRequest(http.MethodGet, "/prepare", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("prepare request: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Then: the unbounded template selection is explicit without changing the selector.
+	if response.StatusCode != fiber.StatusNoContent || len(warnings) != 1 || !strings.Contains(warnings[0], "tags or templates") {
+		t.Fatalf("missing Nuclei selector warning: status=%d warnings=%v", response.StatusCode, warnings)
+	}
+}
+
 func TestRunToolRejectsEmptyCommandSlice(t *testing.T) {
 	t.Parallel()
 

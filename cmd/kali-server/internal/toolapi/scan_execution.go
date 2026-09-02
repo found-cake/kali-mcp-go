@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
@@ -107,26 +108,28 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	}
 	timeout := commandTimeout(requestedTimeout)
 	timeoutPlanning := &dto.TimeoutPlanning{Source: dto.TimeoutSourceDefault}
+	extraWarnings := []string(nil)
+	if nucleiRequest, ok := any(request).(dto.NucleiRequest); ok && strings.TrimSpace(nucleiRequest.Tags) == "" && len(nucleiRequest.Templates) == 0 {
+		extraWarnings = append(extraWarnings, "Nuclei tags or templates were not selected; all locally installed safe templates may be evaluated")
+	}
 	if requestedTimeout > 0 {
 		timeoutPlanning.Source = dto.TimeoutSourceRequest
 	}
 	if effective.MaxRequests > 0 && effective.RateLimit > 0 {
 		budgetSeconds := (effective.MaxRequests + effective.RateLimit - 1) / effective.RateLimit
 		budgetTimeout := time.Duration(budgetSeconds) * time.Second
+		startupGrace := scanStartupGrace(controlledArgs[0])
+		estimatedTimeout := budgetTimeout + startupGrace
 		timeoutPlanning.RequestBudgetEstimateMS = budgetTimeout.Milliseconds()
+		timeoutPlanning.StartupGraceMS = startupGrace.Milliseconds()
 		if requestedTimeout == 0 {
-			startupGrace := 10 * time.Second
-			switch controlledArgs[0] {
-			case "ffuf", "nmap":
-				startupGrace = 5 * time.Second
-			case "feroxbuster":
-				startupGrace = 10 * time.Second
-			case "nuclei", "sqlmap":
-				startupGrace = 30 * time.Second
-			}
-			timeout = budgetTimeout + startupGrace
+			timeout = estimatedTimeout
 			timeoutPlanning.Source = dto.TimeoutSourceRequestBudget
-			timeoutPlanning.StartupGraceMS = startupGrace.Milliseconds()
+		} else if controlledArgs[0] == "nuclei" && timeout < estimatedTimeout {
+			extraWarnings = append(extraWarnings, fmt.Sprintf(
+				"explicit Nuclei timeout %s is below the calculated request budget %s; partial timeout results are likely",
+				timeout, estimatedTimeout,
+			))
 		}
 	}
 	return &scanExecutionPlan{
@@ -137,7 +140,19 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		artifactStore:   httpapi.ArtifactStore(c),
 		dryRun:          dryRun,
 		timeoutPlanning: timeoutPlanning,
+		extraWarnings:   extraWarnings,
 	}, nil
+}
+
+func scanStartupGrace(tool string) time.Duration {
+	switch tool {
+	case "ffuf", "nmap":
+		return 5 * time.Second
+	case "nuclei", "sqlmap":
+		return 30 * time.Second
+	default:
+		return 10 * time.Second
+	}
 }
 
 func (p *scanExecutionPlan) annotate(result *executor.Result) {

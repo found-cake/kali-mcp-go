@@ -47,7 +47,7 @@ func EffectiveScanOptions(tool string, options dto.ScanOptions) (dto.ScanOptions
 		}
 	}
 	if options.MaxRequests > 0 && options.RateLimit == 0 {
-		return dto.ScanOptions{}, fmt.Errorf("max_requests requires rate_limit for enforceable budgeting")
+		return dto.ScanOptions{}, fmt.Errorf("max_requests requires rate_limit for timeout budgeting")
 	}
 	return options, nil
 }
