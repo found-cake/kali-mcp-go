@@ -8,6 +8,9 @@ import (
 )
 
 func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
+	wpscanNonWordPress := toolName == "wpscan_analyze" && result.ReturnCode == 4 && strings.Contains(
+		strings.ToLower(result.Stdout+"\n"+result.Stderr), "does not seem to be running wordpress",
+	)
 	switch {
 	case result.TimedOut:
 		result.ExecutionStatus = dto.ExecutionTimedOut
@@ -19,6 +22,10 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		result.ExecutionStatus = dto.ExecutionSucceeded
 		result.Success = true
 		result.ClassificationReason = "osv_findings_exit_code"
+	case wpscanNonWordPress:
+		result.ExecutionStatus = dto.ExecutionSucceeded
+		result.Success = true
+		result.ClassificationReason = "wpscan_target_not_wordpress"
 	case result.ReturnCode != 0:
 		result.ExecutionStatus = dto.ExecutionFailed
 		result.ClassificationReason = "tool_nonzero_exit"
@@ -27,6 +34,12 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		result.ClassificationReason = "no_reliable_finding_classifier"
 	}
 	result.FindingStatus = dto.FindingsUnknown
+	if wpscanNonWordPress {
+		result.FindingStatus = dto.FindingsNotDetected
+		result.PartialResults = false
+		finalizeClassifiedResult(&result)
+		return result
+	}
 	if toolName == "jwt_analyze" && result.JWTAnalysis != nil && result.JWTAnalysis.ParseStatus != dto.JWTParsed {
 		result.ClassificationReason = "jwt_" + string(result.JWTAnalysis.FailureStage) + "_failed"
 	}

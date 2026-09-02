@@ -30,6 +30,7 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 		{name: "retire clean JSON", tool: "retirejs_scan", in: dto.ToolResult{Success: true, Stdout: `{"version":"5.7.0","data":[]}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
 		{name: "osv finding exit one", tool: "osv_scan", in: dto.ToolResult{ReturnCode: 1, Stdout: `{"results":[{"packages":[]}]}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsDetected},
 		{name: "osv clean JSON", tool: "osv_scan", in: dto.ToolResult{Success: true, Stdout: `{"results":[]}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
+		{name: "wpscan non wordpress target", tool: "wpscan_analyze", in: dto.ToolResult{ReturnCode: 4, Stdout: "Scan Aborted: The remote website is up, but does not seem to be running WordPress.", PartialResults: true, Failure: &dto.FailureInfo{Code: "nonzero_exit"}}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -42,6 +43,12 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 			}
 			if got.ExecutionStatus != dto.ExecutionSucceeded && got.Failure == nil {
 				t.Fatalf("expected structured failure metadata: %+v", got)
+			}
+			if got.ExecutionStatus == dto.ExecutionSucceeded && got.Failure != nil {
+				t.Fatalf("successful execution retained failure metadata: %+v", got)
+			}
+			if got.ExecutionStatus == dto.ExecutionSucceeded && got.PartialResults {
+				t.Fatalf("completed execution retained partial-result status: %+v", got)
 			}
 			if got.ClassificationReason == "" {
 				t.Fatalf("expected a machine-readable classification reason: %+v", got)
