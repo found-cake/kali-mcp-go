@@ -47,7 +47,7 @@ Concurrent, policy-aware MCP runtime for authorized security testing with Kali t
 
 | Component | Requirement |
 |---|---|
-| `kali-server` host | Any environment with the required security tools installed (Kali Linux, other Linux distros, macOS, etc.) |
+| `kali-server` host | Linux with the required security tools installed (Kali Linux recommended; other Linux distributions are supported when dependencies are available) |
 | `mcp-client` host | Linux, Windows, or macOS |
 | Build from source | Go 1.27+ |
 
