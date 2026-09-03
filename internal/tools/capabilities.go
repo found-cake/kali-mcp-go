@@ -26,7 +26,9 @@ func ScanCapabilities(availability ...func(string) bool) dto.ScanCapabilitiesRes
 	tools := make([]dto.ScanToolCapability, 0, len(scanToolCapabilities))
 	for _, capability := range scanToolCapabilities {
 		copy := cloneToolCapability(capability)
-		copy.Profiles = append(copy.Profiles, dto.ProfileExplicitCustom)
+		if copy.Profiles != nil {
+			copy.Profiles = append(copy.Profiles, dto.ProfileExplicitCustom)
+		}
 		copy.SupportedControls = make([]dto.ScanControl, 0, len(copy.Controls))
 		for _, control := range copy.Controls {
 			copy.SupportedControls = append(copy.SupportedControls, control.Control)
@@ -128,7 +130,7 @@ func wordlistCapability(definition wordlistDefinition) dto.WordlistCapability {
 func compatibleMCPTools(profile dto.SafetyProfile) []string {
 	tools := make([]string, 0, len(scanToolCapabilities))
 	for _, capability := range scanToolCapabilities {
-		if profile == dto.ProfileExplicitCustom || slices.Contains(capability.Profiles, profile) {
+		if (profile == dto.ProfileExplicitCustom && capability.Profiles != nil) || slices.Contains(capability.Profiles, profile) {
 			tools = append(tools, capability.Tool)
 		}
 	}

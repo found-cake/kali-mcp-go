@@ -56,6 +56,12 @@ func TestScanCapabilitiesCoverEveryExecutableToolWithRoutingMetadata(t *testing.
 	if john.RequiresTargetContext {
 		t.Fatalf("offline password auditing must not require a network target: %+v", john)
 	}
+	for _, tool := range []string{"execute_command", "john_crack", "osv_scan", "tshark_capture"} {
+		capability := findToolCapability(t, capabilities.Tools, tool)
+		if slices.Contains(capability.Profiles, dto.ProfileExplicitCustom) {
+			t.Fatalf("%s advertises a profile absent from its input schema: %+v", tool, capability)
+		}
+	}
 }
 
 func TestScanCapabilitiesReportConfiguredDefaultWordlists(t *testing.T) {
