@@ -183,7 +183,7 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 func gobusterReportedFinding(output string) bool {
 	for line := range strings.Lines(output) {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "/") || strings.HasPrefix(strings.ToLower(line), "found:") || strings.Contains(line, "(Status:") {
+		if strings.HasPrefix(line, "/") || strings.HasPrefix(strings.ToLower(line), "found:") || strings.Contains(line, "(Status:") || strings.HasPrefix(line, "[Status=") {
 			return true
 		}
 	}
