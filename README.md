@@ -100,7 +100,7 @@ The published image contains both binaries and the provisioned security tools. P
 docker pull ghcr.io/found-cake/kali-mcp-go:latest
 ```
 
-Use `:rolling` for the biweekly Kali Rolling build, or a version tag such as `:v1.2.3` for reproducible deployments. To build locally:
+Use `:rolling` for the biweekly Kali Rolling build, or a version tag such as `:v1.2.3` for a release-aligned deployment. Pin the resolved image digest (`image@sha256:...`) when byte-identical deployment inputs are required. To build locally:
 
 ```bash
 docker build -t kali-mcp-go:local .
@@ -465,7 +465,7 @@ Progress checkpoints describe already observed output but are not server-side jo
 
 Scan tools never silently rewrite a target. `127.0.0.1`, `localhost`, and `[::1]` refer to the machine or container running `kali-server`, whether that runtime is Docker, a VM, or a directly installed Linux host.
 
-For a loopback target, call `resolve_target`, choose one returned candidate, and pass its `target_context` to subsequent scan tools. Network tools derive the candidate's explicit network host, while web tools use its browser URL and may accept a same-origin path extension. Contexts are signed, default to ten minutes, and may request up to one hour with `valid_for_seconds`; they are never renewed without another connectivity check. The older target plus `resolution_receipt` form remains supported. Loopback scans without either proof are rejected. Non-loopback targets remain usable directly, but their results carry an unverified-target warning.
+For a loopback target, call `resolve_target`, choose one returned candidate, and pass its `target_context` to subsequent scan tools. Network tools derive the candidate's explicit network host and signed port, while web tools use its browser URL and may accept a same-origin path extension. Nmap, Hydra, and Metasploit bind their effective port to the signed candidate. Host-header, virtual-host, and alternate-source overrides are rejected with a context so the executed service matches the reported provenance. Contexts are signed, default to ten minutes, and may request up to one hour with `valid_for_seconds`; they are never renewed without another connectivity check. The older target plus `resolution_receipt` form remains supported. Loopback scans without either proof are rejected. Non-loopback targets remain usable directly, but their results carry an unverified-target warning.
 
 ### Safety profiles and budgets
 
@@ -481,7 +481,7 @@ Call `get_scan_capabilities` before composing a scan when profile compatibility 
 | `browser-xss-confirm` | Browser-backed confirmation of a specific XSS candidate |
 | `explicit-custom` | Explicit caller-supplied controls within hard server limits |
 
-The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate and concurrency flags. When `timeout` is omitted and both request and rate budgets are known, the outer timeout is derived from that budget plus tool startup grace; an explicit shorter Nuclei timeout is preserved with a partial-result warning. `execution.timeout_planning.max_requests_hard_limit` remains `false` unless a tool can expose an authoritative request counter. When `health_url` is present, the server probes it before and after the run, except for local-only `dry_run` previews. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. In Nuclei safe mode, caller-supplied selection and safety-override flags are rejected and the final DoS, fuzz, DAST, OAST, and interactsh exclusions cannot be overridden; `allow_unsafe` is required to leave that policy boundary.
+The server limits total work and weighted work per target service, canonicalized across web URLs, network hosts, paths, and explicitly selected resolver candidates. Heavy tools cannot run concurrently against that service. Supported tools receive native rate and concurrency flags. When `timeout` is omitted and both request and rate budgets are known, the outer timeout is derived from that budget plus tool startup grace; an explicit shorter Nuclei timeout is preserved with a partial-result warning. `execution.timeout_planning.max_requests_hard_limit` remains `false` unless a tool can expose an authoritative request counter. When `health_url` is present, the server probes it before and after the run, except for local-only `dry_run` previews. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Safety profiles also constrain impact: discovery tools retain read-only methods, Nmap accepts only passive built-in script selectors without script arguments, Nikto rejects explicit DoS and command-execution tuning, SQLmap pins conservative verification settings, and manual `http_request` calls permit only GET, HEAD, and OPTIONS. In Nuclei safe mode, caller-supplied selection and safety-override flags are rejected and the final DoS, fuzz, DAST, OAST, and interactsh exclusions cannot be overridden; `allow_unsafe` is required to leave that policy boundary.
 
 ### Credential management
 
@@ -493,11 +493,11 @@ The server instructions and tool descriptions recognize authorized black-box pen
 
 ### SQLmap JSON and raw requests
 
-`sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
+`sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Absolute raw-request targets must match their `Host` header, and a selected context additionally rejects Host overrides and binds the raw destination to the signed service. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
 
 ### Bounded manual HTTP requests
 
-Use `http_request` instead of `execute_command` with curl for one-off validation. It accepts HTTP(S) only, one request per call, an optional arbitrary `json_body`, bounded raw bodies and responses, a maximum 300-second timeout, and at most five same-origin redirects. Loopback targets require a selected `target_context` or the legacy explicit URL plus receipt. Request headers, response headers, URLs, and bodies are preserved verbatim unless the caller supplies exact `redact_values`. Browser network evidence follows the same rule, retaining query and fragment values for reproduction until explicit redaction is requested.
+Use `http_request` instead of `execute_command` with curl for one-off validation. It accepts HTTP(S) only, one request per call, an optional arbitrary `json_body`, bounded raw bodies and responses, a maximum 300-second timeout, and at most five same-origin redirects. `safe-recon` is limited to GET, HEAD, and OPTIONS; state-changing methods require `explicit-custom`. Loopback targets require a selected `target_context` or the legacy explicit URL plus receipt, and context-bound requests cannot override `Host`. Request headers, response headers, URLs, and bodies are preserved verbatim unless the caller supplies exact `redact_values`. Browser network evidence follows the same rule, retaining query and fragment values for reproduction until explicit redaction is requested.
 
 ### Scan load, SPA baselines, and artifacts
 
