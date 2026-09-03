@@ -27,6 +27,8 @@ func TestClassifyToolResultSeparatesFindingsFromExecution(t *testing.T) {
 		{name: "timeout", tool: "nikto_scan", in: dto.ToolResult{TimedOut: true, PartialResults: true}, exec: dto.ExecutionTimedOut, find: dto.FindingsInconclusive},
 		{name: "cancelled", tool: "nuclei_scan", in: dto.ToolResult{Cancelled: true}, exec: dto.ExecutionCancelled, find: dto.FindingsInconclusive},
 		{name: "whatweb internal error", tool: "whatweb_scan", in: dto.ToolResult{Success: true, Stdout: "ERROR Opening: target"}, exec: dto.ExecutionFailed, find: dto.FindingsInconclusive},
+		{name: "gobuster clean banner", tool: "gobuster_scan", in: dto.ToolResult{Success: true, Stdout: "Gobuster v3.8.2\nStarting gobuster\nFinished"}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
+		{name: "gobuster finding", tool: "gobuster_scan", in: dto.ToolResult{Success: true, Stdout: "/admin (Status: 200) [Size: 123]"}, exec: dto.ExecutionSucceeded, find: dto.FindingsDetected},
 		{name: "dalfox clean JSON", tool: "dalfox_scan", in: dto.ToolResult{Success: true, Stdout: `{"findings":[],"meta":{"findings_count":0}}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},
 		{name: "browser invalid JSON", tool: "browser_check", in: dto.ToolResult{Success: true, Stdout: `not-json`}, exec: dto.ExecutionFailed, find: dto.FindingsInconclusive, failureCode: "output_parse_failed"},
 		{name: "retire clean JSON", tool: "retirejs_scan", in: dto.ToolResult{Success: true, Stdout: `{"version":"5.7.0","data":[]}`}, exec: dto.ExecutionSucceeded, find: dto.FindingsNotDetected},

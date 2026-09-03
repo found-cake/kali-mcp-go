@@ -217,7 +217,7 @@ func TestGobusterArgsUsesEnvWordlistOverride(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	want := []string{"gobuster", "dir", "-u", "https://example.com", "-w", wordlist.Name()}
+	want := []string{"gobuster", "dir", "-u", "https://example.com", "-w", wordlist.Name(), "--quiet", "--no-progress", "--no-color"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}

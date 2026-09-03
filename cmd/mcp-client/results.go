@@ -93,7 +93,15 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 			result.FindingStatus = dto.FindingsDetected
 			result.ClassificationReason = "nikto_items_reported"
 		}
-	case "nuclei_scan", "ffuf_scan", "gobuster_scan", "feroxbuster_scan":
+	case "gobuster_scan":
+		if gobusterReportedFinding(result.Stdout) {
+			result.FindingStatus = dto.FindingsDetected
+			result.ClassificationReason = "gobuster_result_reported"
+		} else {
+			result.FindingStatus = dto.FindingsNotDetected
+			result.ClassificationReason = "gobuster_completed_without_result"
+		}
+	case "nuclei_scan", "ffuf_scan", "feroxbuster_scan":
 		if strings.TrimSpace(result.Stdout) == "" {
 			result.FindingStatus = dto.FindingsNotDetected
 			result.ClassificationReason = "scanner_completed_without_output"
@@ -170,6 +178,16 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	}
 	finalizeClassifiedResult(&result)
 	return result
+}
+
+func gobusterReportedFinding(output string) bool {
+	for line := range strings.Lines(output) {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "/") || strings.HasPrefix(strings.ToLower(line), "found:") || strings.Contains(line, "(Status:") {
+			return true
+		}
+	}
+	return false
 }
 
 func finalizeClassifiedResult(result *dto.ToolResult) {

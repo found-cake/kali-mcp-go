@@ -19,7 +19,8 @@ func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 	if mode == "dns" {
 		targetFlag = "--domain"
 	}
-	return appendTargetSafeArgs([]string{"gobuster", mode, targetFlag, r.URL, "-w", wordlist}, r.AdditionalArgs, "additional_args", false, "-u", "--url", "--domain", "--do")
+	args := []string{"gobuster", mode, targetFlag, r.URL, "-w", wordlist, "--quiet", "--no-progress", "--no-color"}
+	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-u", "--url", "--domain", "--do")
 }
 
 func DirbArgs(r dto.DirbRequest) ([]string, error) {
