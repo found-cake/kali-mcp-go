@@ -68,6 +68,13 @@ func TestToolVersionCancellationKillsDescendants(t *testing.T) {
 	if version := toolVersionWithTimeout(context.Background(), executable, 10*time.Second); version != "version 1.0" {
 		t.Fatalf("version cache did not recover after cancellation: %q", version)
 	}
+	cachedScript := "#!/bin/sh\nprintf 'unexpected second probe\\n'\n"
+	if err := os.WriteFile(executable, []byte(cachedScript), 0o700); err != nil {
+		t.Fatalf("replace cached version probe: %v", err)
+	}
+	if version := toolVersionWithTimeout(context.Background(), executable, 10*time.Second); version != "version 1.0" {
+		t.Fatalf("successful version probe was not cached: %q", version)
+	}
 }
 
 func TestStreamShellKillsDescendantAfterCancel(t *testing.T) {
