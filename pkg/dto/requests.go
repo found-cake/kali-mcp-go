@@ -139,7 +139,7 @@ type NucleiRequest struct {
 	Severity       string   `json:"severity,omitempty" jsonschema:"comma-separated severities"`
 	Tags           string   `json:"tags,omitempty" jsonschema:"comma-separated template tags to include"`
 	Templates      []string `json:"templates,omitempty" jsonschema:"specific template paths or IDs"`
-	AllowUnsafe    bool     `json:"allow_unsafe,omitempty" jsonschema:"allow DoS, fuzz, DAST, and OAST behavior; false excludes these behaviors"`
+	AllowUnsafe    bool     `json:"allow_unsafe,omitempty" jsonschema:"allow DoS, fuzz, DAST, OAST, and interactsh behavior; false excludes these behaviors"`
 	DryRun         bool     `json:"dry_run,omitempty" jsonschema:"enumerate matching local templates and preview the command without contacting the target"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra nuclei arguments"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds; 0 derives it from request and rate budgets, while shorter explicit values are preserved with a warning"`
