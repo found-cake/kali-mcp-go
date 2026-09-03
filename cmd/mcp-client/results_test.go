@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -73,6 +75,109 @@ func TestTextResultReturnsStructuredContentAndMarksFailure(t *testing.T) {
 	}
 	if structured.ExecutionStatus != dto.ExecutionFailed {
 		t.Fatalf("expected structured failed status, got %+v", structured)
+	}
+}
+
+func TestClassifyNiktoResultMarksInternalMaxTimeAsPartialTimeout(t *testing.T) {
+	// Given: Nikto exited zero after its own maximum execution time stopped a scan with findings.
+	input := dto.ToolResult{
+		ReturnCode: 0,
+		Stdout: "+ ERROR: Host maximum execution time of 2 seconds reached\n" +
+			"+ Scan terminated: 0 errors and 1 item reported on the remote host\n",
+	}
+
+	// When: the MCP boundary classifies the tool result.
+	result := classifyToolResult("nikto_scan", input)
+
+	// Then: the incomplete scan cannot be mistaken for a successful vulnerability finding.
+	if result.ExecutionStatus != dto.ExecutionTimedOut || !result.TimedOut || !result.PartialResults || result.FindingStatus != dto.FindingsInconclusive || result.ClassificationReason != "nikto_internal_max_time" {
+		t.Fatalf("unexpected Nikto internal timeout classification: %+v", result)
+	}
+}
+
+func TestClassifyNiktoResultDoesNotInferTimeoutFromOrdinaryTimingText(t *testing.T) {
+	// Given: a completed Nikto result that mentions time without an internal termination signature.
+	input := dto.ToolResult{ReturnCode: 0, Stdout: "+ 0 item(s) reported\n+ End Time: 2026-09-03\n"}
+
+	// When: the MCP boundary classifies the tool result.
+	result := classifyToolResult("nikto_scan", input)
+
+	// Then: the completed scan retains its normal clean classification.
+	if result.ExecutionStatus != dto.ExecutionSucceeded || result.PartialResults || result.FindingStatus != dto.FindingsNotDetected {
+		t.Fatalf("ordinary Nikto completion was treated as a timeout: %+v", result)
+	}
+}
+
+func TestClassifyNiktoResultParsesReportedRequestCount(t *testing.T) {
+	// Given: a completed Nikto summary with its authoritative request count.
+	input := dto.ToolResult{ReturnCode: 0, Stdout: "- STATUS: Completed 8318 requests: currently in plugin 'Nikto Tests'\n" +
+		"+ 8499 requests: 0 errors and 7 items reported on the remote host\n"}
+
+	// When: the MCP boundary classifies the result.
+	result := classifyToolResult("nikto_scan", input)
+
+	// Then: the exact count and its parsed provenance are exposed.
+	if result.HTTPRequests == nil || *result.HTTPRequests != 8499 || result.RequestCountSource != dto.RequestCountParsed {
+		t.Fatalf("Nikto request count was not parsed: %+v", result)
+	}
+}
+
+func TestClassifyNucleiDryRunDoesNotReportFinding(t *testing.T) {
+	input := dto.ToolResult{
+		ReturnCode: 0,
+		Stdout:     "dry run validated; tool was not executed",
+		Execution:  dto.ExecutionMetadata{DryRun: true},
+		NucleiPreview: &dto.NucleiPreviewMetadata{
+			TemplatesMatched: 42, TargetRequestsSent: 0,
+		},
+	}
+
+	result := classifyToolResult("nuclei_scan", input)
+
+	if result.ExecutionStatus != dto.ExecutionSucceeded || result.FindingStatus != dto.FindingsUnknown || result.ClassificationReason != "dry_run_preview" {
+		t.Fatalf("dry run was classified as target evidence: %+v", result)
+	}
+}
+
+func TestClassifyToolResultDistinguishesObservationTypes(t *testing.T) {
+	// Given: scanners that report different kinds of observations.
+	tests := []struct {
+		tool   string
+		stdout string
+		want   []string
+	}{
+		{tool: "nmap_scan", stdout: "3000/tcp open http", want: []string{"service"}},
+		{tool: "whatweb_scan", stdout: "HTTPServer[Express]", want: []string{"technology"}},
+		{tool: "ffuf_scan", stdout: `{"url":"https://example.test/admin"}`, want: []string{"content"}},
+		{tool: "nuclei_scan", stdout: `{"template-id":"exposure"}`, want: []string{"vulnerability", "misconfiguration"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.tool, func(t *testing.T) {
+			// When: the common MCP result is classified and serialized.
+			result := classifyToolResult(test.tool, dto.ToolResult{ReturnCode: 0, Stdout: test.stdout})
+			payload, err := json.Marshal(result)
+			if err != nil {
+				t.Fatalf("marshal classified result: %v", err)
+			}
+			var object map[string]any
+			if err := json.Unmarshal(payload, &object); err != nil {
+				t.Fatalf("decode classified result: %v", err)
+			}
+
+			// Then: the result identifies what was detected without treating all output as a vulnerability.
+			values, ok := object["finding_types"].([]any)
+			if !ok {
+				t.Fatalf("finding_types missing from %s result: %s", test.tool, payload)
+			}
+			got := make([]string, 0, len(values))
+			for _, value := range values {
+				got = append(got, value.(string))
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("finding_types=%v want=%v", got, test.want)
+			}
+		})
 	}
 }
 

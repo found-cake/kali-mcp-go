@@ -165,6 +165,7 @@ type ToolResult struct {
 	Status               RunStatus              `json:"status" jsonschema:"completed|failed|timeout|cancelled overall run status"`
 	ExecutionStatus      ExecutionStatus        `json:"execution_status" jsonschema:"succeeded|failed|timed_out|cancelled tool execution outcome"`
 	FindingStatus        FindingStatus          `json:"finding_status" jsonschema:"detected|not_detected|inconclusive|unknown security finding outcome independent of execution_status"`
+	FindingTypes         []FindingType          `json:"finding_types,omitempty" jsonschema:"categories of observations produced or evaluated by the tool"`
 	ClassificationReason string                 `json:"classification_reason,omitempty" jsonschema:"machine-readable reason for the execution and finding classification"`
 	HTTPRequests         *int                   `json:"http_requests"`
 	RequestCountSource   RequestCountSource     `json:"request_count_source"`

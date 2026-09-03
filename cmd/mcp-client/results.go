@@ -8,10 +8,19 @@ import (
 )
 
 func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
+	result.FindingTypes = findingTypesForTool(toolName)
+	attachReportedRequestCount(toolName, &result)
+	output := strings.ToLower(result.Stdout + "\n" + result.Stderr)
+	niktoInternalTimeout := toolName == "nikto_scan" && result.ReturnCode == 0 && !result.TimedOut && !result.Cancelled &&
+		strings.Contains(output, "host maximum execution time of") && strings.Contains(output, " seconds reached")
 	wpscanNonWordPress := toolName == "wpscan_analyze" && result.ReturnCode == 4 && strings.Contains(
-		strings.ToLower(result.Stdout+"\n"+result.Stderr), "does not seem to be running wordpress",
+		output, "does not seem to be running wordpress",
 	)
 	switch {
+	case niktoInternalTimeout:
+		result.ExecutionStatus = dto.ExecutionTimedOut
+		result.PartialResults = true
+		result.ClassificationReason = "nikto_internal_max_time"
 	case result.TimedOut:
 		result.ExecutionStatus = dto.ExecutionTimedOut
 		result.ClassificationReason = "execution_timed_out"
@@ -47,7 +56,12 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		finalizeClassifiedResult(&result)
 		return result
 	}
-	output := strings.ToLower(result.Stdout + "\n" + result.Stderr)
+	if result.Execution.DryRun {
+		result.FindingStatus = dto.FindingsUnknown
+		result.ClassificationReason = "dry_run_preview"
+		finalizeClassifiedResult(&result)
+		return result
+	}
 	switch toolName {
 	case "sqlmap_scan":
 		switch {

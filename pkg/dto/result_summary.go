@@ -6,6 +6,7 @@ type inlineResultAssessment struct {
 	Status               RunStatus       `json:"status"`
 	ExecutionStatus      ExecutionStatus `json:"execution_status"`
 	FindingStatus        FindingStatus   `json:"finding_status"`
+	FindingTypes         []FindingType   `json:"finding_types,omitempty"`
 	ClassificationReason string          `json:"classification_reason,omitempty"`
 	OutputTruncated      bool            `json:"output_truncated"`
 }
@@ -37,7 +38,7 @@ func (r ToolResult) inlineStructuredSummary() (string, error) {
 	summary := inlineResultSummary{
 		Assessment: inlineResultAssessment{
 			Status: r.Status, ExecutionStatus: r.ExecutionStatus, FindingStatus: r.FindingStatus,
-			ClassificationReason: r.ClassificationReason, OutputTruncated: r.OutputTruncated,
+			FindingTypes: r.FindingTypes, ClassificationReason: r.ClassificationReason, OutputTruncated: r.OutputTruncated,
 		},
 		SQLMapAnalysis: r.SQLMapAnalysis,
 		JWTStructure:   r.JWTAnalysis,
