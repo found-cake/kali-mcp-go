@@ -34,6 +34,7 @@ func newTicker(interval time.Duration) ticker {
 }
 
 type Config struct {
+	Context           context.Context
 	CallID            string
 	Lines             <-chan executor.Line
 	Done              <-chan *executor.Result
@@ -50,12 +51,13 @@ func Run(writer Writer, config Config) {
 
 func runWithTicker(writer Writer, config Config, tickerFactory func() ticker) {
 	streamRun{
-		lines: config.Lines, done: config.Done, cancel: config.Cancel,
+		context: config.Context, lines: config.Lines, done: config.Done, cancel: config.Cancel,
 		tickerFactory: tickerFactory, cleanups: config.Cleanups, callID: config.CallID,
 	}.run(writer)
 }
 
 type streamRun struct {
+	context       context.Context
 	lines         <-chan executor.Line
 	done          <-chan *executor.Result
 	cancel        context.CancelFunc
@@ -83,6 +85,7 @@ func (s streamRun) run(w Writer) {
 	wroteDone := false
 	linesCh := s.lines
 	doneCh := s.done
+	contextDone := contextDone(s.context)
 
 	for linesCh != nil || doneCh != nil {
 		var resultCh <-chan *executor.Result
@@ -91,6 +94,12 @@ func (s streamRun) run(w Writer) {
 		}
 
 		select {
+		case <-contextDone:
+			if s.cancel != nil {
+				s.cancel()
+			}
+			go drainStreamLines(linesCh)
+			return
 		case line, ok := <-linesCh:
 			if !ok {
 				linesCh = nil
@@ -164,6 +173,13 @@ func (s streamRun) run(w Writer) {
 	if !wroteDone {
 		writeStreamDoneFallback(w, "internal error: stream ended without result")
 	}
+}
+
+func contextDone(ctx context.Context) <-chan struct{} {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Done()
 }
 
 func writeStreamPayload(w Writer, payload []byte) error {

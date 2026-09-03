@@ -24,6 +24,7 @@ func TestToolCallTelemetryCorrelatesJSONResult(t *testing.T) {
 	}
 	request.Header.Set(fiber.HeaderAuthorization, "Bearer telemetry-token")
 	request.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	request.Header.Set(dto.CallIDHeader, "call_0123456789abcdef0123456789abcdef")
 
 	// When a tool call completes through the JSON API.
 	response, err := app.Test(request)
@@ -38,7 +39,7 @@ func TestToolCallTelemetryCorrelatesJSONResult(t *testing.T) {
 
 	// Then one call ID correlates the header, body, and bounded execution interval.
 	callID := response.Header.Get(dto.CallIDHeader)
-	if callID == "" || result.CallID != callID {
+	if callID != "call_0123456789abcdef0123456789abcdef" || result.CallID != callID {
 		t.Fatalf("expected matching call IDs, header=%q result=%q", callID, result.CallID)
 	}
 	if result.Execution.EndedAt.Before(result.Execution.StartedAt) {
@@ -57,6 +58,7 @@ func TestToolCallTelemetryCorrelatesEverySSEEvent(t *testing.T) {
 	}
 	request.Header.Set(fiber.HeaderAuthorization, "Bearer telemetry-token")
 	request.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	request.Header.Set(dto.CallIDHeader, "call_0123456789abcdef0123456789abcdef")
 
 	// When the complete SSE response is consumed.
 	response, err := app.Test(request)
@@ -72,7 +74,7 @@ func TestToolCallTelemetryCorrelatesEverySSEEvent(t *testing.T) {
 
 	// Then every event and the response header use the same call ID.
 	callID := response.Header.Get(dto.CallIDHeader)
-	if callID == "" || len(events) != 3 {
+	if callID != "call_0123456789abcdef0123456789abcdef" || len(events) != 3 {
 		t.Fatalf("expected call ID and three events, call_id=%q events=%d", callID, len(events))
 	}
 	for _, event := range events {

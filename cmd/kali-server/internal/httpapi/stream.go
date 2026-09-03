@@ -1,26 +1,65 @@
 package httpapi
 
 import (
-	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/streaming"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/sse"
 )
 
-const streamHeartbeatInterval = 15 * time.Second
+const (
+	streamHeartbeatInterval       = 15 * time.Second
+	streamDisconnectProbeInterval = 2 * time.Second
+)
 
 func SendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, cleanups ...func()) error {
-	c.Set("Content-Type", "text/event-stream")
-	c.Set("Cache-Control", "no-cache")
-	c.Set("X-Accel-Buffering", "no")
+	return sendToolStream(c, lines, done, cancel, streamDisconnectProbeInterval, cleanups...)
+}
+
+func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, disconnectProbeInterval time.Duration, cleanups ...func()) error {
+	if unregister := RegisterCallCancellation(c, cancel); unregister != nil {
+		cleanups = append(cleanups, unregister)
+	}
 	config := streaming.Config{
 		CallID: CallID(c), Lines: lines, Done: done, Cancel: cancel,
 		HeartbeatInterval: streamHeartbeatInterval, Cleanups: cleanups,
 	}
-	return c.SendStreamWriter(func(writer *bufio.Writer) {
-		streaming.Run(writer, config)
+	handler := sse.New(sse.Config{
+		HeartbeatInterval: disconnectProbeInterval,
+		Handler: func(_ fiber.Ctx, stream *sse.Stream) error {
+			config.Context = stream.Context()
+			streaming.Run(&ssePayloadWriter{stream: stream}, config)
+			return stream.Err()
+		},
 	})
+	return handler(c)
+}
+
+type ssePayloadWriter struct {
+	stream *sse.Stream
+	buffer bytes.Buffer
+}
+
+func (writer *ssePayloadWriter) WriteString(value string) (int, error) {
+	return writer.buffer.WriteString(value)
+}
+
+func (writer *ssePayloadWriter) Flush() error {
+	frame := writer.buffer.String()
+	writer.buffer.Reset()
+	if !strings.HasPrefix(frame, "data: ") || !strings.HasSuffix(frame, "\n\n") {
+		return fmt.Errorf("invalid SSE data frame")
+	}
+	payload := strings.TrimSuffix(strings.TrimPrefix(frame, "data: "), "\n\n")
+	if !json.Valid([]byte(payload)) {
+		return fmt.Errorf("invalid SSE JSON payload")
+	}
+	return writer.stream.Event(sse.Event{Data: json.RawMessage(payload)})
 }

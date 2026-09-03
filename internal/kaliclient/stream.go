@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/callid"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
@@ -38,6 +40,10 @@ type streamAccumulator struct {
 }
 
 func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
+	callID, err := callid.New()
+	if err != nil {
+		return nil, fmt.Errorf("stream call ID: %w", err)
+	}
 	requestContext, cancel := c.requestContext(ctx, body)
 	defer cancel()
 	request, err := c.newJSONRequest(requestContext, jsonRequestSpec{
@@ -47,8 +53,10 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		return nil, err
 	}
 	request.Header.Set("Accept", "text/event-stream")
+	request.Header.Set(dto.CallIDHeader, callID)
 	response, err := c.http.Do(request)
 	if err != nil {
+		c.cancelRemoteCall(callID)
 		return nil, fmt.Errorf("stream: %w", err)
 	}
 	defer response.Body.Close()
@@ -56,7 +64,30 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		responseBody, _ := io.ReadAll(response.Body)
 		return nil, serverResponseError(response, responseBody)
 	}
-	return parseToolStream(response.Body, response.Header.Get(dto.CallIDHeader))
+	responseCallID := response.Header.Get(dto.CallIDHeader)
+	if responseCallID == "" {
+		responseCallID = callID
+	}
+	result, err := parseToolStream(response.Body, responseCallID)
+	if err != nil {
+		c.cancelRemoteCall(callID)
+	}
+	return result, err
+}
+
+func (c *Client) cancelRemoteCall(callID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	request, err := c.newJSONRequest(ctx, jsonRequestSpec{
+		method: http.MethodPost, endpoint: "/api/calls/" + callID + "/cancel", authorize: true,
+	})
+	if err != nil {
+		return
+	}
+	response, err := c.http.Do(request)
+	if err == nil {
+		response.Body.Close()
+	}
 }
 
 func parseToolStream(reader io.Reader, initialCallID string) (*dto.ToolResult, error) {

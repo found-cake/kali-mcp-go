@@ -1,14 +1,13 @@
 package httpapi
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/callid"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
@@ -72,9 +71,13 @@ func CallTelemetryMiddleware(print LogPrinter) fiber.Handler {
 		print = func(string, ...any) {}
 	}
 	return func(c fiber.Ctx) error {
-		callID, err := randomCallID()
-		if err != nil {
-			return InternalServerError(c, "failed to generate call ID")
+		callID := strings.TrimSpace(c.Get(dto.CallIDHeader))
+		if !callid.Valid(callID) {
+			var err error
+			callID, err = callid.New()
+			if err != nil {
+				return InternalServerError(c, "failed to generate call ID")
+			}
 		}
 		startedAt := time.Now().UTC()
 		c.Locals(callIDLocalKey, callID)
@@ -93,14 +96,6 @@ func CallTelemetryMiddleware(print LogPrinter) fiber.Handler {
 	}
 }
 
-func randomCallID() (string, error) {
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	return "call_" + hex.EncodeToString(raw), nil
-}
-
 func CallID(c fiber.Ctx) string {
 	callID, _ := c.Locals(callIDLocalKey).(string)
 	return callID
@@ -113,6 +108,8 @@ func callOperation(path string) string {
 		return "execute_command"
 	case strings.HasPrefix(trimmed, "artifacts/"):
 		return "result_artifact_read"
+	case strings.HasPrefix(trimmed, "calls/") && strings.HasSuffix(trimmed, "/cancel"):
+		return "cancel_call"
 	case trimmed == "tools/capabilities":
 		return "get_scan_capabilities"
 	case trimmed == "tools/resolve-target":
