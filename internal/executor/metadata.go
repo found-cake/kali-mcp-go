@@ -16,14 +16,25 @@ func toolVersion(ctx context.Context, name string) string {
 			return version
 		}
 	}
-	versionCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	version := queryToolVersion(ctx, name, 2*time.Second)
+	versionCache.Store(name, version)
+	return version
+}
+
+func queryToolVersion(ctx context.Context, name string, timeout time.Duration) string {
+	versionCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	output, err := exec.CommandContext(versionCtx, name, versionArguments(name)...).CombinedOutput()
+	command := exec.CommandContext(versionCtx, name, versionArguments(name)...)
+	configureCommandCancellation(command)
+	command.WaitDelay = gracefulStopTimeout
+	output, err := command.CombinedOutput()
+	if cleanupErr := cleanupCommandProcesses(command); cleanupErr != nil {
+		err = cleanupErr
+	}
 	version := "unknown"
 	if err == nil {
 		version = versionLine(name, string(output))
 	}
-	versionCache.Store(name, version)
 	return version
 }
 

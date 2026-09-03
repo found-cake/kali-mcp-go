@@ -5,11 +5,58 @@ package executor
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"testing"
 	"time"
 )
+
+func TestToolVersionCancellationKillsDescendants(t *testing.T) {
+	directory := t.TempDir()
+	marker := filepath.Join(directory, "child-pid")
+	executable := filepath.Join(directory, "version-probe")
+	script := "#!/bin/sh\nsleep 30 &\nchild=$!\nprintf '%s' \"$child\" > \"$VERSION_PROBE_MARKER\"\nwait \"$child\"\n"
+	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
+		t.Fatalf("write version probe: %v", err)
+	}
+	t.Setenv("VERSION_PROBE_MARKER", marker)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan string, 1)
+	go func() { done <- queryToolVersion(ctx, executable, 10*time.Second) }()
+
+	var childPID int
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		contents, err := os.ReadFile(marker)
+		if err == nil {
+			childPID, err = strconv.Atoi(string(contents))
+			if err != nil {
+				t.Fatalf("parse child PID: %v", err)
+			}
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if childPID == 0 {
+		t.Fatal("version probe did not start")
+	}
+	t.Cleanup(func() { _ = syscall.Kill(childPID, syscall.SIGKILL) })
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2500 * time.Millisecond):
+		_ = syscall.Kill(childPID, syscall.SIGKILL)
+		<-done
+		t.Fatal("cancelled version probe retained a descendant process")
+	}
+	if !waitForProcessExit(childPID, time.Second) {
+		t.Fatalf("version probe descendant %d survived cancellation", childPID)
+	}
+}
 
 func TestStreamShellKillsDescendantAfterCancel(t *testing.T) {
 	// Given: a shell command with a descendant that ignores graceful termination signals.
