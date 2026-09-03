@@ -196,6 +196,15 @@ func TestNucleiArgsRejectsSafetyOverridesByDefault(t *testing.T) {
 	}
 }
 
+func TestNucleiArgsRejectsInlineValueForFlagOnlyOption(t *testing.T) {
+	_, err := NucleiArgs(dto.NucleiRequest{
+		Target: "https://example.com", AdditionalArgs: "--stats=true",
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not accept an inline value") {
+		t.Fatalf("flag-only option accepted an inline value: %v", err)
+	}
+}
+
 func TestNucleiArgsAllowSafetyOverridesOnlyWhenExplicit(t *testing.T) {
 	// Given: the caller explicitly authorizes unsafe Nuclei behavior.
 	request := dto.NucleiRequest{

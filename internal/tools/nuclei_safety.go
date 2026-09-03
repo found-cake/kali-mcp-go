@@ -59,6 +59,9 @@ func validateSafeNucleiAdditionalArgs(value string) error {
 		if !allowed {
 			return fmt.Errorf("Nuclei additional_args flag %q requires allow_unsafe", args[index])
 		}
+		if !requiresValue && inlineValue {
+			return fmt.Errorf("Nuclei additional_args flag %q does not accept an inline value", args[index])
+		}
 		if !requiresValue || inlineValue {
 			continue
 		}
