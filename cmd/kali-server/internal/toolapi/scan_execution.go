@@ -100,9 +100,10 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if provenance != nil {
 		target = provenance.Selected
 	}
+	schedulerTarget := targeting.SchedulerKey(target, provenance)
 	release := func() {}
 	if scheduler := httpapi.Scheduler(c); scheduler != nil {
-		release, err = scheduler.Acquire(target, scanWeight(controlledArgs[0]))
+		release, err = scheduler.Acquire(schedulerTarget, scanWeight(controlledArgs[0]))
 		if err != nil {
 			return nil, err
 		}
