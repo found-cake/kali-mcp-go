@@ -158,14 +158,14 @@ type ToolResult struct {
 	StderrBytes          int                   `json:"stderr_bytes"`
 	OutputTruncated      bool                  `json:"output_truncated"`
 	ReturnCode           int                   `json:"return_code"`
-	Success              bool                  `json:"success"`
+	Success              bool                  `json:"success" jsonschema:"true when tool execution succeeded; does not mean a security finding was detected"`
 	TimedOut             bool                  `json:"timed_out"`
 	Cancelled            bool                  `json:"cancelled"`
 	PartialResults       bool                  `json:"partial_results"`
-	Status               RunStatus             `json:"status"`
-	ExecutionStatus      ExecutionStatus       `json:"execution_status"`
-	FindingStatus        FindingStatus         `json:"finding_status"`
-	ClassificationReason string                `json:"classification_reason,omitempty"`
+	Status               RunStatus             `json:"status" jsonschema:"completed|failed|timeout|cancelled overall run status"`
+	ExecutionStatus      ExecutionStatus       `json:"execution_status" jsonschema:"succeeded|failed|timed_out|cancelled tool execution outcome"`
+	FindingStatus        FindingStatus         `json:"finding_status" jsonschema:"detected|not_detected|inconclusive|unknown security finding outcome independent of execution_status"`
+	ClassificationReason string                `json:"classification_reason,omitempty" jsonschema:"machine-readable reason for the execution and finding classification"`
 	HTTPRequests         *int                  `json:"http_requests"`
 	RequestCountSource   RequestCountSource    `json:"request_count_source"`
 	DurationMS           int64                 `json:"duration_ms"`

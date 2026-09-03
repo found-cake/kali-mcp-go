@@ -158,11 +158,11 @@ func (r WhatWebRequest) GetRequestTimeout() int { return r.Timeout }
 
 type JWTRequest struct {
 	ScanOptions
-	Token          string `json:"token" jsonschema:"required,JWT value"`
-	TargetURL      string `json:"target_url,omitempty" jsonschema:"application endpoint used for live verification"`
-	RequestHeader  string `json:"request_header,omitempty" jsonschema:"request header containing JWT_HERE placeholder"`
-	RequestCookie  string `json:"request_cookie,omitempty" jsonschema:"request cookie containing JWT_HERE placeholder"`
-	Canary         string `json:"canary,omitempty" jsonschema:"response text indicating an accepted token"`
+	Token          string `json:"token" jsonschema:"required,raw JWT that is always parsed for offline structure and metadata"`
+	TargetURL      string `json:"target_url,omitempty" jsonschema:"optional application endpoint that enables live token acceptance verification"`
+	RequestHeader  string `json:"request_header,omitempty" jsonschema:"full request header template containing the literal JWT_HERE placeholder; used only with target_url"`
+	RequestCookie  string `json:"request_cookie,omitempty" jsonschema:"request cookie template containing the literal JWT_HERE placeholder; used only with target_url"`
+	Canary         string `json:"canary,omitempty" jsonschema:"response text indicating an accepted token during live verification"`
 	Mode           string `json:"mode,omitempty" jsonschema:"jwt_tool scan mode pb|er|at; defaults to at for live targets"`
 	PublicKey      string `json:"public_key,omitempty" jsonschema:"public key path for RS/HS confusion testing"`
 	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra jwt_tool arguments"`
