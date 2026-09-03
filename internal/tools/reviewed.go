@@ -41,7 +41,7 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 	if request.Depth > 0 {
 		args = append(args, "--depth", strconv.Itoa(request.Depth))
 	}
-	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "--url", "--stdin", "--resume-from", "--request-file", "--config")
+	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-u", "--url", "--stdin", "--resume-from", "--request-file", "--config")
 }
 
 func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
@@ -90,7 +90,8 @@ func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
 	if request.Aggression > 0 {
 		args = append(args, "--aggression", strconv.Itoa(request.Aggression))
 	}
-	args, err := appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", true, "-i", "--input-file")
+	args, err := appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", true,
+		"-i", "--input-file", "--url-prefix", "--url-suffix", "--url-pattern")
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 	if request.PublicKey != "" {
 		args = append(args, "-pk", request.PublicKey)
 	}
-	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-t")
+	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-t", "-r", "--request")
 }
 
 func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
@@ -138,7 +139,8 @@ func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
 			return nil, fmt.Errorf("additional_args must not set Dalfox worker flags; use concurrency")
 		}
 	}
-	if err := rejectTargetSourceArgs(extra, "additional_args", false, "--file", "--rawdata", "--har-file"); err != nil {
+	if err := rejectTargetSourceArgs(extra, "additional_args", true,
+		"--file", "--rawdata", "--har-file", "--config", "--session-check-url"); err != nil {
 		return nil, err
 	}
 	return append(args, extra...), nil
@@ -163,7 +165,7 @@ func BrowserArgs(request dto.BrowserRequest) ([]string, error) {
 
 func RetireArgs(request dto.RetireRequest) ([]string, error) {
 	args := []string{"retire", "--path", request.Path, "--outputformat", "json", "--exitwith", "0"}
-	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "--path")
+	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "--path", "--jspath")
 }
 
 func OSVArgs(request dto.OSVRequest) ([]string, error) {

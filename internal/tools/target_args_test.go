@@ -27,12 +27,24 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			_, err := NmapArgs(dto.NmapRequest{Target: "192.0.2.10", AdditionalArgs: "-iL=targets.txt"})
 			return err
 		}},
+		{name: "nmap resume file", build: func() error {
+			_, err := NmapArgs(dto.NmapRequest{Target: "192.0.2.10", AdditionalArgs: "--resume=scan.xml"})
+			return err
+		}},
+		{name: "nmap idle scan zombie", build: func() error {
+			_, err := NmapArgs(dto.NmapRequest{Target: "192.0.2.10", ScanType: "-sI198.51.100.20"})
+			return err
+		}},
+		{name: "nmap FTP relay", build: func() error {
+			_, err := NmapArgs(dto.NmapRequest{Target: "192.0.2.10", AdditionalArgs: "-b=ftp://198.51.100.20"})
+			return err
+		}},
 		{name: "ffuf URL", build: func() error {
 			_, err := FFUFArgs(dto.FFUFRequest{URL: "https://example.test/FUZZ", AdditionalArgs: "-u=https://foreign.test/FUZZ"})
 			return err
 		}},
 		{name: "ferox URL", build: func() error {
-			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{URL: "https://example.test/", AdditionalArgs: "--url=https://foreign.test/"})
+			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{URL: "https://example.test/", AdditionalArgs: "-u=https://foreign.test/"})
 			return err
 		}},
 		{name: "gobuster URL", build: func() error {
@@ -40,7 +52,7 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			return err
 		}},
 		{name: "nikto host", build: func() error {
-			_, err := NiktoArgs(dto.NiktoRequest{Target: "https://example.test/", AdditionalArgs: "-h=https://foreign.test/"})
+			_, err := NiktoArgs(dto.NiktoRequest{Target: "https://example.test/", AdditionalArgs: "-url=https://foreign.test/"})
 			return err
 		}},
 		{name: "wpscan URL", build: func() error {
@@ -54,6 +66,20 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			}
 			return err
 		}},
+		{name: "sqlmap direct database", build: func() error {
+			plan, err := PrepareSQLMap(dto.SQLMapRequest{URL: "https://example.test/?id=1", AdditionalArgs: "--direct=sqlite:///tmp/foreign.db"})
+			if plan != nil {
+				plan.Cleanup()
+			}
+			return err
+		}},
+		{name: "sqlmap secondary URL", build: func() error {
+			plan, err := PrepareSQLMap(dto.SQLMapRequest{URL: "https://example.test/?id=1", AdditionalArgs: "--second-url=https://foreign.test/"})
+			if plan != nil {
+				plan.Cleanup()
+			}
+			return err
+		}},
 		{name: "nuclei target", build: func() error {
 			_, err := NucleiArgs(dto.NucleiRequest{Target: "https://example.test/", AllowUnsafe: true, AdditionalArgs: "-u=https://foreign.test/"})
 			return err
@@ -62,16 +88,20 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			_, err := WhatWebArgs(dto.WhatWebRequest{Target: "https://example.test/", AdditionalArgs: "https://foreign.test/"})
 			return err
 		}},
+		{name: "whatweb URL prefix", build: func() error {
+			_, err := WhatWebArgs(dto.WhatWebRequest{Target: "example.test", AdditionalArgs: "--url-prefix=https://foreign.test/"})
+			return err
+		}},
 		{name: "JWT live target", build: func() error {
-			_, err := JWTToolArgs(dto.JWTRequest{Token: "a.b.c", TargetURL: "https://example.test/", AdditionalArgs: "-t=https://foreign.test/"})
+			_, err := JWTToolArgs(dto.JWTRequest{Token: "a.b.c", TargetURL: "https://example.test/", AdditionalArgs: "--request=request.txt"})
 			return err
 		}},
 		{name: "Dalfox request file", build: func() error {
-			_, err := DalfoxArgs(dto.DalfoxRequest{Target: "https://example.test/?q=FUZZ", AdditionalArgs: "--file=foreign.txt"})
+			_, err := DalfoxArgs(dto.DalfoxRequest{Target: "https://example.test/?q=FUZZ", AdditionalArgs: "https://foreign.test/?q=FUZZ"})
 			return err
 		}},
 		{name: "Retire path", build: func() error {
-			_, err := RetireArgs(dto.RetireRequest{Path: "/tmp/selected", AdditionalArgs: "--path=/tmp/foreign"})
+			_, err := RetireArgs(dto.RetireRequest{Path: "/tmp/selected", AdditionalArgs: "--jspath=/tmp/foreign"})
 			return err
 		}},
 		{name: "Hydra target list", build: func() error {

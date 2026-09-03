@@ -68,7 +68,8 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 	}
 	plan.args = append(plan.args, "-t", plan.trafficFile, "--output-dir", filepath.Join(tempDir, "output"))
 	plan.args, err = appendTargetSafeArgs(plan.args, request.AdditionalArgs, "additional_args", false,
-		"-u", "--url", "-r", "--request-file", "-l", "--log-file", "-m", "--bulk-file", "-g", "--google-dork", "-c", "--config-file")
+		"-u", "--url", "-r", "--request-file", "-l", "--log-file", "-m", "--bulk-file", "-g", "--google-dork", "-c", "--config-file",
+		"-d", "--direct", "--second-url", "--second-req", "--safe-url", "--safe-req", "--csrf-url", "--host")
 	if err != nil {
 		plan.Cleanup()
 		return nil, err

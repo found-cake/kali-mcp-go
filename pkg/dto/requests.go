@@ -17,7 +17,7 @@ func (r CommandRequest) GetRequestTimeout() int { return r.Timeout }
 type NmapRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"IP address or hostname to scan; omit when target_context is supplied"`
-	ScanType       string `json:"scan_type,omitempty" jsonschema:"nmap scan flags only (default: -sCV); positional targets and input-list flags are rejected"`
+	ScanType       string `json:"scan_type,omitempty" jsonschema:"nmap scan flags only (default: -sCV); positional targets, input lists, resume files, idle-scan zombies, and FTP relays are rejected"`
 	Ports          string `json:"ports,omitempty" jsonschema:"port list or range e.g. 80,443,8000-8080"`
 	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra target-neutral nmap options (default: -T4 -Pn); positional targets are rejected and option values must use attached --flag=value syntax"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
@@ -83,7 +83,7 @@ type SQLMapRequest struct {
 	ContentType    string            `json:"content_type,omitempty" jsonschema:"Content-Type header value e.g. application/json"`
 	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
 	TestParameters string            `json:"test_parameters,omitempty" jsonschema:"comma-separated parameters or JSON fields to test"`
-	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding URL, request-file, bulk-target, dork, and config source overrides"`
+	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding alternate URL, request, database, safe-request, CSRF, host, bulk-target, dork, and config sources"`
 	Timeout        int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -176,7 +176,7 @@ func (r JWTRequest) GetRequestTimeout() int { return r.Timeout }
 type DalfoxRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"target URL or raw HTTP file; omit only for a URL supplied through target_context"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments excluding alternate request sources; use concurrency instead of --worker or --workers"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments excluding positional and alternate request sources; option values must use attached --flag=value syntax and concurrency replaces --worker or --workers"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 

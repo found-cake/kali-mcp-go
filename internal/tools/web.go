@@ -42,7 +42,7 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 	if r.Tuning != "" {
 		args = append(args, "-Tuning", r.Tuning)
 	}
-	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-h", "-host", "-config")
+	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-h", "-host", "-url", "-config")
 }
 
 func WPScanArgs(r dto.WPScanRequest) ([]string, error) {
