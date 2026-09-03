@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
@@ -36,15 +37,25 @@ func SendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *execut
 }
 
 func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, disconnectProbeInterval time.Duration, cleanups ...func()) error {
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() { cancelAndCleanup(nil, cleanups) })
+	}
+	finish := func() {
+		if cancel != nil {
+			cancel()
+		}
+		cleanup()
+	}
 	config := streaming.Config{
 		CallID: CallID(c), Lines: lines, Done: done, Cancel: cancel,
-		HeartbeatInterval: streamHeartbeatInterval, Cleanups: cleanups,
+		HeartbeatInterval: streamHeartbeatInterval, Cleanups: []func(){cleanup},
 	}
 	handler := sse.New(sse.Config{
 		HeartbeatInterval: disconnectProbeInterval,
 		Handler: func(_ fiber.Ctx, stream *sse.Stream) error {
 			if err := stream.Comment(""); err != nil {
-				cancelAndCleanup(cancel, cleanups)
+				finish()
 				return err
 			}
 			config.Context = stream.Context()
@@ -52,8 +63,9 @@ func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *execut
 			return stream.Err()
 		},
 	})
+	c.SetContext(transportContext(c))
 	if err := handler(c); err != nil {
-		cancelAndCleanup(cancel, cleanups)
+		finish()
 		return err
 	}
 	return nil

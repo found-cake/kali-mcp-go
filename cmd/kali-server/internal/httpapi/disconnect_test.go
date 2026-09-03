@@ -6,10 +6,12 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -119,5 +121,66 @@ func TestSendToolStreamFlushesAnInitialFrame(t *testing.T) {
 	done <- &executor.Result{}
 	if _, err := io.ReadAll(response.Body); err != nil {
 		t.Fatalf("read terminal frame: %v", err)
+	}
+}
+
+func TestExplicitCallCancellationReturnsTerminalStreamEvent(t *testing.T) {
+	app := fiber.New()
+	registry := NewCallCancellationRegistry()
+	app.Use(CallTelemetryMiddleware(nil))
+	app.Use(CallCancellationRegistryMiddleware(registry))
+	app.Post("/stream", WithCallCancellation(func(c fiber.Ctx) error {
+		lines := make(chan executor.Line)
+		done := make(chan *executor.Result, 1)
+		executionContext, cancel := context.WithCancel(c.Context())
+		go func() {
+			<-executionContext.Done()
+			time.Sleep(50 * time.Millisecond)
+			close(lines)
+			done <- &executor.Result{ReturnCode: -1, Cancelled: true}
+			close(done)
+		}()
+		return SendToolStream(c, lines, done, cancel)
+	}))
+	app.Post("/calls/:id/cancel", HandleCancelCall)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- app.Listener(listener, fiber.ListenConfig{DisableStartupMessage: true}) }()
+	t.Cleanup(func() {
+		_ = app.Shutdown()
+		<-serverDone
+	})
+	callID := "call_0123456789abcdef0123456789abcdef"
+	request, err := http.NewRequest(http.MethodPost, "http://"+listener.Addr().String()+"/stream", nil)
+	if err != nil {
+		t.Fatalf("create stream request: %v", err)
+	}
+	request.Header.Set(dto.CallIDHeader, callID)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	defer response.Body.Close()
+	cancelRequest, err := http.NewRequest(http.MethodPost, "http://"+listener.Addr().String()+"/calls/"+callID+"/cancel", nil)
+	if err != nil {
+		t.Fatalf("create cancel request: %v", err)
+	}
+	cancelResponse, err := http.DefaultClient.Do(cancelRequest)
+	if err != nil {
+		t.Fatalf("cancel stream: %v", err)
+	}
+	cancelResponse.Body.Close()
+	if cancelResponse.StatusCode != fiber.StatusAccepted {
+		t.Fatalf("cancel status=%d", cancelResponse.StatusCode)
+	}
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read cancelled stream: %v", err)
+	}
+	if !strings.Contains(string(payload), `"done":true`) || !strings.Contains(string(payload), `"cancelled":true`) {
+		t.Fatalf("cancelled stream lacks terminal result: %q", payload)
 	}
 }

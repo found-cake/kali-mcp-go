@@ -13,6 +13,8 @@ const callCancellationRegistryLocalKey = "call-cancellation-registry"
 
 const callCancellationLeaseLocalKey = "call-cancellation-lease"
 
+const callTransportContextLocalKey = "call-transport-context"
+
 var ErrCallIDAlreadyActive = errors.New("call ID is already active")
 
 type CallCancellationRegistry struct {
@@ -69,7 +71,9 @@ func CallCancellationRegistryMiddleware(registry *CallCancellationRegistry) fibe
 
 func WithCallCancellation(next fiber.Handler) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx, cancel := context.WithCancel(c.Context())
+		transportContext := c.Context()
+		c.Locals(callTransportContextLocalKey, transportContext)
+		ctx, cancel := context.WithCancel(transportContext)
 		c.SetContext(ctx)
 		unregister, err := RegisterCallCancellation(c, cancel)
 		if err != nil {
@@ -85,6 +89,14 @@ func WithCallCancellation(next fiber.Handler) fiber.Handler {
 		}()
 		return next(c)
 	}
+}
+
+func transportContext(c fiber.Ctx) context.Context {
+	ctx, ok := c.Locals(callTransportContextLocalKey).(context.Context)
+	if !ok || ctx == nil {
+		return c.Context()
+	}
+	return ctx
 }
 
 func RetainCallCancellation(c fiber.Ctx) func() {
