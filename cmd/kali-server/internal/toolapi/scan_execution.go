@@ -29,6 +29,19 @@ var healthHTTPClient = &http.Client{
 		ResponseHeaderTimeout: 2 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
 	},
+	CheckRedirect: func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("health URL stopped after 10 redirects")
+		}
+		if len(via) > 0 {
+			origin, originOK := targeting.Origin(via[0].URL.String())
+			destination, destinationOK := targeting.Origin(request.URL.String())
+			if !originOK || !destinationOK || origin != destination {
+				return errors.New("health URL redirect changes origin")
+			}
+		}
+		return nil
+	},
 }
 
 func scanPreparationError(c fiber.Ctx, err error) error {
@@ -90,6 +103,9 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	}
 	if tools.RuntimeRequiresTargetContext(args[0]) && (provenance == nil || !provenance.Verified) {
 		return nil, fmt.Errorf("%s requires a verified target_context from resolve_target", args[0])
+	}
+	if err := targeting.ValidateHealthURL(effective.HealthURL, provenance); err != nil {
+		return nil, err
 	}
 	if effective.HealthURL != "" && !dryRun {
 		if err := probeTargetHealth(c.Context(), effective.HealthURL); err != nil {
@@ -190,10 +206,12 @@ func probeTargetHealth(ctx context.Context, target string) error {
 		return fmt.Errorf("create health request: %w", err)
 	}
 	response, err := healthHTTPClient.Do(request)
+	if response != nil {
+		defer response.Body.Close()
+	}
 	if err != nil {
 		return fmt.Errorf("request health URL: %w", err)
 	}
-	defer response.Body.Close()
 	if response.StatusCode >= http.StatusInternalServerError {
 		return fmt.Errorf("health URL returned %d", response.StatusCode)
 	}

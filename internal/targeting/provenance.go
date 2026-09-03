@@ -1,11 +1,58 @@
 package targeting
 
 import (
+	"fmt"
+	"net"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func ValidateHealthURL(healthURL string, provenance *dto.TargetProvenance) error {
+	if healthURL == "" {
+		return nil
+	}
+	if provenance == nil || strings.TrimSpace(provenance.Selected) == "" {
+		return fmt.Errorf("health_url requires a target-bound request")
+	}
+	parsed, err := url.Parse(healthURL)
+	if err != nil || parsed.User != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("health_url must be an HTTP or HTTPS URL")
+	}
+	if selectedOrigin, ok := Origin(provenance.Selected); ok {
+		healthOrigin, _ := Origin(healthURL)
+		if healthOrigin != selectedOrigin {
+			return fmt.Errorf("health_url must use the selected target origin")
+		}
+		return nil
+	}
+	selectedHost := strings.Trim(strings.TrimSpace(provenance.Selected), "[]")
+	if host, _, splitErr := net.SplitHostPort(provenance.Selected); splitErr == nil {
+		selectedHost = strings.Trim(host, "[]")
+	}
+	if !strings.EqualFold(parsed.Hostname(), selectedHost) {
+		return fmt.Errorf("health_url must use the selected target host")
+	}
+	if provenance.Port > 0 && healthURLPort(parsed) != provenance.Port {
+		return fmt.Errorf("health_url must use the selected target port %d", provenance.Port)
+	}
+	return nil
+}
+
+func healthURLPort(parsed *url.URL) int {
+	if parsed.Port() != "" {
+		port, _ := strconv.Atoi(parsed.Port())
+		return port
+	}
+	if parsed.Scheme == "http" {
+		return 80
+	}
+	return 443
+}
 
 func ResolveProvenance(request any, secret string, now time.Time) (*dto.TargetProvenance, error) {
 	scanRequest, ok := request.(dto.ScanRequest)

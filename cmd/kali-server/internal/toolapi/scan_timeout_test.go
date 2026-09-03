@@ -3,6 +3,7 @@ package toolapi
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,21 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
+
+func TestProbeTargetHealthRejectsCrossOriginRedirect(t *testing.T) {
+	destination := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+	}))
+	defer destination.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		http.Redirect(response, request, destination.URL, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	if err := probeTargetHealth(t.Context(), origin.URL); err == nil || !strings.Contains(err.Error(), "redirect") {
+		t.Fatalf("cross-origin health redirect was accepted: %v", err)
+	}
+}
 
 func TestPrepareScanExecution_preserves_explicit_timeout_when_request_budget_is_shorter(t *testing.T) {
 	// Given: an explicit two-minute timeout and a forty-second request-budget estimate.
