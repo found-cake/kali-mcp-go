@@ -3,9 +3,27 @@ package tools
 import (
 	"fmt"
 	"strings"
+
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 const safeNucleiExcludedTags = "dos,fuzz,dast,oast,interactsh"
+
+func validateNucleiSafety(request dto.NucleiRequest) error {
+	if request.AllowUnsafe {
+		if request.Profile != "" && request.Profile != dto.ProfileExplicitCustom {
+			return fmt.Errorf("allow_unsafe requires explicit-custom or an omitted profile")
+		}
+		return nil
+	}
+	for _, selector := range append([]string{request.Tags}, request.Templates...) {
+		lower := strings.ToLower(selector)
+		if strings.Contains(lower, "dos") || strings.Contains(lower, "fuzz") || strings.Contains(lower, "dast") || strings.Contains(lower, "oast") || strings.Contains(lower, "interactsh") {
+			return fmt.Errorf("unsafe Nuclei selector requires allow_unsafe")
+		}
+	}
+	return validateSafeNucleiAdditionalArgs(request.AdditionalArgs)
+}
 
 var safeNucleiAdditionalFlags = map[string]bool{
 	"H":                     true,

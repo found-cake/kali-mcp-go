@@ -16,9 +16,15 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
-	if request.Profile == dto.ProfileSafeRecon || request.Profile == dto.ProfileWebDiscoveryLowRate {
+	if isDiscoveryProfile(request.Profile) {
 		if err := rejectArguments(extra, "additional_args", "discovery profiles use FFUF's default read-only request",
-			"-X", "-d", "-r", "-request", "-request-proto", "-input-cmd", "-input-num"); err != nil {
+			"-X", "-d", "-r", "-request", "-request-proto", "-input-cmd", "-input-num", "-sni", "-x", "-replay-proxy"); err != nil {
+			return nil, err
+		}
+	}
+	if hasResolvedTarget(request.ScanOptions) {
+		if err := rejectArguments(extra, "additional_args", "resolved targets forbid alternate TLS names, proxies, and replay destinations",
+			"-sni", "-x", "-replay-proxy", "-r"); err != nil {
 			return nil, err
 		}
 	}
@@ -39,7 +45,7 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 	if request.Recursion {
 		args = append(args, "-recursion")
 	}
-	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-u", "-request", "-config")
+	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-u", "-w", "-request", "-config")
 }
 
 func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
@@ -50,9 +56,16 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
-	if request.Profile == dto.ProfileSafeRecon || request.Profile == dto.ProfileWebDiscoveryLowRate {
+	if isDiscoveryProfile(request.Profile) {
 		if err := rejectArguments(extra, "additional_args", "discovery profiles use Feroxbuster's default GET request",
-			"-m", "--methods", "--data", "--data-json", "--data-urlencoded", "-r", "--redirects"); err != nil {
+			"-m", "--methods", "--data", "--data-json", "--data-urlencoded", "-r", "--redirects", "--scope", "--filter-similar-to",
+			"-p", "--proxy", "-P", "--replay-proxy", "--burp", "--burp-replay"); err != nil {
+			return nil, err
+		}
+	}
+	if hasResolvedTarget(request.ScanOptions) {
+		if err := rejectArguments(extra, "additional_args", "resolved targets forbid additional scopes, comparison URLs, proxies, and replay destinations",
+			"--scope", "--filter-similar-to", "-p", "--proxy", "-P", "--replay-proxy", "--burp", "--burp-replay", "-r", "--redirects"); err != nil {
 			return nil, err
 		}
 	}
@@ -67,7 +80,7 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 	if request.Depth > 0 {
 		args = append(args, "--depth", strconv.Itoa(request.Depth))
 	}
-	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-u", "--url", "--stdin", "--resume-from", "--request-file", "--config")
+	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-u", "--url", "-w", "--wordlist", "--stdin", "--resume-from", "--request-file", "--config")
 }
 
 func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
@@ -78,8 +91,15 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
-	if err := rejectTargetSourceArgs(additional, "additional_args", false, "-u", "-target", "-l", "-list", "-resume"); err != nil {
+	if err := rejectTargetSourceArgs(additional, "additional_args", false,
+		"-u", "-target", "-l", "-list", "-targets-inline", "-resume"); err != nil {
 		return nil, err
+	}
+	if hasResolvedTarget(request.ScanOptions) {
+		if err := rejectArguments(additional, "additional_args", "resolved targets forbid cross-host redirects, TLS-name overrides, and proxy routing",
+			"-fr", "--fr", "-follow-redirects", "--follow-redirects", "-sni", "--sni", "-p", "--proxy", "-pi", "--proxy-internal"); err != nil {
+			return nil, err
+		}
 	}
 	if err := validateNucleiSafety(request); err != nil {
 		return nil, err
@@ -101,22 +121,6 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 	return args, nil
 }
 
-func validateNucleiSafety(request dto.NucleiRequest) error {
-	if request.AllowUnsafe {
-		if request.Profile != "" && request.Profile != dto.ProfileExplicitCustom {
-			return fmt.Errorf("allow_unsafe requires explicit-custom or an omitted profile")
-		}
-		return nil
-	}
-	for _, selector := range append([]string{request.Tags}, request.Templates...) {
-		lower := strings.ToLower(selector)
-		if strings.Contains(lower, "dos") || strings.Contains(lower, "fuzz") || strings.Contains(lower, "dast") || strings.Contains(lower, "oast") || strings.Contains(lower, "interactsh") {
-			return fmt.Errorf("unsafe Nuclei selector requires allow_unsafe")
-		}
-	}
-	return validateSafeNucleiAdditionalArgs(request.AdditionalArgs)
-}
-
 func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
 	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "--header"); err != nil {
 		return nil, err
@@ -128,8 +132,15 @@ func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
-	if request.Profile == dto.ProfileSafeRecon || request.Profile == dto.ProfileWebDiscoveryLowRate {
-		if err := rejectArguments(extra, "additional_args", "safety profiles forbid cross-host redirects", "-r", "--follow-redirect"); err != nil {
+	if isDiscoveryProfile(request.Profile) {
+		if err := rejectArguments(extra, "additional_args", "safety profiles forbid cross-host redirects, proxies, and remote-log destinations",
+			"-r", "--follow-redirect", "--proxy", "--proxy-user", "--log-mongo-host", "--log-elastic-host"); err != nil {
+			return nil, err
+		}
+	}
+	if hasResolvedTarget(request.ScanOptions) {
+		if err := rejectArguments(extra, "additional_args", "resolved targets forbid proxy destinations",
+			"--proxy", "--proxy-user", "--log-mongo-host", "--log-elastic-host", "-r", "--follow-redirect"); err != nil {
 			return nil, err
 		}
 	}
@@ -137,42 +148,15 @@ func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
 	if request.Aggression > 0 {
 		args = append(args, "--aggression", strconv.Itoa(request.Aggression))
 	}
+	if isDiscoveryProfile(request.Profile) || hasResolvedTarget(request.ScanOptions) {
+		args = append(args, "--follow-redirect=never")
+	}
 	args, err = appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", true,
 		"-i", "--input-file", "--url-prefix", "--url-suffix", "--url-pattern")
 	if err != nil {
 		return nil, err
 	}
 	return append(args, request.Target), nil
-}
-
-func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
-	args := []string{"jwt_tool", request.Token}
-	if request.TargetURL != "" {
-		args = append(args, "-t", request.TargetURL)
-	}
-	if request.RequestHeader != "" {
-		args = append(args, "-rh", request.RequestHeader)
-	}
-	if request.RequestCookie != "" {
-		args = append(args, "-rc", request.RequestCookie)
-	}
-	if request.Canary != "" {
-		args = append(args, "-cv", request.Canary)
-	}
-	mode := request.Mode
-	if mode == "" && request.TargetURL != "" {
-		mode = "at"
-	}
-	if err := validateJWTMode(mode); err != nil {
-		return nil, err
-	}
-	if mode != "" {
-		args = append(args, "-M", mode)
-	}
-	if request.PublicKey != "" {
-		args = append(args, "-pk", request.PublicKey)
-	}
-	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-t", "-r", "--request")
 }
 
 func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
@@ -191,7 +175,13 @@ func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
 	}
 	if request.Profile == dto.ProfileBrowserXSSConfirm {
 		if err := rejectArguments(extra, "additional_args", "browser-xss-confirm uses Dalfox's default GET request",
-			"-X", "--method", "-d", "--data", "-F", "--follow-redirects"); err != nil {
+			"-X", "--method", "-d", "--data", "-F", "--follow-redirects", "-b", "--blind", "--blind-oob", "--blind-oob-secret",
+			"--custom-blind-xss-payload", "--remote-payloads", "--remote-wordlists", "--proxy", "--sxss-url"); err != nil {
+			return nil, err
+		}
+	}
+	if hasResolvedTarget(request.ScanOptions) {
+		if err := rejectArguments(extra, "additional_args", "resolved targets forbid cross-host redirects", "-F", "--follow-redirects"); err != nil {
 			return nil, err
 		}
 	}
@@ -227,13 +217,4 @@ func RetireArgs(request dto.RetireRequest) ([]string, error) {
 func OSVArgs(request dto.OSVRequest) ([]string, error) {
 	args := []string{"osv-scanner", "scan", "source", "-r", request.Path, "--format", "json"}
 	return appendSplitArgs(args, request.AdditionalArgs, "additional_args")
-}
-
-func validateJWTMode(mode string) error {
-	switch mode {
-	case "", "pb", "er", "at":
-		return nil
-	default:
-		return fmt.Errorf("mode must be pb|er|at")
-	}
 }

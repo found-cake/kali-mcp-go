@@ -106,7 +106,7 @@ func rejectArguments(parts []string, fieldName, reason string, forbiddenFlags ..
 }
 
 func rejectContextHostHeaders(options dto.ScanOptions, extra, fieldName string, headerFlags ...string) error {
-	if options.TargetContext == "" || strings.TrimSpace(extra) == "" {
+	if (options.TargetContext == "" && options.ResolutionReceipt == "") || strings.TrimSpace(extra) == "" {
 		return nil
 	}
 	parts, err := splitArgs(extra)
@@ -139,10 +139,13 @@ func rejectContextHostHeaders(options dto.ScanOptions, extra, fieldName string, 
 
 func argumentMatchesFlag(argument, flag string) bool {
 	name, _, _ := strings.Cut(argument, "=")
-	if name == flag {
+	normalizedName := strings.TrimLeft(name, "-")
+	normalizedFlag := strings.TrimLeft(flag, "-")
+	if normalizedName == normalizedFlag {
 		return true
 	}
-	return !strings.HasPrefix(flag, "--") && strings.HasPrefix(argument, flag)
+	return strings.HasPrefix(flag, "-") && !strings.HasPrefix(flag, "--") &&
+		strings.HasPrefix(name, "-") && !strings.HasPrefix(name, "--") && strings.HasPrefix(name, flag)
 }
 
 func defaultWordlistPath(envKey, fallback string) string {

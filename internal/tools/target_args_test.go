@@ -39,16 +39,32 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			_, err := NmapArgs(dto.NmapRequest{Target: "192.0.2.10", AdditionalArgs: "-b=ftp://198.51.100.20"})
 			return err
 		}},
+		{name: "nmap port override", build: func() error {
+			_, err := NmapArgs(dto.NmapRequest{Target: "192.0.2.10", Ports: "3000", AdditionalArgs: "-p=80"})
+			return err
+		}},
 		{name: "ffuf URL", build: func() error {
 			_, err := FFUFArgs(dto.FFUFRequest{URL: "https://example.test/FUZZ", AdditionalArgs: "-u=https://foreign.test/FUZZ"})
+			return err
+		}},
+		{name: "ffuf wordlist override", build: func() error {
+			_, err := FFUFArgs(dto.FFUFRequest{URL: "https://example.test/FUZZ", AdditionalArgs: "-w=https://foreign.test/words"})
 			return err
 		}},
 		{name: "ferox URL", build: func() error {
 			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{URL: "https://example.test/", AdditionalArgs: "-u=https://foreign.test/"})
 			return err
 		}},
+		{name: "ferox wordlist override", build: func() error {
+			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{URL: "https://example.test/", AdditionalArgs: "--wordlist=https://foreign.test/words"})
+			return err
+		}},
 		{name: "gobuster URL", build: func() error {
 			_, err := GobusterArgs(dto.GobusterRequest{URL: "https://example.test/", AdditionalArgs: "--url=https://foreign.test/"})
+			return err
+		}},
+		{name: "gobuster wordlist override", build: func() error {
+			_, err := GobusterArgs(dto.GobusterRequest{URL: "https://example.test/", AdditionalArgs: "--wordlist=https://foreign.test/words"})
 			return err
 		}},
 		{name: "nikto host", build: func() error {
@@ -82,6 +98,10 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 		}},
 		{name: "nuclei target", build: func() error {
 			_, err := NucleiArgs(dto.NucleiRequest{Target: "https://example.test/", AllowUnsafe: true, AdditionalArgs: "-u=https://foreign.test/"})
+			return err
+		}},
+		{name: "nuclei inline targets", build: func() error {
+			_, err := NucleiArgs(dto.NucleiRequest{Target: "https://example.test/", AllowUnsafe: true, AdditionalArgs: "--targets-inline=https://foreign.test/"})
 			return err
 		}},
 		{name: "whatweb positional target", build: func() error {
@@ -135,12 +155,38 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 			_, err := NucleiArgs(dto.NucleiRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "-H 'Host: foreign.test'"})
 			return err
 		}},
+		{name: "Nuclei resolved redirect", build: func() error {
+			_, err := NucleiArgs(dto.NucleiRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom},
+				Target:      "https://example.test/", AllowUnsafe: true, AdditionalArgs: "-fr",
+			})
+			return err
+		}},
+		{name: "Nuclei SNI override", build: func() error {
+			_, err := NucleiArgs(dto.NucleiRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom},
+				Target:      "https://example.test/", AllowUnsafe: true, AdditionalArgs: "-sni=foreign.test",
+			})
+			return err
+		}},
 		{name: "FFUF Host header", build: func() error {
 			_, err := FFUFArgs(dto.FFUFRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/FUZZ", AdditionalArgs: "-H 'Host: foreign.test'"})
 			return err
 		}},
+		{name: "FFUF SNI override", build: func() error {
+			_, err := FFUFArgs(dto.FFUFRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/FUZZ", AdditionalArgs: "-sni=foreign.test"})
+			return err
+		}},
+		{name: "FFUF resolved redirect", build: func() error {
+			_, err := FFUFArgs(dto.FFUFRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, URL: "https://example.test/FUZZ", AdditionalArgs: "-r"})
+			return err
+		}},
 		{name: "Ferox Host header", build: func() error {
 			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "--headers='Host: foreign.test'"})
+			return err
+		}},
+		{name: "Ferox additional scope", build: func() error {
+			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "--scope=https://foreign.test/"})
 			return err
 		}},
 		{name: "Gobuster vhost mode", build: func() error {
@@ -155,8 +201,20 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 			_, err := WhatWebArgs(dto.WhatWebRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "--header='Host: foreign.test'"})
 			return err
 		}},
+		{name: "WhatWeb proxy", build: func() error {
+			_, err := WhatWebArgs(dto.WhatWebRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "--proxy=foreign.test:8080"})
+			return err
+		}},
+		{name: "WhatWeb resolved redirect", build: func() error {
+			_, err := WhatWebArgs(dto.WhatWebRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "https://example.test/", AdditionalArgs: "--follow-redirect=always"})
+			return err
+		}},
 		{name: "Dalfox Host header", build: func() error {
 			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "--header='Host: foreign.test'"})
+			return err
+		}},
+		{name: "Dalfox resolved redirect", build: func() error {
+			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "-F"})
 			return err
 		}},
 		{name: "Hydra Host module option", build: func() error {

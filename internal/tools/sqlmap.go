@@ -42,6 +42,12 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 			return nil, err
 		}
 	}
+	if hasResolvedTarget(request.ScanOptions) {
+		if err := rejectArguments(additional, "additional_args", "resolved targets forbid proxy routing and scheme or port overrides",
+			"--proxy", "--proxy-file", "--tor", "--tor-type", "--tor-port", "--check-tor", "--force-ssl"); err != nil {
+			return nil, err
+		}
+	}
 	tempDir, err := os.MkdirTemp("", "kali-mcp-sqlmap-*")
 	if err != nil {
 		return nil, fmt.Errorf("create sqlmap workspace: %w", err)
@@ -86,8 +92,11 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 		plan.Cleanup()
 		return nil, err
 	}
+	if request.Profile == dto.ProfileSQLILowRisk || hasResolvedTarget(request.ScanOptions) {
+		plan.args = append(plan.args, "--ignore-redirects")
+	}
 	if request.Profile == dto.ProfileSQLILowRisk {
-		plan.args = append(plan.args, "--risk=1", "--level=1", "--technique=BEU", "--ignore-redirects")
+		plan.args = append(plan.args, "--risk=1", "--level=1", "--technique=BEU")
 	}
 	return plan, nil
 }
@@ -98,7 +107,8 @@ func validateLowRiskSQLMapArguments(args []string) error {
 		"--os-cmd", "--os-shell", "--os-pwn", "--os-smbrelay", "--os-bof", "--priv-esc", "--udf-inject",
 		"--file-read", "--file-write", "--file-dest", "--reg-read", "--reg-add", "--reg-del", "--reg-key", "--reg-value", "--reg-data", "--reg-type",
 		"--all", "--dump", "--dump-all", "--passwords", "--dbs", "--tables", "--columns", "--schema", "--search", "--users", "--roles", "--privileges",
-		"--common-tables", "--common-columns", "--forms", "--crawl", "--scope", "--tamper", "--preprocess", "--postprocess")
+		"--common-tables", "--common-columns", "--forms", "--crawl", "--scope", "--dns-domain", "--proxy", "--proxy-file", "--tor", "--tor-type", "--tor-port", "--check-tor",
+		"--tamper", "--preprocess", "--postprocess")
 }
 
 func (p *SQLMapPlan) addSource(request dto.SQLMapRequest) error {

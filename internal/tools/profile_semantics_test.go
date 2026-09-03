@@ -120,6 +120,16 @@ func TestSafetyProfilesRejectImpactEscalationArguments(t *testing.T) {
 			}
 			return err
 		}},
+		{name: "SQLMap DNS exfiltration", build: func() error {
+			plan, err := PrepareSQLMap(dto.SQLMapRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSQLILowRisk},
+				URL:         "https://example.test/?id=1", AdditionalArgs: "--dns-domain=foreign.test",
+			})
+			if plan != nil {
+				plan.Cleanup()
+			}
+			return err
+		}},
 		{name: "Dalfox state changing method", build: func() error {
 			_, err := DalfoxArgs(dto.DalfoxRequest{
 				ScanOptions: dto.ScanOptions{Profile: dto.ProfileBrowserXSSConfirm},
@@ -131,6 +141,13 @@ func TestSafetyProfilesRejectImpactEscalationArguments(t *testing.T) {
 			_, err := DalfoxArgs(dto.DalfoxRequest{
 				ScanOptions: dto.ScanOptions{Profile: dto.ProfileBrowserXSSConfirm},
 				Target:      "https://example.test/?q=FUZZ", AdditionalArgs: "-F",
+			})
+			return err
+		}},
+		{name: "Dalfox blind callback", build: func() error {
+			_, err := DalfoxArgs(dto.DalfoxRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileBrowserXSSConfirm},
+				Target:      "https://example.test/?q=FUZZ", AdditionalArgs: "--blind=https://foreign.test/callback",
 			})
 			return err
 		}},
@@ -166,5 +183,17 @@ func TestSQLMapLowRiskProfilePinsVerificationSettings(t *testing.T) {
 		if !containsArg(args, expected) {
 			t.Fatalf("low-risk SQLMap args missing %q: %v", expected, args)
 		}
+	}
+}
+
+func TestWhatWebSafetyProfileDisablesRedirects(t *testing.T) {
+	args, err := WhatWebArgs(dto.WhatWebRequest{
+		ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon}, Target: "https://example.test/",
+	})
+	if err != nil {
+		t.Fatalf("build WhatWeb args: %v", err)
+	}
+	if !containsArg(args, "--follow-redirect=never") {
+		t.Fatalf("safe WhatWeb did not disable its cross-host redirect default: %v", args)
 	}
 }

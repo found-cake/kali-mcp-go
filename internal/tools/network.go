@@ -16,7 +16,8 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid scan_type: %w", err)
 	}
-	if err := rejectTargetSourceArgs(scanParts, "scan_type", true, "-iL", "-iR", "--resume", "-sI", "-b"); err != nil {
+	if err := rejectTargetSourceArgs(scanParts, "scan_type", true,
+		"-iL", "-iR", "--resume", "-sI", "-b", "-p", "-F", "--top-ports", "--port-ratio"); err != nil {
 		return nil, err
 	}
 	extra := r.AdditionalArgs
@@ -36,7 +37,8 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 	if r.Ports != "" {
 		args = append(args, "-p", r.Ports)
 	}
-	args, err = appendTargetSafeArgs(args, extra, "additional_args", true, "-iL", "-iR", "--resume", "-sI", "-b")
+	args, err = appendTargetSafeArgs(args, extra, "additional_args", true,
+		"-iL", "-iR", "--resume", "-sI", "-b", "-p", "-F", "--top-ports", "--port-ratio")
 	if err != nil {
 		return nil, err
 	}
