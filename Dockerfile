@@ -17,12 +17,29 @@ RUN CGO_ENABLED=0 \
 FROM ${KALI_BASE_IMAGE}
 
 ARG TARGETARCH
+ARG KALI_APT_MIRROR=http://kali.download/kali/
+ARG KALI_APT_SECURE_MIRROR=https://kali.download/kali/
 
 # Nmap cannot exec when its NET_ADMIN file capability exceeds Docker's default bounding set.
-RUN apt-get update \
+RUN set -eux; \
+    for source in /etc/apt/sources.list /etc/apt/sources.list.d/kali.sources; do \
+        if [ -f "$source" ]; then \
+            sed -i \
+                -e "s|http://http.kali.org/kali/|${KALI_APT_MIRROR}|g" \
+                -e "s|https://http.kali.org/kali/|${KALI_APT_MIRROR}|g" \
+                "$source"; \
+        fi; \
+    done; \
+    apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates \
+    && for source in /etc/apt/sources.list /etc/apt/sources.list.d/kali.sources; do \
+        if [ -f "$source" ]; then \
+            sed -i "s|${KALI_APT_MIRROR}|${KALI_APT_SECURE_MIRROR}|g" "$source"; \
+        fi; \
+    done \
+    && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         bash \
-        ca-certificates \
         chromium \
         curl \
         dirb \
