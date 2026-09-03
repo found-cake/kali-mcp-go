@@ -24,21 +24,25 @@ ARG KALI_APT_SECURE_MIRROR=https://kali.download/kali/
 RUN set -eux; \
     printf '%s\n' "$KALI_APT_MIRROR" | grep -Eq '^https?://[A-Za-z0-9._~:/-]+/$'; \
     printf '%s\n' "$KALI_APT_SECURE_MIRROR" | grep -Eq '^https://[A-Za-z0-9._~:/-]+/$'; \
+    mirror_configured=false; \
     for source in /etc/apt/sources.list /etc/apt/sources.list.d/kali.sources; do \
         if [ -f "$source" ]; then \
-            sed -i \
-                -e "s|http://http.kali.org/kali/|${KALI_APT_MIRROR}|g" \
-                -e "s|https://http.kali.org/kali/|${KALI_APT_MIRROR}|g" \
-                "$source"; \
+            sed -i -E "s|https?://http\\.kali\\.org/kali/?|${KALI_APT_MIRROR}|g" "$source"; \
+            if grep -Fq "$KALI_APT_MIRROR" "$source"; then mirror_configured=true; fi; \
         fi; \
     done; \
+    [ "$mirror_configured" = true ]; \
     apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates \
+    && mirror_pattern="$(printf '%s' "${KALI_APT_MIRROR%/}" | sed 's/[.]/\\./g')" \
+    && secure_mirror_configured=false \
     && for source in /etc/apt/sources.list /etc/apt/sources.list.d/kali.sources; do \
         if [ -f "$source" ]; then \
-            sed -i "s|${KALI_APT_MIRROR}|${KALI_APT_SECURE_MIRROR}|g" "$source"; \
+            sed -i -E "s|${mirror_pattern}/?|${KALI_APT_SECURE_MIRROR}|g" "$source"; \
+            if grep -Fq "$KALI_APT_SECURE_MIRROR" "$source"; then secure_mirror_configured=true; fi; \
         fi; \
     done \
+    && [ "$secure_mirror_configured" = true ] \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         bash \
