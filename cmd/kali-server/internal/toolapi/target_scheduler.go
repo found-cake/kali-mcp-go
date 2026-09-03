@@ -1,7 +1,5 @@
 package toolapi
 
-import ()
-
 func scanWeight(tool string) int {
 	switch tool {
 	case "nuclei", "nikto", "sqlmap", "ffuf", "feroxbuster", "dalfox":
