@@ -222,3 +222,19 @@ func TestGobusterArgsUsesEnvWordlistOverride(t *testing.T) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}
 }
+
+func TestGobusterDNSUsesDomainTargetFlag(t *testing.T) {
+	wordlist, err := os.CreateTemp(t.TempDir(), "wordlist-*.txt")
+	if err != nil {
+		t.Fatalf("create temp wordlist: %v", err)
+	}
+	defer wordlist.Close()
+
+	args, err := GobusterArgs(dto.GobusterRequest{Mode: "dns", URL: "example.com", Wordlist: wordlist.Name()})
+	if err != nil {
+		t.Fatalf("build Gobuster DNS args: %v", err)
+	}
+	if !reflect.DeepEqual(args[:4], []string{"gobuster", "dns", "--domain", "example.com"}) {
+		t.Fatalf("Gobuster DNS target args=%v", args)
+	}
+}

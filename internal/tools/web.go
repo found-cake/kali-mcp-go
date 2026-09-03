@@ -15,7 +15,11 @@ func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return appendSplitArgs([]string{"gobuster", mode, "-u", r.URL, "-w", wordlist}, r.AdditionalArgs, "additional_args")
+	targetFlag := "-u"
+	if mode == "dns" {
+		targetFlag = "--domain"
+	}
+	return appendTargetSafeArgs([]string{"gobuster", mode, targetFlag, r.URL, "-w", wordlist}, r.AdditionalArgs, "additional_args", false, "-u", "--url", "--domain", "--do")
 }
 
 func DirbArgs(r dto.DirbRequest) ([]string, error) {
@@ -37,9 +41,9 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 	if r.Tuning != "" {
 		args = append(args, "-Tuning", r.Tuning)
 	}
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
+	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-h", "-host", "-config")
 }
 
 func WPScanArgs(r dto.WPScanRequest) ([]string, error) {
-	return appendSplitArgs([]string{"wpscan", "--url", r.URL}, r.AdditionalArgs, "additional_args")
+	return appendTargetSafeArgs([]string{"wpscan", "--url", r.URL}, r.AdditionalArgs, "additional_args", false, "--url", "--config-file")
 }

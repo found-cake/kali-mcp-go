@@ -67,6 +67,36 @@ func appendSplitArgs(args []string, extra string, fieldName string) ([]string, e
 	return append(args, parts...), nil
 }
 
+func appendTargetSafeArgs(args []string, extra, fieldName string, rejectPositionals bool, forbiddenFlags ...string) ([]string, error) {
+	parts, err := splitArgs(extra)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", fieldName, err)
+	}
+	if err := rejectTargetSourceArgs(parts, fieldName, rejectPositionals, forbiddenFlags...); err != nil {
+		return nil, err
+	}
+	return append(args, parts...), nil
+}
+
+func rejectTargetSourceArgs(parts []string, fieldName string, rejectPositionals bool, forbiddenFlags ...string) error {
+	for _, argument := range parts {
+		if rejectPositionals && !strings.HasPrefix(argument, "-") {
+			return fmt.Errorf("%s must not contain positional targets; use attached option values such as --flag=value", fieldName)
+		}
+		name, _, _ := strings.Cut(argument, "=")
+		for _, forbidden := range forbiddenFlags {
+			matched := name == forbidden
+			if !strings.HasPrefix(forbidden, "--") {
+				matched = matched || strings.HasPrefix(argument, forbidden)
+			}
+			if matched {
+				return fmt.Errorf("%s must not override the selected target with %s", fieldName, forbidden)
+			}
+		}
+	}
+	return nil
+}
+
 func defaultWordlistPath(envKey, fallback string) string {
 	path := strings.TrimSpace(os.Getenv(envKey))
 	if path == "" {

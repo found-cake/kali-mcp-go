@@ -16,6 +16,9 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid scan_type: %w", err)
 	}
+	if err := rejectTargetSourceArgs(scanParts, "scan_type", true, "-iL", "-iR"); err != nil {
+		return nil, err
+	}
 	extra := r.AdditionalArgs
 	if extra == "" {
 		extra = "-T4 -Pn"
@@ -24,7 +27,7 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 	if r.Ports != "" {
 		args = append(args, "-p", r.Ports)
 	}
-	args, err = appendSplitArgs(args, extra, "additional_args")
+	args, err = appendTargetSafeArgs(args, extra, "additional_args", true, "-iL", "-iR")
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +77,7 @@ func Enum4linuxArgs(r dto.Enum4linuxRequest) ([]string, error) {
 	if extra == "" {
 		extra = "-a"
 	}
-	args, err := appendSplitArgs([]string{"enum4linux"}, extra, "additional_args")
+	args, err := appendTargetSafeArgs([]string{"enum4linux"}, extra, "additional_args", true)
 	if err != nil {
 		return nil, err
 	}

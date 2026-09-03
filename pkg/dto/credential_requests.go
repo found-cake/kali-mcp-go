@@ -25,7 +25,7 @@ type HydraRequest struct {
 	UsernameFile   string `json:"username_file,omitempty" jsonschema:"path to username list; mutually exclusive with username"`
 	Password       string `json:"password,omitempty" jsonschema:"single password; mutually exclusive with password_file; provide exactly one of password or password_file"`
 	PasswordFile   string `json:"password_file,omitempty" jsonschema:"path to password list; mutually exclusive with password"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra hydra arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Hydra arguments excluding target-list and restore-session overrides"`
 	DryRun         bool   `json:"dry_run,omitempty" jsonschema:"validate policy and return a redacted execution preview without running Hydra"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the attack (0 = default 300s)"`
 }

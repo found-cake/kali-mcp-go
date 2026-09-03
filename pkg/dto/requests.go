@@ -17,9 +17,9 @@ func (r CommandRequest) GetRequestTimeout() int { return r.Timeout }
 type NmapRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"IP address or hostname to scan; omit when target_context is supplied"`
-	ScanType       string `json:"scan_type,omitempty" jsonschema:"nmap scan flags (default: -sCV)"`
+	ScanType       string `json:"scan_type,omitempty" jsonschema:"nmap scan flags only (default: -sCV); positional targets and input-list flags are rejected"`
 	Ports          string `json:"ports,omitempty" jsonschema:"port list or range e.g. 80,443,8000-8080"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra nmap arguments (default: -T4 -Pn)"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra target-neutral nmap options (default: -T4 -Pn); positional targets are rejected and option values must use attached --flag=value syntax"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -30,7 +30,7 @@ type GobusterRequest struct {
 	URL            string `json:"url,omitempty" jsonschema:"target URL; omit when target_context is supplied"`
 	Mode           string `json:"mode,omitempty" jsonschema:"dir|dns|fuzz|vhost (default: dir)"`
 	Wordlist       string `json:"wordlist,omitempty" jsonschema:"path to wordlist file"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra gobuster arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Gobuster arguments excluding target URL overrides"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -52,7 +52,7 @@ type NiktoRequest struct {
 	PauseSeconds   float64 `json:"pause_seconds,omitempty" jsonschema:"delay between requests in seconds"`
 	MaxTime        string  `json:"max_time,omitempty" jsonschema:"maximum Nikto scan duration e.g. 120s or 10m"`
 	Tuning         string  `json:"tuning,omitempty" jsonschema:"Nikto tuning selectors e.g. 123"`
-	AdditionalArgs string  `json:"additional_args,omitempty" jsonschema:"extra nikto arguments"`
+	AdditionalArgs string  `json:"additional_args,omitempty" jsonschema:"extra Nikto arguments excluding host and config overrides"`
 	Timeout        int     `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -83,7 +83,7 @@ type SQLMapRequest struct {
 	ContentType    string            `json:"content_type,omitempty" jsonschema:"Content-Type header value e.g. application/json"`
 	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
 	TestParameters string            `json:"test_parameters,omitempty" jsonschema:"comma-separated parameters or JSON fields to test"`
-	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra sqlmap arguments"`
+	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding URL, request-file, bulk-target, dork, and config source overrides"`
 	Timeout        int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -92,7 +92,7 @@ func (r SQLMapRequest) GetRequestTimeout() int { return r.Timeout }
 type WPScanRequest struct {
 	ScanOptions
 	URL            string `json:"url,omitempty" jsonschema:"target WordPress URL; omit when target_context is supplied"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra wpscan arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra WPScan arguments excluding URL and config overrides"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -101,7 +101,7 @@ func (r WPScanRequest) GetRequestTimeout() int { return r.Timeout }
 type Enum4linuxRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"target IP or hostname; omit when target_context is supplied"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra enum4linux arguments (default: -a)"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra target-neutral Enum4linux options (default: -a); positional arguments are rejected and option values must use attached --flag=value syntax"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -115,7 +115,7 @@ type FFUFRequest struct {
 	RequestTimeout int    `json:"request_timeout,omitempty" jsonschema:"per-request HTTP timeout in seconds (default 10, maximum 300); distinct from the outer timeout"`
 	FilterStatuses string `json:"filter_status_codes,omitempty" jsonschema:"HTTP status codes or ranges to omit from findings, e.g. 404,500-599"`
 	Recursion      bool   `json:"recursion,omitempty" jsonschema:"enable recursive discovery"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra ffuf arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra FFUF arguments excluding URL, raw-request, and config source overrides"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -127,7 +127,7 @@ type FeroxbusterRequest struct {
 	Wordlist       string `json:"wordlist,omitempty" jsonschema:"path to wordlist file"`
 	FilterSize     string `json:"filter_size,omitempty" jsonschema:"response size or comma-separated sizes to exclude"`
 	Depth          int    `json:"depth,omitempty" jsonschema:"maximum recursion depth (0 = tool default)"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra feroxbuster arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Feroxbuster arguments excluding URL, stdin, resume, request-file, and config source overrides"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -141,7 +141,7 @@ type NucleiRequest struct {
 	Templates      []string `json:"templates,omitempty" jsonschema:"specific template paths or IDs"`
 	AllowUnsafe    bool     `json:"allow_unsafe,omitempty" jsonschema:"allow DoS, fuzz, DAST, OAST, and interactsh behavior; false excludes these behaviors"`
 	DryRun         bool     `json:"dry_run,omitempty" jsonschema:"enumerate matching local templates and preview the command without contacting the target"`
-	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra nuclei arguments"`
+	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Nuclei arguments excluding target, target-list, and resume source overrides"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds; 0 derives it from request and rate budgets, while shorter explicit values are preserved with a warning"`
 }
 
@@ -152,7 +152,7 @@ type WhatWebRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"target URL or host; omit when target_context is supplied"`
 	Aggression     int    `json:"aggression,omitempty" jsonschema:"aggression level 1-4 (0 = tool default)"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra WhatWeb arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra target-neutral WhatWeb options; positional targets are rejected and option values must use attached --flag=value syntax"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -167,7 +167,7 @@ type JWTRequest struct {
 	Canary         string `json:"canary,omitempty" jsonschema:"response text indicating an accepted token during live verification"`
 	Mode           string `json:"mode,omitempty" jsonschema:"jwt_tool scan mode pb|er|at; defaults to at for live targets"`
 	PublicKey      string `json:"public_key,omitempty" jsonschema:"public key path for RS/HS confusion testing"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra jwt_tool arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra jwt_tool arguments excluding live-target overrides"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -176,7 +176,7 @@ func (r JWTRequest) GetRequestTimeout() int { return r.Timeout }
 type DalfoxRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"target URL or raw HTTP file; omit only for a URL supplied through target_context"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments; use concurrency instead of --worker or --workers"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments excluding alternate request sources; use concurrency instead of --worker or --workers"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -199,7 +199,7 @@ type RetireRequest struct {
 	Path           string   `json:"path,omitempty" jsonschema:"file or directory containing JavaScript bundles; mutually exclusive with url and script_urls"`
 	URL            string   `json:"url,omitempty" jsonschema:"page URL whose same-origin public JavaScript bundles should be downloaded and scanned; mutually exclusive with path and script_urls"`
 	ScriptURLs     []string `json:"script_urls,omitempty" jsonschema:"explicit same-origin public JavaScript bundle URLs observed by browser_check; requires target_context and is mutually exclusive with path and url"`
-	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Retire.js arguments"`
+	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Retire.js arguments excluding path overrides"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 

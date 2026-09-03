@@ -51,7 +51,7 @@ func HydraArgs(r dto.HydraRequest) ([]string, error) {
 		args = append(args, "-P", r.PasswordFile)
 	}
 	args = append(args, r.Target, r.Service)
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
+	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-M", "-R")
 }
 
 func JohnArgs(r dto.JohnRequest) ([]string, error) {
