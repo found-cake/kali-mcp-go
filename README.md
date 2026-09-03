@@ -381,7 +381,7 @@ For long scans, the MCP host timeout must be at least as large as `mcp-client --
 | `enum4linux_scan` | Windows / Samba enumeration (SSE streaming) |
 | `ffuf_scan` | Web content discovery with automatic calibration, size filtering, and optional recursion |
 | `feroxbuster_scan` | Recursive web content discovery with automatic tuning |
-| `nuclei_scan` | Nuclei scan; DoS, fuzz, and OAST templates are excluded unless explicitly enabled |
+| `nuclei_scan` | Nuclei scan with local template-selection preview; DoS, fuzz, DAST, and OAST behavior is excluded unless explicitly enabled |
 | `whatweb_scan` | Web technology and framework fingerprinting |
 | `jwt_analyze` | JWT decoding and optional live playbook/forced-error/all-tests assessment |
 | `dalfox_scan` | XSS candidate scanning with JSON findings |
@@ -419,6 +419,7 @@ When using OpenCode, the per-tool request `timeout` is not enough by itself for 
 For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout` value for long-running tools, but OpenCode's `mcp.<name>.timeout` setting does not apply there.
 
 Quiet streams may also emit lightweight heartbeat SSE events to keep the connection active until the final `done` event arrives.
+The bundled MCP client assigns the stream `call_id` before execution and sends an authenticated cancellation request if its caller context ends or the SSE stream becomes unreadable. On Unix servers, that cancellation stops the complete spawned process group after a short graceful-stop window and releases its execution slot. SSE flush failures provide a transport-level fallback, but custom HTTP consumers should explicitly call `POST /api/calls/{call_id}/cancel` when abandoning a stream. Keep the MCP host timeout at least as large as the client and request timeouts so an intermediary does not abandon useful work prematurely.
 
 These tools still use a normal POST request/response flow:
 
@@ -435,6 +436,7 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 - `success`: derived from `status`; a timeout or cancellation is never reported as successful
 - `execution_status`: the detailed process state retained for existing clients
 - `finding_status`: `detected`, `not_detected`, `inconclusive`, or `unknown`
+- `finding_types`: the kind of observation evaluated, such as `service`, `technology`, `content`, `vulnerability`, or `misconfiguration`
 - `partial_results`, `http_requests`, `duration_ms`, original stdout/stderr byte counts, and `output_truncated`
 - `progress`: phase, observed output item count, last retained output item, exact HTTP request count when known, request budget, and a stateless checkpoint
 - `target`: original target, explicitly selected target, resolution ID, and selection basis
@@ -446,7 +448,9 @@ Tool process failures and timeouts set MCP `isError`; a successful scan with no 
 
 Every HTTP call also emits one JSON telemetry record containing its `call_id`, MCP operation, path, start/end time, duration, and HTTP status. Target and credential values remain in the protected structured result rather than server logs.
 
-`http_requests` is `null` when a tool cannot report an exact request count. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the retained sizes. HTTP response metadata, SQLMap differential analysis, and JWT structural analysis are also appended as one compact JSON summary for MCP hosts that do not surface structured content. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
+`http_requests` is populated only from an authoritative counter emitted or measured by the tool; `request_count_source` distinguishes `measured`, `parsed`, and `unknown`, and the count remains `null` rather than being estimated. Nikto's own maximum-execution-time termination is normalized to `timed_out` with partial, inconclusive results even when Nikto exits with code zero. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the retained sizes. HTTP response metadata, SQLMap differential analysis, JWT structural analysis, and Nuclei preview metadata are also appended as one compact JSON summary for MCP hosts that do not surface structured content. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
+
+Executable tools share one compact top-level MCP output contract. Detailed nested evidence remains in structured content and artifacts, while the common schema keeps status, classification, request-count provenance, target provenance, and artifact fields discoverable without repeating the full nested schema for every tool.
 
 Progress checkpoints describe already observed output but are not server-side jobs. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without shared MCP session memory.
 ### Explicit target resolution
@@ -469,7 +473,7 @@ Call `get_scan_capabilities` before composing a scan when profile compatibility 
 | `browser-xss-confirm` | Browser-backed confirmation of a specific XSS candidate |
 | `explicit-custom` | Explicit caller-supplied controls within hard server limits |
 
-The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate and concurrency flags, while the outer timeout shrinks to the estimated request/rate budget. `execution.timeout_planning.max_requests_hard_limit` remains `false` unless a tool can expose an authoritative request counter. When `health_url` is present, the server probes it before and after the run. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Nuclei DoS, fuzz, and interactsh selectors remain blocked unless `allow_unsafe` is explicitly enabled.
+The server limits total work and weighted work per target. Heavy tools cannot run concurrently against the same target. Supported tools receive native rate and concurrency flags. When `timeout` is omitted and both request and rate budgets are known, the outer timeout is derived from that budget plus tool startup grace; an explicit shorter Nuclei timeout is preserved with a partial-result warning. `execution.timeout_planning.max_requests_hard_limit` remains `false` unless a tool can expose an authoritative request counter. When `health_url` is present, the server probes it before and after the run, except for local-only `dry_run` previews. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. In Nuclei safe mode, caller-supplied selection and safety-override flags are rejected and the final DoS/fuzz and interactsh exclusions cannot be overridden; `allow_unsafe` is required to leave that policy boundary.
 
 ### Credential management
 
@@ -485,11 +489,11 @@ The server instructions and tool descriptions recognize authorized black-box pen
 
 ### Bounded manual HTTP requests
 
-Use `http_request` instead of `execute_command` with curl for one-off validation. It accepts HTTP(S) only, one request per call, an optional arbitrary `json_body`, bounded raw bodies and responses, a maximum 300-second timeout, and at most five same-origin redirects. Loopback targets require a selected `target_context` or the legacy explicit URL plus receipt. Request headers, response headers, URLs, and bodies are preserved verbatim unless the caller supplies exact `redact_values`.
+Use `http_request` instead of `execute_command` with curl for one-off validation. It accepts HTTP(S) only, one request per call, an optional arbitrary `json_body`, bounded raw bodies and responses, a maximum 300-second timeout, and at most five same-origin redirects. Loopback targets require a selected `target_context` or the legacy explicit URL plus receipt. Request headers, response headers, URLs, and bodies are preserved verbatim unless the caller supplies exact `redact_values`. Browser network evidence follows the same rule, retaining query and fragment values for reproduction until explicit redaction is requested.
 
 ### Scan load, SPA baselines, and artifacts
 
-Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. FFUF supports `request_timeout` for each HTTP request and `filter_status_codes` for explicit response filtering; these are separate from the outer scan `timeout`. `get_scan_capabilities` exposes both the common and small directory wordlists so the caller can select scan breadth explicitly. Before FFUF, Gobuster directory mode, or Feroxbuster starts, the server samples random missing paths and compares status, length, and normalized body hashes. A stable successful fallback is excluded by size, and every result includes the measured baseline plus `false_positive_risk`. An unstable fallback remains visible with a warning. Nuclei templates are installed when the Docker image is built, and `server_health` reports Nuclei unavailable if their checksum is missing without downloading anything. Nuclei preserves explicit template selection: omitting both `tags` and `templates` evaluates all locally installed safe templates and adds a scope warning instead of silently choosing a subset.
+Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. FFUF supports `request_timeout` for each HTTP request and `filter_status_codes` for explicit response filtering; these are separate from the outer scan `timeout`. `get_scan_capabilities` exposes both the common and small directory wordlists so the caller can select scan breadth explicitly. Before FFUF, Gobuster directory mode, or Feroxbuster starts, the server samples random missing paths and compares status, length, and normalized body hashes. A stable successful fallback is excluded by size, and every result includes the measured baseline plus `false_positive_risk`. An unstable fallback remains visible with a warning. Nuclei templates are installed when the Docker image is built, and `server_health` reports Nuclei unavailable if their checksum is missing without downloading anything. Nuclei preserves explicit template selection: omitting both `tags` and `templates` evaluates all locally installed safe templates and adds a scope warning instead of silently choosing a subset. Set `dry_run: true` to list the matching local templates before scanning; the result reports `templates_matched`, `selection_source`, and `target_requests_sent: 0`. It deliberately leaves request estimation unavailable because template workflows can vary at runtime.
 
 John accepts either `hash_file` or an inline `hash`. Inline hashes and John state live under a temporary HOME that is deleted after the run. Set `mask_plaintext` to redact recovered plaintext from returned output. JWT Tool likewise starts from a clean temporary HOME seeded with its packaged configuration, then removes that workspace after each call.
 
