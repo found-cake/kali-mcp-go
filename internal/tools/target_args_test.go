@@ -262,6 +262,13 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 			})
 			return err
 		}},
+		{name: "Hydra receipt Host module option", build: func() error {
+			_, err := HydraArgs(dto.HydraRequest{
+				ScanOptions: dto.ScanOptions{ResolutionReceipt: "signed-receipt"}, Target: "192.0.2.10", Service: "http-post-form",
+				Username: "user", Password: "pass", AdditionalArgs: `"/:u=^USER^&p=^PASS^:F=bad:H=Host:foreign.test"`,
+			})
+			return err
+		}},
 		{name: "WPScan resolved proxy", build: func() error {
 			_, err := WPScanArgs(dto.WPScanRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "--proxy=https://foreign.test:8080"})
 			return err
