@@ -116,6 +116,8 @@ func callOperation(path string) string {
 		return "resolve_target"
 	case trimmed == "tools/http-request":
 		return "http_request"
+	case trimmed == "tools/hydra/stream":
+		return "hydra_attack_stream"
 	case strings.HasPrefix(trimmed, "tools/"):
 		name := strings.TrimSuffix(strings.TrimPrefix(trimmed, "tools/"), "/stream")
 		switch name {
