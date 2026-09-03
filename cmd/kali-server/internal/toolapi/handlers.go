@@ -116,6 +116,7 @@ func handleJohn(c fiber.Ctx) error {
 		result.Stdout = tools.RedactJohnOutput(result.Stdout)
 		result.Stderr = tools.RedactJohnOutput(result.Stderr)
 	}
+	results.HideImplementationPaths(result, plan.EphemeralPath())
 	return httpapi.WriteToolResult(c, result, req)
 }
 
@@ -176,6 +177,7 @@ func handleRetireStream(c fiber.Ctx) error {
 		return httpapi.BadRequest(c, err.Error())
 	}
 	scanPlan.args = retirePlan.Args()
+	scanPlan.ephemeralPaths = []string{retirePlan.EphemeralPath()}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
 	lines = results.ProtectStream(execCtx, lines, req)

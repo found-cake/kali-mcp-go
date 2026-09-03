@@ -26,6 +26,7 @@ func handleSQLMapStream(c fiber.Ctx) error {
 		sqlmapPlan.Cleanup()
 		return scanPreparationError(c, err)
 	}
+	scanPlan.ephemeralPaths = []string{sqlmapPlan.EphemeralPath()}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
 	lines = results.ProtectStream(execCtx, lines, req)

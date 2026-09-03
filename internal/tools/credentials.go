@@ -115,6 +115,10 @@ func (p *JohnPlan) Args() []string {
 	return append([]string(nil), p.args...)
 }
 
+func (p *JohnPlan) EphemeralPath() string {
+	return p.tempDir
+}
+
 func (p *JohnPlan) Cleanup() {
 	if p != nil && p.tempDir != "" {
 		_ = os.RemoveAll(p.tempDir)

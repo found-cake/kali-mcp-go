@@ -98,6 +98,10 @@ func (p *SQLMapPlan) Args() []string {
 	return append([]string(nil), p.args...)
 }
 
+func (p *SQLMapPlan) EphemeralPath() string {
+	return p.tempDir
+}
+
 func (p *SQLMapPlan) HTTPRequestCount() int {
 	return p.Analysis("", "").HTTPRequests
 }

@@ -27,12 +27,26 @@ func TestPrepareRetireDownloadsExplicitBrowserScriptURLs(t *testing.T) {
 		t.Fatalf("prepare explicit bundle scan: %v", err)
 	}
 	defer plan.Cleanup()
+	if plan.EphemeralPath() == "" {
+		t.Fatal("expected downloaded scripts to use a server workspace")
+	}
 	files, err := filepath.Glob(filepath.Join(plan.tempDir, "*.js"))
 	if err != nil {
 		t.Fatalf("list bundles: %v", err)
 	}
 	if len(files) != 2 {
 		t.Fatalf("expected two browser-observed bundles, got %v", files)
+	}
+}
+
+func TestPrepareRetirePreservesCallerPathAsNonEphemeral(t *testing.T) {
+	plan, err := PrepareRetire(context.Background(), dto.RetireRequest{Path: "/workspace/public"})
+	if err != nil {
+		t.Fatalf("prepare caller path: %v", err)
+	}
+	defer plan.Cleanup()
+	if plan.EphemeralPath() != "" {
+		t.Fatalf("caller path marked as server-generated: %q", plan.EphemeralPath())
 	}
 }
 

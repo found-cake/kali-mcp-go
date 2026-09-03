@@ -2,12 +2,27 @@ package results
 
 import (
 	"context"
+	"strings"
 
 	artifactstore "github.com/found-cake/kali-mcp-go/internal/artifacts"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func HideImplementationPaths(result *executor.Result, paths ...string) {
+	if result == nil {
+		return
+	}
+	for index, argument := range result.ArgvRedacted {
+		for _, path := range paths {
+			if path != "" {
+				argument = strings.ReplaceAll(argument, path, "[EPHEMERAL_PATH]")
+			}
+		}
+		result.ArgvRedacted[index] = argument
+	}
+}
 
 func Protect(store *artifactstore.Store, result *executor.Result, request any) {
 	if result == nil {

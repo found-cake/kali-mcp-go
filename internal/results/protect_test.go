@@ -62,3 +62,30 @@ func TestProtectReportsArtifactStoreFailure(t *testing.T) {
 		t.Fatalf("unexpected failed artifact result: %+v", result)
 	}
 }
+
+func TestHideImplementationPathsOnlyChangesExecutionMetadata(t *testing.T) {
+	// Given: execution metadata includes a server workspace and a caller-selected path.
+	result := &executor.Result{
+		Stdout: "scanner retained /tmp/kali-mcp-sqlmap-123/traffic.txt as raw output",
+		ArgvRedacted: []string{
+			"-r", "/workspace/request.txt",
+			"-t", "/tmp/kali-mcp-sqlmap-123/traffic.txt",
+			"--output-dir=/tmp/kali-mcp-sqlmap-123/output",
+		},
+	}
+
+	// When: the server-generated workspace is hidden.
+	HideImplementationPaths(result, "/tmp/kali-mcp-sqlmap-123")
+
+	// Then: argv omits the workspace, while caller paths and raw tool output remain intact.
+	joined := strings.Join(result.ArgvRedacted, " ")
+	if strings.Contains(joined, "/tmp/kali-mcp-sqlmap-123") {
+		t.Fatalf("implementation path remains in execution metadata: %q", joined)
+	}
+	if !strings.Contains(joined, "/workspace/request.txt") {
+		t.Fatalf("caller-selected path was hidden: %q", joined)
+	}
+	if !strings.Contains(result.Stdout, "/tmp/kali-mcp-sqlmap-123/traffic.txt") {
+		t.Fatalf("raw output was unexpectedly changed: %q", result.Stdout)
+	}
+}

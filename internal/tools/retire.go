@@ -60,6 +60,10 @@ func (p *RetirePlan) Args() []string {
 	return append([]string(nil), p.args...)
 }
 
+func (p *RetirePlan) EphemeralPath() string {
+	return p.tempDir
+}
+
 func (p *RetirePlan) Cleanup() {
 	if p != nil && p.tempDir != "" {
 		_ = os.RemoveAll(p.tempDir)

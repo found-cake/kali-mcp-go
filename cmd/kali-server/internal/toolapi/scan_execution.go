@@ -60,6 +60,7 @@ type scanExecutionPlan struct {
 	jwtAnalysis           *dto.JWTAnalysisMetadata
 	nucleiPreview         *dto.NucleiPreviewMetadata
 	browserScreenshotPath string
+	ephemeralPaths        []string
 	dryRun                bool
 }
 
@@ -173,6 +174,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.TimeoutPlanning = p.timeoutPlanning
 	result.Warnings = append(result.Warnings, p.extraWarnings...)
 	result.FinalizeProgress()
+	results.HideImplementationPaths(result, p.ephemeralPaths...)
 	if p.healthURL != "" && !p.dryRun {
 		if err := probeTargetHealth(p.context, p.healthURL); err != nil {
 			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())
