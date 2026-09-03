@@ -41,6 +41,9 @@ func TestScanCapabilitiesCoverEveryExecutableToolWithRoutingMetadata(t *testing.
 	if explicit.ImpactLevel != dto.ImpactArbitraryExecution {
 		t.Fatalf("execute_command impact is not explicit: %+v", explicit)
 	}
+	if explicit.RuntimeTool != "bash" {
+		t.Fatalf("execute_command readiness checks %q instead of its executed shell", explicit.RuntimeTool)
+	}
 	hydra := findToolCapability(t, capabilities.Tools, "hydra_attack")
 	if !hydra.RequiresTargetContext || !slices.Contains(hydra.SupportedControls, dto.ScanControlDryRun) {
 		t.Fatalf("Hydra safety contract is incomplete: %+v", hydra)
