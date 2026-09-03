@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -42,8 +44,22 @@ func TestPreviewNucleiTemplatesReturnsLocalSelectionCount(t *testing.T) {
 func TestNucleiPreviewRegistersCancellationBeforeListingTemplates(t *testing.T) {
 	directory := t.TempDir()
 	marker := filepath.Join(directory, "started")
+	if err := syscall.Mkfifo(marker, 0o600); err != nil {
+		t.Fatalf("create preview signal: %v", err)
+	}
+	markerReader, err := os.OpenFile(marker, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("open preview signal: %v", err)
+	}
+	defer markerReader.Close()
+	previewStarted := make(chan error, 1)
+	go func() {
+		var signal [1]byte
+		_, readErr := io.ReadFull(markerReader, signal[:])
+		previewStarted <- readErr
+	}()
 	executable := filepath.Join(directory, "nuclei")
-	script := "#!/bin/sh\n: > \"$NUCLEI_PREVIEW_MARKER\"\nsleep 30\n"
+	script := "#!/bin/sh\nprintf x > \"$NUCLEI_PREVIEW_MARKER\"\nsleep 30\n"
 	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
 		t.Fatalf("write fake nuclei: %v", err)
 	}
@@ -98,7 +114,16 @@ func TestNucleiPreviewRegistersCancellationBeforeListingTemplates(t *testing.T) 
 		}
 		previewDone <- response
 	}()
-	waitForPreviewMarker(t, marker)
+	select {
+	case err := <-previewStarted:
+		if err != nil {
+			t.Fatalf("read preview signal: %v", err)
+		}
+	case err := <-previewFailed:
+		t.Fatalf("preview request failed before starting: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Nuclei preview did not start")
+	}
 
 	cancelRequest, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/calls/%s/cancel", listener.Addr(), callID), nil)
 	if err != nil {
@@ -138,16 +163,4 @@ func TestNucleiPreviewRegistersCancellationBeforeListingTemplates(t *testing.T) 
 	if probeResponse.StatusCode != fiber.StatusOK {
 		t.Fatalf("preview retained execution capacity: status=%d", probeResponse.StatusCode)
 	}
-}
-
-func waitForPreviewMarker(t *testing.T, marker string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(marker); err == nil {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("Nuclei preview did not start")
 }
