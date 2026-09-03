@@ -11,17 +11,23 @@ import (
 var versionCache sync.Map
 
 func toolVersion(ctx context.Context, name string) string {
+	return toolVersionWithTimeout(ctx, name, 2*time.Second)
+}
+
+func toolVersionWithTimeout(ctx context.Context, name string, timeout time.Duration) string {
 	if cached, ok := versionCache.Load(name); ok {
 		if version, valid := cached.(string); valid {
 			return version
 		}
 	}
-	version := queryToolVersion(ctx, name, 2*time.Second)
-	versionCache.Store(name, version)
+	version, cacheable := queryToolVersion(ctx, name, timeout)
+	if cacheable {
+		versionCache.Store(name, version)
+	}
 	return version
 }
 
-func queryToolVersion(ctx context.Context, name string, timeout time.Duration) string {
+func queryToolVersion(ctx context.Context, name string, timeout time.Duration) (string, bool) {
 	versionCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	command := exec.CommandContext(versionCtx, name, versionArguments(name)...)
@@ -32,10 +38,10 @@ func queryToolVersion(ctx context.Context, name string, timeout time.Duration) s
 		err = cleanupErr
 	}
 	version := "unknown"
-	if err == nil {
-		version = versionLine(name, string(output))
+	if err != nil {
+		return version, false
 	}
-	return version
+	return versionLine(name, string(output)), true
 }
 
 func versionArguments(name string) []string {

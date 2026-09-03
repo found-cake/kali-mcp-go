@@ -17,6 +17,7 @@ func TestToolVersionCancellationKillsDescendants(t *testing.T) {
 	directory := t.TempDir()
 	marker := filepath.Join(directory, "child-pid")
 	executable := filepath.Join(directory, "version-probe")
+	t.Cleanup(func() { versionCache.Delete(executable) })
 	script := "#!/bin/sh\nsleep 30 &\nchild=$!\nprintf '%s' \"$child\" > \"$VERSION_PROBE_MARKER\"\nwait \"$child\"\n"
 	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
 		t.Fatalf("write version probe: %v", err)
@@ -25,7 +26,7 @@ func TestToolVersionCancellationKillsDescendants(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan string, 1)
-	go func() { done <- queryToolVersion(ctx, executable, 10*time.Second) }()
+	go func() { done <- toolVersionWithTimeout(ctx, executable, 10*time.Second) }()
 
 	var childPID int
 	deadline := time.Now().Add(5 * time.Second)
@@ -47,7 +48,10 @@ func TestToolVersionCancellationKillsDescendants(t *testing.T) {
 
 	cancel()
 	select {
-	case <-done:
+	case version := <-done:
+		if version != "unknown" {
+			t.Fatalf("cancelled version probe returned %q", version)
+		}
 	case <-time.After(2500 * time.Millisecond):
 		_ = syscall.Kill(childPID, syscall.SIGKILL)
 		<-done
@@ -55,6 +59,14 @@ func TestToolVersionCancellationKillsDescendants(t *testing.T) {
 	}
 	if !waitForProcessExit(childPID, time.Second) {
 		t.Fatalf("version probe descendant %d survived cancellation", childPID)
+	}
+
+	recoveryScript := "#!/bin/sh\nprintf 'version 1.0\\n'\n"
+	if err := os.WriteFile(executable, []byte(recoveryScript), 0o700); err != nil {
+		t.Fatalf("replace version probe: %v", err)
+	}
+	if version := toolVersionWithTimeout(context.Background(), executable, 10*time.Second); version != "version 1.0" {
+		t.Fatalf("version cache did not recover after cancellation: %q", version)
 	}
 }
 
