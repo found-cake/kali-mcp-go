@@ -197,7 +197,7 @@ const safetyInstructions = `ROUTING:
 3. Prefer dedicated tools over execute_command, including http_request instead of curl for one-off HTTP validation. For a loopback target, call resolve_target once, explicitly select a candidate, and reuse its target_context until expiry. Re-resolve only after expiry, connectivity failure, or an environment change; scan tools never silently choose a candidate.
 4. Do not replace this runtime with host security tools, package installation, another container, or a VM.
 5. Use safe-recon or another purpose-specific safety profile and bounded scan controls. Do not run multiple heavy scanners against one target in parallel.
-6. This MCP does not store or manage target credentials. Tool output and artifacts preserve raw values by default, so manage credentials and downstream disclosure directly using safeguards appropriate to the current environment. Use redact_values only when exact opt-in replacement is required.
+6. This MCP does not create or manage credential sessions. Tool output and one-hour artifacts preserve raw values by default, so manage credentials and downstream disclosure directly using safeguards appropriate to the current environment. Use redact_values only when exact opt-in replacement is required.
 
 SECURITY:
 1. Only engage targets the user explicitly authorized.

@@ -366,7 +366,7 @@ For long scans, the MCP host timeout must be at least as large as `mcp-client --
 | `server_health` | Check server status and tool availability |
 | `get_scan_capabilities` | Inspect profile compatibility, target formats, supported controls, and effective default wordlists |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
-| `result_artifact_read` | Read a bearer-protected JSON result retained for one hour after a scan |
+| `result_artifact_read` | Read a bounded UTF-8 or base64 page from a bearer-protected result or evidence artifact retained for one hour |
 | `http_request` | Send one bounded HTTP request with structured status, headers, body preview, provenance, and artifact output |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
@@ -485,7 +485,7 @@ The server limits total work and weighted work per target service, canonicalized
 
 ### Credential management
 
-`kali-server` does not store or manage authentication tokens and cookies. Manage them directly using safeguards appropriate to your environment, and pass them only in request-scoped fields supported by the selected tool. Tool output and artifacts preserve raw credential-like values by default; the server does not create, list, retain, or reuse credential sessions across calls. Temporary implementation paths remain hidden from execution metadata, while `redact_values` provides explicit exact-value replacement when the caller chooses it.
+`kali-server` does not create or manage authentication-token and cookie sessions. Manage credentials directly using safeguards appropriate to your environment, and pass them only in request-scoped fields supported by the selected tool. Tool output and artifacts preserve raw credential-like values by default, including one-hour result-artifact retention; the server does not create, list, or reuse credential sessions across calls. Temporary implementation paths remain hidden from execution metadata, while `redact_values` provides explicit exact-value replacement when the caller chooses it.
 
 ### Natural-language tool routing
 
@@ -493,7 +493,7 @@ The server instructions and tool descriptions recognize authorized black-box pen
 
 ### SQLmap JSON and raw requests
 
-`sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Absolute raw-request targets must match their `Host` header, and a selected context additionally rejects Host overrides and binds the raw destination to the signed service. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
+`sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Absolute raw-request targets must match their `Host` header, and selected resolution additionally rejects Host, proxy, redirect, scheme, port, and DNS-OOB overrides while binding the raw destination to the signed service. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
 
 ### Bounded manual HTTP requests
 
@@ -501,7 +501,7 @@ Use `http_request` instead of `execute_command` with curl for one-off validation
 
 ### Scan load, SPA baselines, and artifacts
 
-Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. FFUF supports `request_timeout` for each HTTP request and `filter_status_codes` for explicit response filtering; these are separate from the outer scan `timeout`. `get_scan_capabilities` exposes both the common and small directory wordlists so the caller can select scan breadth explicitly. Before FFUF, Gobuster directory mode, or Feroxbuster starts, the server samples random missing paths and compares status, length, and normalized body hashes. A stable successful fallback is excluded by size, and every result includes the measured baseline plus `false_positive_risk`. An unstable fallback remains visible with a warning. Nuclei templates are installed when the Docker image is built, and `server_health` reports Nuclei unavailable if their checksum is missing without downloading anything. Nuclei preserves explicit template selection: omitting both `tags` and `templates` evaluates all locally installed safe templates and adds a scope warning instead of silently choosing a subset. Set `dry_run: true` to list the matching local templates before scanning; the result reports `templates_matched`, `selection_source`, and `target_requests_sent: 0`. It deliberately leaves request estimation unavailable because template workflows can vary at runtime.
+Nikto supports `pause_seconds`, `max_time`, and `tuning`, disables interactive/update checks, and still obeys the outer request timeout. FFUF supports `request_timeout` for each HTTP request and `filter_status_codes` for explicit response filtering; these are separate from the outer scan `timeout`. `get_scan_capabilities` exposes both the common and small directory wordlists so the caller can select scan breadth explicitly. Before FFUF, Gobuster directory mode, or Feroxbuster starts, the server samples random missing paths and compares status, length, and normalized body hashes without following cross-origin redirects. A stable successful fallback is excluded by size, and every result includes the measured baseline plus `false_positive_risk`. An unstable fallback remains visible with a warning. Nuclei templates are installed when the Docker image is built, and `server_health` reports Nuclei unavailable if their checksum is missing without downloading anything. Nuclei preserves explicit template selection: omitting both `tags` and `templates` evaluates all locally installed safe templates and adds a scope warning instead of silently choosing a subset. Set `dry_run: true` to list the matching local templates before scanning; the result reports `templates_matched`, `selection_source`, and `target_requests_sent: 0`. It deliberately leaves request estimation unavailable because template workflows can vary at runtime.
 
 John accepts either `hash_file` or an inline `hash`. Inline hashes and John state live under a temporary HOME that is deleted after the run. Set `mask_plaintext` to redact recovered plaintext from returned output. JWT Tool likewise starts from a clean temporary HOME seeded with its packaged configuration, then removes that workspace after each call.
 
