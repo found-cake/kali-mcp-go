@@ -16,7 +16,7 @@ import (
 
 const (
 	streamHeartbeatInterval       = 15 * time.Second
-	streamDisconnectProbeInterval = time.Second
+	streamDisconnectProbeInterval = 500 * time.Millisecond
 )
 
 func SendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, cleanups ...func()) error {
