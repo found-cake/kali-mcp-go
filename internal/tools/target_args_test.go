@@ -106,6 +106,26 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			}
 			return err
 		}},
+		{name: "sqlmap context DNS exfiltration", build: func() error {
+			plan, err := PrepareSQLMap(dto.SQLMapRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: "signed-context", Profile: dto.ProfileExplicitCustom},
+				URL:         "https://example.test/?id=1", AdditionalArgs: "--dns-domain=foreign.test",
+			})
+			if plan != nil {
+				plan.Cleanup()
+			}
+			return err
+		}},
+		{name: "sqlmap receipt DNS exfiltration", build: func() error {
+			plan, err := PrepareSQLMap(dto.SQLMapRequest{
+				ScanOptions: dto.ScanOptions{ResolutionReceipt: "signed-receipt", Profile: dto.ProfileExplicitCustom},
+				URL:         "https://example.test/?id=1", AdditionalArgs: "--dns-domain=foreign.test",
+			})
+			if plan != nil {
+				plan.Cleanup()
+			}
+			return err
+		}},
 		{name: "nuclei target", build: func() error {
 			_, err := NucleiArgs(dto.NucleiRequest{Target: "https://example.test/", AllowUnsafe: true, AdditionalArgs: "-u=https://foreign.test/"})
 			return err

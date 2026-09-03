@@ -83,7 +83,7 @@ type SQLMapRequest struct {
 	ContentType    string            `json:"content_type,omitempty" jsonschema:"Content-Type header value e.g. application/json"`
 	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
 	TestParameters string            `json:"test_parameters,omitempty" jsonschema:"comma-separated parameters or JSON fields to test"`
-	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding alternate sources; sqli-verify-low-risk pins risk 1, level 1, techniques BEU and forbids takeover, write, broad extraction, tamper, and hook options"`
+	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding alternate sources; resolved targets forbid proxy and DNS-OOB destinations; sqli-verify-low-risk pins risk 1, level 1, techniques BEU and forbids takeover, write, broad extraction, tamper, and hook options"`
 	Timeout        int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 

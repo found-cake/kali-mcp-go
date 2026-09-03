@@ -43,8 +43,8 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 		}
 	}
 	if hasResolvedTarget(request.ScanOptions) {
-		if err := rejectArguments(additional, "additional_args", "resolved targets forbid proxy routing and scheme or port overrides",
-			"--proxy", "--proxy-file", "--tor", "--tor-type", "--tor-port", "--check-tor", "--force-ssl"); err != nil {
+		if err := rejectArguments(additional, "additional_args", "resolved targets forbid proxy routing, OOB callbacks, and scheme or port overrides",
+			"--proxy", "--proxy-file", "--tor", "--tor-type", "--tor-port", "--check-tor", "--force-ssl", "--dns-domain"); err != nil {
 			return nil, err
 		}
 	}
