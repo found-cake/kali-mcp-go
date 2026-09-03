@@ -108,6 +108,7 @@ func TestResolutionReceiptAllowsNetworkFormDerivedFromResolvedWebTarget(t *testi
 				BrowserTarget: "http://host.docker.internal:3000/",
 				NetworkTarget: "host.docker.internal",
 				Port:          3000,
+				Scope:         dto.TargetScopeDockerHost,
 				Reachable:     true,
 				Selectable:    true,
 			},
@@ -124,8 +125,38 @@ func TestResolutionReceiptAllowsNetworkFormDerivedFromResolvedWebTarget(t *testi
 	if err != nil {
 		t.Fatalf("verify network target: %v", err)
 	}
-	if !provenance.Verified || provenance.SelectionReason != "only_reachable_candidate" {
+	if !provenance.Verified || provenance.SelectionReason != "only_reachable_candidate" ||
+		provenance.Port != 3000 || provenance.Scope != dto.TargetScopeDockerHost {
 		t.Fatalf("unexpected provenance: %+v", provenance)
+	}
+}
+
+func TestResolutionReceiptBindsNetworkToolPort(t *testing.T) {
+	now := time.Date(2026, time.September, 4, 9, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.168.65.254:3000/", NetworkTarget: "192.168.65.254",
+			Port: 3000, Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := AttachResolution("secret", &result, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach resolution: %v", err)
+	}
+	receipt := result.ResolutionReceipt
+
+	normalized, err := ApplyContext("secret", dto.NmapRequest{
+		ScanOptions: dto.ScanOptions{ResolutionReceipt: receipt}, Target: "192.168.65.254",
+	}, now)
+	if err != nil || normalized.Ports != "3000" {
+		t.Fatalf("receipt port not bound: request=%+v err=%v", normalized, err)
+	}
+
+	_, err = ApplyContext("secret", dto.NmapRequest{
+		ScanOptions: dto.ScanOptions{ResolutionReceipt: receipt}, Target: "192.168.65.254", Ports: "22",
+	}, now)
+	if err == nil || !strings.Contains(err.Error(), "port") {
+		t.Fatalf("receipt accepted mismatched port: %v", err)
 	}
 }
 

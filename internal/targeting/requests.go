@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
@@ -15,11 +16,24 @@ func ApplyContext[T any](secret string, request T, now time.Time) (T, error) {
 		return request, nil
 	}
 	options := scanRequest.GetScanOptions()
-	if options.TargetContext == "" {
-		return request, nil
-	}
-	if options.ResolutionReceipt != "" {
+	if options.TargetContext != "" && options.ResolutionReceipt != "" {
 		return request, fmt.Errorf("target_context and resolution_receipt cannot be used together")
+	}
+	if options.TargetContext == "" {
+		if options.ResolutionReceipt == "" {
+			return request, nil
+		}
+		if sqlmap, ok := any(request).(dto.SQLMapRequest); ok && sqlmap.RequestFile != "" {
+			return request, nil
+		}
+		claims, err := resolutionReceiptContext(secret, options.ResolutionReceipt, tools.RequestTarget(request), now)
+		if err != nil {
+			return request, err
+		}
+		if err := applyContextTarget(&request, claims); err != nil {
+			return request, err
+		}
+		return request, nil
 	}
 	claims, err := verifyTargetContext(secret, options.TargetContext, now)
 	if err != nil {
