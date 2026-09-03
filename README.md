@@ -402,6 +402,7 @@ These MCP tools now stream incremental output over SSE instead of waiting for a 
 - `enum4linux_scan`
 - `sqlmap_scan`
 - `tshark_capture`
+- `hydra_attack_stream`
 - `ffuf_scan`
 - `feroxbuster_scan`
 - `nuclei_scan`
@@ -421,7 +422,7 @@ For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout
 Quiet streams may also emit lightweight heartbeat SSE events to keep the connection active until the final `done` event arrives.
 The bundled MCP client assigns the stream `call_id` before execution and sends an authenticated cancellation request if its caller context ends or the SSE stream becomes unreadable. On Unix servers, that cancellation stops the complete spawned process group after a short graceful-stop window and releases its execution slot. SSE flush failures provide a transport-level fallback, but custom HTTP consumers should explicitly call `POST /api/calls/{call_id}/cancel` when abandoning a stream. Keep the MCP host timeout at least as large as the client and request timeouts so an intermediary does not abandon useful work prematurely.
 
-These tools still use a normal POST request/response flow:
+These tools do not use SSE. `metasploit_run` and `john_crack` use a normal POST request/response flow, while `server_health` uses GET:
 
 - `metasploit_run`
 - `john_crack`
