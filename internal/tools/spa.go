@@ -28,6 +28,15 @@ var spaHTTPClient = &http.Client{
 		ResponseHeaderTimeout: 3 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
 	},
+	CheckRedirect: func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("SPA baseline stopped after 10 redirects")
+		}
+		if len(via) > 0 && !sameSPAOrigin(via[0].URL, request.URL) {
+			return fmt.Errorf("SPA baseline redirect changes origin")
+		}
+		return nil
+	},
 }
 
 type baselineSample struct {
@@ -53,6 +62,9 @@ func MeasureSPABaseline(ctx context.Context, target string) (dto.SPABaseline, er
 			return dto.SPABaseline{}, fmt.Errorf("create baseline request: %w", err)
 		}
 		response, err := spaHTTPClient.Do(request)
+		if response != nil && err != nil {
+			_ = response.Body.Close()
+		}
 		if err != nil {
 			return dto.SPABaseline{}, fmt.Errorf("request SPA baseline: %w", err)
 		}
@@ -84,6 +96,22 @@ func MeasureSPABaseline(ctx context.Context, target string) (dto.SPABaseline, er
 		BodyHash:      first.hash,
 		Stable:        stable,
 	}, nil
+}
+
+func sameSPAOrigin(left, right *url.URL) bool {
+	return strings.EqualFold(left.Scheme, right.Scheme) &&
+		strings.EqualFold(left.Hostname(), right.Hostname()) &&
+		spaURLPort(left) == spaURLPort(right)
+}
+
+func spaURLPort(target *url.URL) string {
+	if target.Port() != "" {
+		return target.Port()
+	}
+	if strings.EqualFold(target.Scheme, "http") {
+		return "80"
+	}
+	return "443"
 }
 
 func missingRouteURL(target, missingPath string) (string, error) {

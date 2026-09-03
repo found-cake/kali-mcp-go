@@ -6,10 +6,29 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func TestMeasureSPABaselineRejectsCrossOriginRedirect(t *testing.T) {
+	var destinationRequests atomic.Int32
+	destination := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		destinationRequests.Add(1)
+		writer.WriteHeader(http.StatusOK)
+	}))
+	defer destination.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		http.Redirect(writer, request, destination.URL, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	_, err := MeasureSPABaseline(t.Context(), origin.URL+"/FUZZ")
+	if err == nil || destinationRequests.Load() != 0 {
+		t.Fatalf("cross-origin baseline redirect was followed: requests=%d err=%v", destinationRequests.Load(), err)
+	}
+}
 
 func TestMeasureSPABaselineFiltersStableFallbackBySize(t *testing.T) {
 	// Given: every unknown route returns the same SPA shell.
