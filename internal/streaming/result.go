@@ -21,9 +21,9 @@ func terminalStreamError(result *executor.Result, streamedStderr string) string 
 	return strings.TrimLeft(terminalErr, "\n")
 }
 
-func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr string) {
+func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr, callID string) {
 	if result == nil {
-		writeStreamDoneFallback(w, "internal error: missing stream result")
+		writeStreamDoneFallback(w, callID, "internal error: missing stream result")
 		return
 	}
 	returnCode := result.ReturnCode
@@ -84,7 +84,7 @@ func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr stri
 	}
 	payload, err := json.Marshal(doneEvent)
 	if err != nil {
-		writeStreamDoneFallback(w, "internal error: failed to encode done event")
+		writeStreamDoneFallback(w, callID, "internal error: failed to encode done event")
 		return
 	}
 	_ = writeStreamPayload(w, payload)

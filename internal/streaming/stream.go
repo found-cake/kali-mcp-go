@@ -124,7 +124,7 @@ func (s streamRun) run(w Writer) {
 					s.cancel()
 				}
 				go drainStreamLines(linesCh)
-				writeStreamDoneFallback(w, "internal error: failed to encode stream event")
+				writeStreamDoneFallback(w, s.callID, "internal error: failed to encode stream event")
 				return
 			}
 			if err := writeStreamPayload(w, payload); err != nil {
@@ -146,7 +146,7 @@ func (s streamRun) run(w Writer) {
 				result.Progress = &progress
 				result.FinalizeProgress()
 			}
-			writeStreamDoneEvent(w, result, streamedStderr.String())
+			writeStreamDoneEvent(w, result, streamedStderr.String(), s.callID)
 			wroteDone = true
 			return
 		case <-ticker.Chan():
@@ -157,7 +157,7 @@ func (s streamRun) run(w Writer) {
 					s.cancel()
 				}
 				go drainStreamLines(linesCh)
-				writeStreamDoneFallback(w, "internal error: failed to encode heartbeat event")
+				writeStreamDoneFallback(w, s.callID, "internal error: failed to encode heartbeat event")
 				return
 			}
 			if err := writeStreamPayload(w, payload); err != nil {
@@ -171,7 +171,7 @@ func (s streamRun) run(w Writer) {
 	}
 
 	if !wroteDone {
-		writeStreamDoneFallback(w, "internal error: stream ended without result")
+		writeStreamDoneFallback(w, s.callID, "internal error: stream ended without result")
 	}
 }
 
@@ -197,11 +197,12 @@ func drainStreamLines(lines <-chan executor.Line) {
 	}
 }
 
-func writeStreamDoneFallback(w Writer, message string) {
+func writeStreamDoneFallback(w Writer, callID, message string) {
 	returnCode := -1
-	payload, err := json.Marshal(dto.StreamEvent{Done: true, ReturnCode: &returnCode, Error: message})
+	payload, err := json.Marshal(dto.StreamEvent{CallID: callID, Done: true, ReturnCode: &returnCode, Error: message})
 	if err != nil {
-		_, _ = w.WriteString("data: {\"done\":true,\"return_code\":-1,\"error\":\"internal error: failed to encode fallback event\"}\n\n")
+		encodedCallID, _ := json.Marshal(callID)
+		_, _ = w.WriteString("data: {\"call_id\":" + string(encodedCallID) + ",\"done\":true,\"return_code\":-1,\"error\":\"internal error: failed to encode fallback event\"}\n\n")
 		_ = w.Flush()
 		return
 	}

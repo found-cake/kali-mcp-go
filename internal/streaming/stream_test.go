@@ -125,13 +125,13 @@ func TestRunWritesFallbackWhenDoneClosesWithoutValue(t *testing.T) {
 	buffer := &strings.Builder{}
 
 	// When: the stream state machine reaches the empty terminal state.
-	runWithTicker(bufio.NewWriter(buffer), Config{Lines: lines, Done: done}, func() ticker {
+	runWithTicker(bufio.NewWriter(buffer), Config{CallID: "call-fallback", Lines: lines, Done: done}, func() ticker {
 		return fakeTicker{ch: make(chan time.Time)}
 	})
 
 	// Then: one valid fallback event describes the missing result.
 	events := parseEvents(t, buffer.String())
-	if len(events) != 1 || !events[0].Done || events[0].ReturnCode == nil || *events[0].ReturnCode != -1 || !strings.Contains(events[0].Error, "without result") {
+	if len(events) != 1 || events[0].CallID != "call-fallback" || !events[0].Done || events[0].ReturnCode == nil || *events[0].ReturnCode != -1 || !strings.Contains(events[0].Error, "without result") {
 		t.Fatalf("unexpected fallback event: %+v", events)
 	}
 }
@@ -142,11 +142,11 @@ func TestWriteDoneFallbackEscapesJSONSafely(t *testing.T) {
 	writer := bufio.NewWriter(buffer)
 
 	// When: the fallback event is serialized.
-	writeStreamDoneFallback(writer, "bad\x00value")
+	writeStreamDoneFallback(writer, "call-fallback", "bad\x00value")
 
 	// Then: the decoded value round-trips while the payload remains escaped.
 	events := parseEvents(t, buffer.String())
-	if len(events) != 1 || events[0].Error != "bad\x00value" || !strings.Contains(buffer.String(), `\u0000`) {
+	if len(events) != 1 || events[0].CallID != "call-fallback" || events[0].Error != "bad\x00value" || !strings.Contains(buffer.String(), `\u0000`) {
 		t.Fatalf("unexpected escaped fallback: events=%+v payload=%q", events, buffer.String())
 	}
 }
