@@ -89,7 +89,7 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		if strings.Contains(output, "0 item(s) reported") || strings.Contains(output, "0 items reported") {
 			result.FindingStatus = dto.FindingsNotDetected
 			result.ClassificationReason = "nikto_zero_items_reported"
-		} else if strings.Contains(output, "item(s) reported") || strings.Contains(output, "items reported") {
+		} else if strings.Contains(output, "item(s) reported") || strings.Contains(output, " item reported") || strings.Contains(output, " items reported") {
 			result.FindingStatus = dto.FindingsDetected
 			result.ClassificationReason = "nikto_items_reported"
 		}

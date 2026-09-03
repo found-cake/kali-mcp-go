@@ -122,6 +122,22 @@ func TestClassifyNiktoResultParsesReportedRequestCount(t *testing.T) {
 	}
 }
 
+func TestClassifyNiktoResultSupportsCurrentProgressAndSingularFindingFormat(t *testing.T) {
+	input := dto.ToolResult{
+		ReturnCode: 0,
+		Stdout:     "- STATUS: Completed 8318 requests\n+ Scan terminated: 0 errors and 1 item reported on the remote host\n",
+	}
+
+	result := classifyToolResult("nikto_scan", input)
+
+	if result.HTTPRequests == nil || *result.HTTPRequests != 8318 || result.RequestCountSource != dto.RequestCountParsed {
+		t.Fatalf("current Nikto progress count was not parsed: %+v", result)
+	}
+	if result.FindingStatus != dto.FindingsDetected || result.ClassificationReason != "nikto_items_reported" {
+		t.Fatalf("singular Nikto finding was not classified: %+v", result)
+	}
+}
+
 func TestClassifyNucleiDryRunDoesNotReportFinding(t *testing.T) {
 	input := dto.ToolResult{
 		ReturnCode: 0,

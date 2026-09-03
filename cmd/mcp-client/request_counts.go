@@ -25,7 +25,7 @@ func parseNiktoRequestCount(output string) (int, bool) {
 	for line := range strings.Lines(output) {
 		fields := strings.Fields(line)
 		for index, field := range fields {
-			if field != "requests:" || index == 0 {
+			if strings.TrimSuffix(field, ":") != "requests" || index == 0 {
 				continue
 			}
 			finalSummary := index == 2 && fields[0] == "+"
