@@ -47,6 +47,7 @@ type Result struct {
 	Progress              *dto.ProgressMetadata
 	JWTAnalysis           *dto.JWTAnalysisMetadata
 	SQLMapAnalysis        *dto.SQLMapAnalysis
+	NucleiPreview         *dto.NucleiPreviewMetadata
 	Evidence              *dto.EvidenceManifest
 	BrowserScreenshotPath string
 }

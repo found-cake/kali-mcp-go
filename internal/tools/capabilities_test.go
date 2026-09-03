@@ -45,6 +45,10 @@ func TestScanCapabilitiesCoverEveryExecutableToolWithRoutingMetadata(t *testing.
 	if !hydra.RequiresTargetContext || !slices.Contains(hydra.SupportedControls, dto.ScanControlDryRun) {
 		t.Fatalf("Hydra safety contract is incomplete: %+v", hydra)
 	}
+	nuclei := findToolCapability(t, capabilities.Tools, "nuclei_scan")
+	if !slices.Contains(nuclei.SupportedControls, dto.ScanControlDryRun) {
+		t.Fatalf("Nuclei template preview is not exposed: %+v", nuclei)
+	}
 	john := findToolCapability(t, capabilities.Tools, "john_crack")
 	if john.RequiresTargetContext {
 		t.Fatalf("offline password auditing must not require a network target: %+v", john)

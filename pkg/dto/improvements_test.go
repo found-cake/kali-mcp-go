@@ -62,7 +62,7 @@ func TestToolResultFormat_exposes_evidence_artifact_identifiers(t *testing.T) {
 }
 
 func TestToolResultFormatAppendsStructuredAnalysisSummary(t *testing.T) {
-	// Given: one result carrying existing HTTP, SQLMap, and JWT metadata.
+	// Given: one result carrying HTTP, SQLMap, JWT, and Nuclei preview metadata.
 	result := ToolResult{
 		ExecutionStatus:      ExecutionSucceeded,
 		FindingStatus:        FindingsInconclusive,
@@ -74,6 +74,7 @@ func TestToolResultFormatAppendsStructuredAnalysisSummary(t *testing.T) {
 		},
 		SQLMapAnalysis: &SQLMapAnalysis{ManualVerificationRecommended: true, ManualVerificationReasons: []string{"server_error_responses_observed"}},
 		JWTAnalysis:    &JWTAnalysisMetadata{ParseStatus: JWTParsed, Algorithm: "RS256", ClaimNames: []string{"sub"}},
+		NucleiPreview:  &NucleiPreviewMetadata{TemplatesMatched: 42, SelectionSource: "tags", TargetRequestsSent: 0},
 	}
 
 	// When: the MCP-compatible text content is rendered.
@@ -94,6 +95,9 @@ func TestToolResultFormatAppendsStructuredAnalysisSummary(t *testing.T) {
 	}
 	if summary.JWTStructure == nil || summary.JWTStructure.Algorithm != "RS256" || summary.Assessment.FindingStatus != FindingsInconclusive {
 		t.Fatalf("missing JWT or assessment summary: %+v", summary)
+	}
+	if summary.NucleiPreview == nil || summary.NucleiPreview.TemplatesMatched != 42 || summary.NucleiPreview.TargetRequestsSent != 0 {
+		t.Fatalf("missing Nuclei preview summary: %+v", summary.NucleiPreview)
 	}
 }
 

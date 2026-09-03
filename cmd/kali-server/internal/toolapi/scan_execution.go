@@ -55,6 +55,7 @@ type scanExecutionPlan struct {
 	extraWarnings         []string
 	artifactStore         *artifactstore.Store
 	jwtAnalysis           *dto.JWTAnalysisMetadata
+	nucleiPreview         *dto.NucleiPreviewMetadata
 	browserScreenshotPath string
 	dryRun                bool
 }
@@ -75,6 +76,10 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if err != nil {
 		return nil, err
 	}
+	dryRun := false
+	if request, ok := any(request).(dto.DryRunRequest); ok {
+		dryRun = request.GetDryRun()
+	}
 	provenance, err := targeting.ResolveProvenance(request, httpapi.APIToken(c), time.Now().UTC())
 	if err != nil {
 		return nil, err
@@ -82,7 +87,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if tools.RuntimeRequiresTargetContext(args[0]) && (provenance == nil || !provenance.Verified) {
 		return nil, fmt.Errorf("%s requires a verified target_context from resolve_target", args[0])
 	}
-	if effective.HealthURL != "" {
+	if effective.HealthURL != "" && !dryRun {
 		if err := probeTargetHealth(c.Context(), effective.HealthURL); err != nil {
 			return nil, fmt.Errorf("pre-scan health check: %w", err)
 		}
@@ -101,10 +106,6 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	requestedTimeout := 0
 	if timeoutRequest, ok := any(request).(dto.TimeoutRequest); ok {
 		requestedTimeout = timeoutRequest.GetRequestTimeout()
-	}
-	dryRun := false
-	if request, ok := any(request).(dto.DryRunRequest); ok {
-		dryRun = request.GetDryRun()
 	}
 	timeout := commandTimeout(requestedTimeout)
 	timeoutPlanning := &dto.TimeoutPlanning{Source: dto.TimeoutSourceDefault}
@@ -162,13 +163,14 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.Policy = p.options
 	result.Controls = p.controls
 	result.JWTAnalysis = p.jwtAnalysis
+	result.NucleiPreview = p.nucleiPreview
 	result.BrowserScreenshotPath = p.browserScreenshotPath
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
 	result.TimeoutPlanning = p.timeoutPlanning
 	result.Warnings = append(result.Warnings, p.extraWarnings...)
 	result.FinalizeProgress()
-	if p.healthURL != "" {
+	if p.healthURL != "" && !p.dryRun {
 		if err := probeTargetHealth(p.context, p.healthURL); err != nil {
 			result.Warnings = append(result.Warnings, "post-scan health check failed: "+err.Error())
 		}

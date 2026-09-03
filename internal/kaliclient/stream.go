@@ -36,6 +36,7 @@ type streamAccumulator struct {
 	progress           *dto.ProgressMetadata
 	jwtAnalysis        *dto.JWTAnalysisMetadata
 	sqlmapAnalysis     *dto.SQLMapAnalysis
+	nucleiPreview      *dto.NucleiPreviewMetadata
 	evidence           *dto.EvidenceManifest
 }
 
@@ -150,6 +151,7 @@ func (a *streamAccumulator) consume(event dto.StreamEvent) error {
 		a.progress = event.Progress
 		a.jwtAnalysis = event.JWTAnalysis
 		a.sqlmapAnalysis = event.SQLMapAnalysis
+		a.nucleiPreview = event.NucleiPreview
 		a.evidence = event.Evidence
 		a.done = true
 		return nil
@@ -180,6 +182,7 @@ func (a *streamAccumulator) result() (*dto.ToolResult, error) {
 		Warnings: a.warnings, Artifacts: a.artifacts, Progress: a.progress, FindingStatus: dto.FindingsUnknown,
 		JWTAnalysis:     a.jwtAnalysis,
 		SQLMapAnalysis:  a.sqlmapAnalysis,
+		NucleiPreview:   a.nucleiPreview,
 		Evidence:        a.evidence,
 		ExecutionStatus: dto.ExecutionStatusFromResult(a.returnCode, a.timedOut, a.cancelled),
 	}

@@ -52,6 +52,7 @@ func ToToolResult(result *executor.Result) dto.ToolResult {
 		Progress:          result.Progress,
 		JWTAnalysis:       result.JWTAnalysis,
 		SQLMapAnalysis:    result.SQLMapAnalysis,
+		NucleiPreview:     result.NucleiPreview,
 		Evidence:          result.Evidence,
 	}
 	if toolResult.ExecutionStatus != dto.ExecutionSucceeded {

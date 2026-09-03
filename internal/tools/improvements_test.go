@@ -120,6 +120,45 @@ func TestNucleiArgsExcludeUnsafeTemplatesByDefault(t *testing.T) {
 	}
 }
 
+func TestNucleiTemplatePreviewUsesOnlyLocalSelectionFilters(t *testing.T) {
+	// Given: a safe Nuclei scan with typed tag selection and a remote target.
+	request := dto.NucleiRequest{Target: "https://example.com", Tags: "exposure,misconfig"}
+
+	// When: the non-network template preview command is generated.
+	args, err := NucleiTemplateListArgs(request)
+
+	// Then: it lists matching local templates without carrying a scan target.
+	if err != nil {
+		t.Fatalf("build Nuclei preview args: %v", err)
+	}
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, " -tl ") || !strings.Contains(joined, "-tags exposure,misconfig") || strings.Contains(joined, "https://example.com") {
+		t.Fatalf("unexpected Nuclei preview args: %v", args)
+	}
+	if count := CountNucleiTemplateList("one.yaml\n\ntwo.yaml\n"); count != 2 {
+		t.Fatalf("template count=%d want=2", count)
+	}
+	preview := SummarizeNucleiTemplateList(request, "one.yaml\ntwo.yaml\n")
+	if preview.TemplatesMatched != 2 || preview.SelectionSource != "tags" || preview.TargetRequestsSent != 0 || preview.RequestEstimateAvailable {
+		t.Fatalf("unexpected Nuclei preview metadata: %+v", preview)
+	}
+	if source := NucleiSelectionSource(dto.NucleiRequest{Tags: "exposure", Templates: []string{"http/test.yaml"}}); source != "templates_and_tags" {
+		t.Fatalf("combined selection source=%q", source)
+	}
+	if source := NucleiSelectionSource(dto.NucleiRequest{Severity: "high,critical"}); source != "severity" {
+		t.Fatalf("severity selection source=%q", source)
+	}
+}
+
+func TestNucleiTemplatePreviewRejectsUnboundedUnsafeAdditionalArguments(t *testing.T) {
+	_, err := NucleiTemplateListArgs(dto.NucleiRequest{
+		AllowUnsafe: true, AdditionalArgs: "--include-tags=dos",
+	})
+	if err == nil || !strings.Contains(err.Error(), "tags") {
+		t.Fatalf("unsafe preview arguments were accepted: %v", err)
+	}
+}
+
 func TestReviewedToolArgsUseStableNonInteractiveDefaults(t *testing.T) {
 	t.Parallel()
 	mustArgs := func(args []string, err error) []string {

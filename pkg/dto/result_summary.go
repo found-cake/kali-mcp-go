@@ -27,10 +27,11 @@ type inlineResultSummary struct {
 	HTTPResponse   *inlineHTTPResponseSummary `json:"http_response,omitempty"`
 	SQLMapAnalysis *SQLMapAnalysis            `json:"sqlmap_analysis,omitempty"`
 	JWTStructure   *JWTAnalysisMetadata       `json:"jwt_structure,omitempty"`
+	NucleiPreview  *NucleiPreviewMetadata     `json:"nuclei_preview,omitempty"`
 }
 
 func (r ToolResult) inlineStructuredSummary() (string, error) {
-	if r.HTTPResponse == nil && r.SQLMapAnalysis == nil && r.JWTAnalysis == nil {
+	if r.HTTPResponse == nil && r.SQLMapAnalysis == nil && r.JWTAnalysis == nil && r.NucleiPreview == nil {
 		return "", nil
 	}
 	summary := inlineResultSummary{
@@ -40,6 +41,7 @@ func (r ToolResult) inlineStructuredSummary() (string, error) {
 		},
 		SQLMapAnalysis: r.SQLMapAnalysis,
 		JWTStructure:   r.JWTAnalysis,
+		NucleiPreview:  r.NucleiPreview,
 	}
 	if r.HTTPResponse != nil {
 		httpSummary := inlineHTTPResponseSummary{

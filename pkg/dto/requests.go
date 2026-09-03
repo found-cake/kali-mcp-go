@@ -140,11 +140,13 @@ type NucleiRequest struct {
 	Tags           string   `json:"tags,omitempty" jsonschema:"comma-separated template tags to include"`
 	Templates      []string `json:"templates,omitempty" jsonschema:"specific template paths or IDs"`
 	AllowUnsafe    bool     `json:"allow_unsafe,omitempty" jsonschema:"allow DoS/fuzz and interactsh templates; false excludes them"`
+	DryRun         bool     `json:"dry_run,omitempty" jsonschema:"enumerate matching local templates and preview the command without contacting the target"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra nuclei arguments"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds; 0 derives it from request and rate budgets, while shorter explicit values are preserved with a warning"`
 }
 
 func (r NucleiRequest) GetRequestTimeout() int { return r.Timeout }
+func (r NucleiRequest) GetDryRun() bool        { return r.DryRun }
 
 type WhatWebRequest struct {
 	ScanOptions
