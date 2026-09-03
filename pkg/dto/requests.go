@@ -40,7 +40,7 @@ type DirbRequest struct {
 	ScanOptions
 	URL            string `json:"url,omitempty" jsonschema:"target URL; omit when target_context is supplied"`
 	Wordlist       string `json:"wordlist,omitempty" jsonschema:"path to wordlist file"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra dirb arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dirb arguments excluding resume sources; resolved targets also forbid proxy routing"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
@@ -92,7 +92,7 @@ func (r SQLMapRequest) GetRequestTimeout() int { return r.Timeout }
 type WPScanRequest struct {
 	ScanOptions
 	URL            string `json:"url,omitempty" jsonschema:"target WordPress URL; omit when target_context is supplied"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra WPScan arguments excluding URL and config overrides"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra WPScan arguments excluding URL and config overrides; resolved targets also forbid proxy routing"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 

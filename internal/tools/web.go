@@ -53,7 +53,16 @@ func DirbArgs(r dto.DirbRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return appendSplitArgs([]string{"dirb", r.URL, wordlist}, r.AdditionalArgs, "additional_args")
+	extra, err := splitArgs(r.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if hasResolvedTarget(r.ScanOptions) {
+		if err := rejectArguments(extra, "additional_args", "resolved targets forbid proxy routing", "-p"); err != nil {
+			return nil, err
+		}
+	}
+	return appendTargetSafeArgs([]string{"dirb", r.URL, wordlist}, r.AdditionalArgs, "additional_args", false, "-resume")
 }
 
 func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
@@ -95,6 +104,15 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 func WPScanArgs(r dto.WPScanRequest) ([]string, error) {
 	if err := rejectContextHostHeaders(r.ScanOptions, r.AdditionalArgs, "additional_args", "--headers"); err != nil {
 		return nil, err
+	}
+	if hasResolvedTarget(r.ScanOptions) {
+		extra, err := splitArgs(r.AdditionalArgs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid additional_args: %w", err)
+		}
+		if err := rejectArguments(extra, "additional_args", "resolved targets forbid proxy routing", "--proxy", "--proxy-auth"); err != nil {
+			return nil, err
+		}
 	}
 	return appendTargetSafeArgs([]string{"wpscan", "--url", r.URL}, r.AdditionalArgs, "additional_args", false, "--url", "--config-file")
 }

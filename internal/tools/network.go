@@ -33,6 +33,11 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 			return nil, err
 		}
 	}
+	if hasResolvedTarget(r.ScanOptions) {
+		if err := rejectArguments(extraParts, "additional_args", "resolved targets forbid proxy routing", "--proxies"); err != nil {
+			return nil, err
+		}
+	}
 	args := append([]string{"nmap"}, scanParts...)
 	if r.Ports != "" {
 		args = append(args, "-p", r.Ports)

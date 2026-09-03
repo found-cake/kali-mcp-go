@@ -67,6 +67,10 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			_, err := GobusterArgs(dto.GobusterRequest{URL: "https://example.test/", AdditionalArgs: "--wordlist=https://foreign.test/words"})
 			return err
 		}},
+		{name: "dirb resume source", build: func() error {
+			_, err := DirbArgs(dto.DirbRequest{URL: "https://example.test/", AdditionalArgs: "-resume=foreign.state"})
+			return err
+		}},
 		{name: "nikto host", build: func() error {
 			_, err := NiktoArgs(dto.NiktoRequest{Target: "https://example.test/", AdditionalArgs: "-url=https://foreign.test/"})
 			return err
@@ -155,6 +159,10 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 			_, err := NucleiArgs(dto.NucleiRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "-H 'Host: foreign.test'"})
 			return err
 		}},
+		{name: "Nmap resolved proxy", build: func() error {
+			_, err := NmapArgs(dto.NmapRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "192.0.2.10", Ports: "3000", AdditionalArgs: "--proxies=http://foreign.test:8080"})
+			return err
+		}},
 		{name: "Nuclei resolved redirect", build: func() error {
 			_, err := NucleiArgs(dto.NucleiRequest{
 				ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom},
@@ -222,6 +230,10 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 				ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "192.0.2.10", Service: "http-post-form",
 				Username: "user", Password: "pass", AdditionalArgs: `"/:u=^USER^&p=^PASS^:F=bad:H=Host:foreign.test"`,
 			})
+			return err
+		}},
+		{name: "WPScan resolved proxy", build: func() error {
+			_, err := WPScanArgs(dto.WPScanRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "--proxy=https://foreign.test:8080"})
 			return err
 		}},
 	}
