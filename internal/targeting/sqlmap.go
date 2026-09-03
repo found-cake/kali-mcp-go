@@ -14,18 +14,9 @@ import (
 const maximumSQLMapRequestHeaderBytes = 64 * 1024
 
 func sqlMapContextTarget(request dto.SQLMapRequest, claims targetContextClaims) (string, error) {
-	requestText := request.RawRequest
-	if request.RequestFile != "" {
-		file, err := os.Open(request.RequestFile)
-		if err != nil {
-			return "", fmt.Errorf("open SQLMap request file: %w", err)
-		}
-		defer file.Close()
-		content, err := io.ReadAll(io.LimitReader(file, maximumSQLMapRequestHeaderBytes+1))
-		if err != nil {
-			return "", fmt.Errorf("read SQLMap request file: %w", err)
-		}
-		requestText = string(content)
+	requestText, err := sqlMapRequestText(request)
+	if err != nil {
+		return "", err
 	}
 	authority, requestTarget, err := rawHTTPRequestDestination(requestText)
 	if err != nil {
@@ -55,6 +46,55 @@ func sqlMapContextTarget(request dto.SQLMapRequest, claims targetContextClaims) 
 		return "", err
 	}
 	return claims.NetworkTarget, nil
+}
+
+func sqlMapRequestTarget(request dto.SQLMapRequest) (string, error) {
+	requestText, err := sqlMapRequestText(request)
+	if err != nil {
+		return "", err
+	}
+	authority, requestTarget, err := rawHTTPRequestDestination(requestText)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(requestTarget, "http://") || strings.HasPrefix(requestTarget, "https://") {
+		parsed, err := url.Parse(requestTarget)
+		if err != nil || parsed.User != nil || parsed.Hostname() == "" || parsed.Fragment != "" {
+			return "", fmt.Errorf("SQLMap request contains an invalid absolute request target")
+		}
+		return requestTarget, nil
+	}
+	if !strings.HasPrefix(requestTarget, "/") && requestTarget != "*" {
+		return "", fmt.Errorf("SQLMap request contains an unsupported request target")
+	}
+	_, port, err := splitHTTPAuthority(authority, 80)
+	if err != nil {
+		return "", err
+	}
+	scheme := "http"
+	if port == 443 {
+		scheme = "https"
+	}
+	if requestTarget == "*" {
+		requestTarget = "/"
+	}
+	return scheme + "://" + authority + requestTarget, nil
+}
+
+func sqlMapRequestText(request dto.SQLMapRequest) (string, error) {
+	if request.RequestFile == "" {
+		return request.RawRequest, nil
+	}
+	file, err := os.Open(request.RequestFile)
+	if err != nil {
+		return "", fmt.Errorf("open SQLMap request file: %w", err)
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, maximumSQLMapRequestHeaderBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read SQLMap request file: %w", err)
+	}
+	return string(content), nil
 }
 
 func rawHTTPRequestDestination(request string) (string, string, error) {

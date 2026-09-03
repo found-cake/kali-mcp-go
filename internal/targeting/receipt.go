@@ -224,6 +224,13 @@ func ResolveProvenance(request any, secret string, now time.Time) (*dto.TargetPr
 		}, nil
 	}
 	target := tools.RequestTarget(request)
+	if sqlmapRequest, sqlmap := request.(dto.SQLMapRequest); sqlmap && (sqlmapRequest.RawRequest != "" || sqlmapRequest.RequestFile != "") {
+		var err error
+		target, err = sqlMapRequestTarget(sqlmapRequest)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if target == "" {
 		return nil, nil
 	}

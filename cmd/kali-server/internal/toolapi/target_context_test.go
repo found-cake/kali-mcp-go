@@ -206,6 +206,20 @@ func TestSQLMapTargetContextRejectsMismatchedNonURLSource(t *testing.T) {
 	}
 }
 
+func TestSQLMapRequestFileLoopbackRequiresResolution(t *testing.T) {
+	t.Parallel()
+
+	requestFile := filepath.Join(t.TempDir(), "loopback.txt")
+	if err := os.WriteFile(requestFile, []byte("GET /?id=* HTTP/1.1\r\nHost: 127.0.0.1:3000\r\n\r\n"), 0o600); err != nil {
+		t.Fatalf("write request file: %v", err)
+	}
+	request := dto.SQLMapRequest{RequestFile: requestFile}
+	provenance, err := targeting.ResolveProvenance(request, "secret", time.Now())
+	if err == nil || !strings.Contains(err.Error(), "target resolution is required") || provenance != nil {
+		t.Fatalf("loopback request file bypassed resolution: provenance=%+v err=%v", provenance, err)
+	}
+}
+
 func TestTargetContextWarnsWhenExpiryIsNear(t *testing.T) {
 	// Given: a verified target context with thirty seconds remaining.
 	now := time.Date(2026, time.August, 30, 9, 0, 0, 0, time.UTC)
