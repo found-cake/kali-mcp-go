@@ -109,6 +109,43 @@ func TestTargetContextOriginMismatchExplainsCandidateUsage(t *testing.T) {
 	}
 }
 
+func TestSQLMapTargetContextPreservesExplicitNonURLSource(t *testing.T) {
+	// Given: a signed web target and each supported non-URL SQLMap source.
+	now := time.Date(2026, time.September, 3, 10, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.168.65.254:3000/", NetworkTarget: "192.168.65.254",
+			Port: 3000, Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret", &result, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach target context: %v", err)
+	}
+	tests := []dto.SQLMapRequest{
+		{RawRequest: "GET / HTTP/1.1\r\nHost: 192.168.65.254:3000\r\n\r\n"},
+		{RequestFile: "/workspace/request.txt"},
+	}
+
+	for _, request := range tests {
+		request.ScanOptions.TargetContext = result.Candidates[0].TargetContext
+
+		// When: the target context is applied before SQLMap validation.
+		normalized, err := targeting.ApplyContext("secret", request, now)
+		if err != nil {
+			t.Fatalf("apply target context: %v", err)
+		}
+
+		// Then: provenance remains signed without introducing a second URL source.
+		if normalized.URL != "" || normalized.RawRequest != request.RawRequest || normalized.RequestFile != request.RequestFile {
+			t.Fatalf("SQLMap source changed: %+v", normalized)
+		}
+		if err := validateSQLMapRequest(normalized); err != nil {
+			t.Fatalf("validate SQLMap source: %v", err)
+		}
+	}
+}
+
 func TestTargetContextWarnsWhenExpiryIsNear(t *testing.T) {
 	// Given: a verified target context with thirty seconds remaining.
 	now := time.Date(2026, time.August, 30, 9, 0, 0, 0, time.UTC)

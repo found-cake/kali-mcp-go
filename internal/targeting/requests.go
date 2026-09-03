@@ -46,6 +46,9 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 	case *dto.NiktoRequest:
 		return setWebTarget(&value.Target, claims.BrowserTarget)
 	case *dto.SQLMapRequest:
+		if value.RequestFile != "" || value.RawRequest != "" {
+			return nil
+		}
 		return setWebTarget(&value.URL, claims.BrowserTarget)
 	case *dto.HydraRequest:
 		return setNetworkTarget(&value.Target, claims.NetworkTarget)
