@@ -150,14 +150,16 @@ func bindIntPort(current *int, expected int, tool string) error {
 }
 
 func bindMetasploitPort(request *dto.MetasploitRequest, expected int) error {
+	for name := range request.Options {
+		if strings.EqualFold(strings.TrimSpace(name), "VHOST") {
+			return fmt.Errorf("Metasploit VHOST is not permitted with target_context")
+		}
+	}
 	if expected == 0 {
 		return nil
 	}
 	options := make(map[string]string, len(request.Options)+1)
 	for name, value := range request.Options {
-		if strings.EqualFold(strings.TrimSpace(name), "VHOST") {
-			return fmt.Errorf("Metasploit VHOST is not permitted with target_context")
-		}
 		if strings.EqualFold(strings.TrimSpace(name), "RPORT") {
 			port, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil || port != expected {

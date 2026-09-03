@@ -172,6 +172,27 @@ func TestTargetContextBindsNetworkToolPorts(t *testing.T) {
 	}
 }
 
+func TestTargetContextRejectsMetasploitVirtualHostWithoutPort(t *testing.T) {
+	now := time.Date(2026, time.September, 4, 1, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "host.docker.internal",
+		Candidates: []dto.TargetCandidate{{
+			NetworkTarget: "host.docker.internal", Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret", &result, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach target context: %v", err)
+	}
+
+	_, err := targeting.ApplyContext("secret", dto.MetasploitRequest{
+		ScanOptions: dto.ScanOptions{TargetContext: result.Candidates[0].TargetContext},
+		Options:     map[string]string{"VHOST": "foreign.test"},
+	}, now)
+	if err == nil || !strings.Contains(err.Error(), "VHOST") {
+		t.Fatalf("zero-port context accepted a virtual host override: %v", err)
+	}
+}
+
 func TestTargetContextRejectsVirtualHostOverrides(t *testing.T) {
 	now := time.Date(2026, time.September, 4, 1, 0, 0, 0, time.UTC)
 	result := dto.TargetResolutionResult{
