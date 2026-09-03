@@ -103,6 +103,9 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 
 func validateNucleiSafety(request dto.NucleiRequest) error {
 	if request.AllowUnsafe {
+		if request.Profile != "" && request.Profile != dto.ProfileExplicitCustom {
+			return fmt.Errorf("allow_unsafe requires explicit-custom or an omitted profile")
+		}
 		return nil
 	}
 	for _, selector := range append([]string{request.Tags}, request.Templates...) {

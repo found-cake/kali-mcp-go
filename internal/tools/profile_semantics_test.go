@@ -89,6 +89,13 @@ func TestSafetyProfilesRejectImpactEscalationArguments(t *testing.T) {
 			})
 			return err
 		}},
+		{name: "Nuclei unsafe opt-out", build: func() error {
+			_, err := NucleiArgs(dto.NucleiRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
+				Target:      "https://example.test/", AllowUnsafe: true, AdditionalArgs: "--include-tags=dos",
+			})
+			return err
+		}},
 		{name: "Nikto DoS tuning", build: func() error {
 			_, err := NiktoArgs(dto.NiktoRequest{
 				ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
