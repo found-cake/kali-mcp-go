@@ -29,5 +29,14 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 			delete(schema.Properties, string(control))
 		}
 	}
+	if profileSchema, ok := schema.Properties["profile"]; ok {
+		profiles := make([]any, 0, len(definition.Profiles)+1)
+		for _, profile := range definition.Profiles {
+			profiles = append(profiles, string(profile))
+		}
+		profiles = append(profiles, string(dto.ProfileExplicitCustom))
+		profileSchema.Description = "safety profile accepted by this tool"
+		profileSchema.Enum = profiles
+	}
 	return &mcp.Tool{Name: definition.Tool, Description: definition.Description, InputSchema: schema}, nil
 }

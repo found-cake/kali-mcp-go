@@ -45,6 +45,25 @@ func TestApplyScanControlsUsesInstalledDalfoxWorkersFlag(t *testing.T) {
 	}
 }
 
+func TestDalfoxArgsRejectsWorkerFlagsInAdditionalArgs(t *testing.T) {
+	// Given: caller-supplied flags that bypass the versioned concurrency control.
+	additionalArgs := []string{"--worker 2", "--workers 2", "--worker=2", "--workers=2"}
+
+	for _, extra := range additionalArgs {
+		t.Run(extra, func(t *testing.T) {
+			// When: Dalfox arguments are generated from the request.
+			_, err := DalfoxArgs(dto.DalfoxRequest{
+				Target: "https://example.com/?q=FUZZ", AdditionalArgs: extra,
+			})
+
+			// Then: callers are directed to the MCP concurrency field instead.
+			if err == nil || !strings.Contains(err.Error(), "concurrency") {
+				t.Fatalf("expected worker flag rejection, got %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateScanProfileRejectsToolOutsideProfile(t *testing.T) {
 	// Given: SQLmap is requested under the reconnaissance-only profile.
 	controls := dto.ScanOptions{Profile: dto.ProfileSafeRecon}

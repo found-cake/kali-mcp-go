@@ -24,6 +24,27 @@ func TestFormatScanCapabilitiesExplainsExecutionContract(t *testing.T) {
 	}
 }
 
+func TestFormatScanCapabilitiesIncludesProfileLimits(t *testing.T) {
+	// Given: a profile with bounded scan controls.
+	result := &dto.ScanCapabilitiesResult{Profiles: []dto.ScanProfileCapability{{
+		Profile: dto.ProfileWebDiscoveryLowRate,
+		Tools:   []string{"ffuf_scan", "feroxbuster_scan"},
+		Limits: dto.ScanLimits{
+			RateLimit: 5, Concurrency: 2, MaxRequests: 1000, Max5xxResponses: 10,
+		},
+	}}}
+
+	// When: capabilities are formatted for the MCP text response.
+	formatted := formatScanCapabilities(result)
+
+	// Then: the model sees every effective profile limit before choosing options.
+	for _, value := range []string{"rate_limit=5", "concurrency=2", "max_requests=1000", "max_5xx_responses=10"} {
+		if !strings.Contains(formatted, value) {
+			t.Fatalf("profile limit summary is missing %q: %s", value, formatted)
+		}
+	}
+}
+
 func TestImplementationVersionDefaultsToDev(t *testing.T) {
 	original := version
 	version = ""

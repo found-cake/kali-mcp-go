@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -42,6 +43,48 @@ func TestToolOutputSchemaSeparatesExecutionFromFindingStatus(t *testing.T) {
 	assertPropertyDescriptionContains(t, properties, "success", "execution")
 	assertPropertyDescriptionContains(t, properties, "execution_status", "execution")
 	assertPropertyDescriptionContains(t, properties, "finding_status", "finding")
+}
+
+func TestToolInputSchemasExposeOnlyCompatibleProfiles(t *testing.T) {
+	// Given: tools with different safety-profile compatibility.
+	tests := []struct {
+		tool     string
+		profiles []string
+	}{
+		{tool: "nmap_scan", profiles: []string{"safe-recon", "explicit-custom"}},
+		{tool: "browser_check", profiles: []string{"browser-xss-confirm", "explicit-custom"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.tool, func(t *testing.T) {
+			// When: an orchestrator inspects the tool's profile schema.
+			properties, ok := schemaProperties(listedToolByName(t, test.tool).InputSchema)
+			if !ok {
+				t.Fatalf("%s has an invalid input schema", test.tool)
+			}
+
+			// Then: only profiles accepted by that tool are selectable.
+			profileSchema, ok := properties["profile"].(map[string]any)
+			if !ok {
+				t.Fatalf("%s has an invalid profile schema", test.tool)
+			}
+			values, ok := profileSchema["enum"].([]any)
+			if !ok {
+				t.Fatalf("%s profile schema has no enum: %+v", test.tool, profileSchema)
+			}
+			profiles := make([]string, 0, len(values))
+			for _, value := range values {
+				profile, ok := value.(string)
+				if !ok {
+					t.Fatalf("%s profile enum contains %T", test.tool, value)
+				}
+				profiles = append(profiles, profile)
+			}
+			if !slices.Equal(profiles, test.profiles) {
+				t.Fatalf("%s profiles=%v want=%v", test.tool, profiles, test.profiles)
+			}
+		})
+	}
 }
 
 func listedToolByName(t *testing.T, name string) *mcp.Tool {

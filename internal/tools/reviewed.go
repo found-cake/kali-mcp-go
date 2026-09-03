@@ -137,7 +137,16 @@ func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 
 func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
 	args := []string{"dalfox", "scan", request.Target, "--format", "json", "--no-color"}
-	return appendSplitArgs(args, request.AdditionalArgs, "additional_args")
+	extra, err := splitArgs(request.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	for _, argument := range extra {
+		if argument == "--worker" || argument == "--workers" || strings.HasPrefix(argument, "--worker=") || strings.HasPrefix(argument, "--workers=") {
+			return nil, fmt.Errorf("additional_args must not set Dalfox worker flags; use concurrency")
+		}
+	}
+	return append(args, extra...), nil
 }
 
 func BrowserArgs(request dto.BrowserRequest) ([]string, error) {

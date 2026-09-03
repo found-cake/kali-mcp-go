@@ -174,7 +174,7 @@ func (r JWTRequest) GetRequestTimeout() int { return r.Timeout }
 type DalfoxRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"target URL or raw HTTP file; omit only for a URL supplied through target_context"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments; use concurrency instead of --worker or --workers"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
