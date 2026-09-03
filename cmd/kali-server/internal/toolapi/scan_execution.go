@@ -59,8 +59,6 @@ type scanExecutionPlan struct {
 	artifactStore         *artifactstore.Store
 	jwtAnalysis           *dto.JWTAnalysisMetadata
 	nucleiPreview         *dto.NucleiPreviewMetadata
-	streamCancel          context.CancelFunc
-	cancelRegistration    func()
 	browserScreenshotPath string
 	dryRun                bool
 }

@@ -20,15 +20,15 @@ const (
 )
 
 func SendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, cleanups ...func()) error {
+	if release := RetainCallCancellation(c); release != nil {
+		cleanups = append(cleanups, release)
+		return sendToolStream(c, lines, done, cancel, streamDisconnectProbeInterval, cleanups...)
+	}
 	unregister, err := RegisterCallCancellation(c, cancel)
 	if err != nil {
 		cancelAndCleanup(cancel, cleanups)
 		return Conflict(c, err.Error())
 	}
-	return SendRegisteredToolStream(c, lines, done, cancel, unregister, cleanups...)
-}
-
-func SendRegisteredToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, unregister func(), cleanups ...func()) error {
 	if unregister != nil {
 		cleanups = append(cleanups, unregister)
 	}

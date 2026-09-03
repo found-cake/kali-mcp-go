@@ -11,6 +11,8 @@ import (
 
 const callCancellationRegistryLocalKey = "call-cancellation-registry"
 
+const callCancellationLeaseLocalKey = "call-cancellation-lease"
+
 var ErrCallIDAlreadyActive = errors.New("call ID is already active")
 
 type CallCancellationRegistry struct {
@@ -19,6 +21,13 @@ type CallCancellationRegistry struct {
 
 type callCancellation struct {
 	cancel context.CancelFunc
+}
+
+type callCancellationLease struct {
+	cancel     context.CancelFunc
+	unregister func()
+	retained   bool
+	once       sync.Once
 }
 
 func NewCallCancellationRegistry() *CallCancellationRegistry {
@@ -56,6 +65,44 @@ func CallCancellationRegistryMiddleware(registry *CallCancellationRegistry) fibe
 		c.Locals(callCancellationRegistryLocalKey, registry)
 		return c.Next()
 	}
+}
+
+func WithCallCancellation(next fiber.Handler) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		ctx, cancel := context.WithCancel(c.Context())
+		c.SetContext(ctx)
+		unregister, err := RegisterCallCancellation(c, cancel)
+		if err != nil {
+			cancel()
+			return Conflict(c, err.Error())
+		}
+		lease := &callCancellationLease{cancel: cancel, unregister: unregister}
+		c.Locals(callCancellationLeaseLocalKey, lease)
+		defer func() {
+			if !lease.retained {
+				lease.release()
+			}
+		}()
+		return next(c)
+	}
+}
+
+func RetainCallCancellation(c fiber.Ctx) func() {
+	lease, ok := c.Locals(callCancellationLeaseLocalKey).(*callCancellationLease)
+	if !ok || lease == nil || lease.retained {
+		return nil
+	}
+	lease.retained = true
+	return lease.release
+}
+
+func (lease *callCancellationLease) release() {
+	lease.once.Do(func() {
+		lease.cancel()
+		if lease.unregister != nil {
+			lease.unregister()
+		}
+	})
 }
 
 func RegisterCallCancellation(c fiber.Ctx, cancel context.CancelFunc) (func(), error) {

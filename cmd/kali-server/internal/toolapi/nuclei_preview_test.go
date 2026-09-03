@@ -56,7 +56,7 @@ func TestNucleiPreviewRegistersCancellationBeforeListingTemplates(t *testing.T) 
 	app.Use(httpapi.CallTelemetryMiddleware(nil))
 	app.Use(httpapi.CallCancellationRegistryMiddleware(registry))
 	app.Use(httpapi.BearerAuthMiddleware("test-secret"))
-	app.Post("/nuclei", httpapi.WithExecutionLimit(limiter, handleNucleiStream))
+	app.Post("/nuclei", httpapi.WithExecutionLimit(limiter, httpapi.WithCallCancellation(handleNucleiStream)))
 	app.Post("/calls/:id/cancel", httpapi.HandleCancelCall)
 	app.Get("/probe", httpapi.WithExecutionLimit(limiter, func(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
