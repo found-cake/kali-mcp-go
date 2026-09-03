@@ -24,7 +24,7 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	}
 	release := func() {}
 	if scheduler := httpapi.Scheduler(c); scheduler != nil {
-		release, err = scheduler.Acquire(request.URL, 1)
+		release, err = scheduler.Acquire(targeting.SchedulerKey(request.URL, provenance), 1)
 		if err != nil {
 			return scanPreparationError(c, err)
 		}
