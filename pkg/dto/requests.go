@@ -18,7 +18,7 @@ type NmapRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"IP address or hostname to scan; omit when target_context is supplied"`
 	ScanType       string `json:"scan_type,omitempty" jsonschema:"nmap scan flags only (default: -sCV); positional targets, input lists, resume files, idle-scan zombies, and FTP relays are rejected"`
-	Ports          string `json:"ports,omitempty" jsonschema:"port list or range e.g. 80,443,8000-8080"`
+	Ports          string `json:"ports,omitempty" jsonschema:"port list or range e.g. 80,443,8000-8080; target_context fills the signed candidate port and rejects any different selection"`
 	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra target-neutral nmap options (default: -T4 -Pn); positional targets are rejected, option values must use attached --flag=value syntax, and safe-recon permits only passive script selectors without script arguments"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
@@ -78,7 +78,7 @@ type SQLMapRequest struct {
 	RequestFile    string            `json:"request_file,omitempty" jsonschema:"path to a raw HTTP request file; mutually exclusive with url and raw_request"`
 	RawRequest     string            `json:"raw_request,omitempty" jsonschema:"inline raw HTTP request; stored in a mode-0600 temporary file and deleted after the scan"`
 	Data           string            `json:"data,omitempty" jsonschema:"POST body; place an asterisk after a JSON field value to mark its injection point"`
-	Headers        map[string]string `json:"headers,omitempty" jsonschema:"HTTP headers such as Authorization"`
+	Headers        map[string]string `json:"headers,omitempty" jsonschema:"HTTP headers such as Authorization; Host overrides are rejected with target_context"`
 	Cookie         string            `json:"cookie,omitempty" jsonschema:"Cookie header value"`
 	ContentType    string            `json:"content_type,omitempty" jsonschema:"Content-Type header value e.g. application/json"`
 	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
@@ -217,7 +217,7 @@ type HTTPRequest struct {
 	ScanOptions
 	URL              string            `json:"url,omitempty" jsonschema:"HTTP or HTTPS URL; omit when target_context is supplied"`
 	Method           string            `json:"method,omitempty" jsonschema:"GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS (default GET); safe-recon permits only GET, HEAD, and OPTIONS"`
-	Headers          map[string]string `json:"headers,omitempty" jsonschema:"request headers; returned evidence preserves values unless redact_values explicitly selects them"`
+	Headers          map[string]string `json:"headers,omitempty" jsonschema:"request headers; Host overrides are rejected with target_context and returned evidence preserves other values unless redact_values explicitly selects them"`
 	Body             string            `json:"body,omitempty" jsonschema:"raw request body; mutually exclusive with json_body"`
 	JSONBody         json.RawMessage   `json:"json_body,omitempty" jsonschema:"JSON request body; mutually exclusive with body"`
 	FollowRedirects  bool              `json:"follow_redirects,omitempty" jsonschema:"follow at most five same-origin redirects"`

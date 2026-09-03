@@ -73,7 +73,7 @@ func TestTargetContextSelectsNetworkFormWithoutServerState(t *testing.T) {
 	}
 
 	// Then: the network form is explicit, verified, and tied to the original target.
-	if normalized.Target != "192.168.65.254" {
+	if normalized.Target != "192.168.65.254" || normalized.Ports != "3000" {
 		t.Fatalf("unexpected network target: %s", normalized.Target)
 	}
 	if !provenance.Verified || provenance.Original != result.OriginalTarget || provenance.Selected != normalized.Target {
@@ -81,6 +81,132 @@ func TestTargetContextSelectsNetworkFormWithoutServerState(t *testing.T) {
 	}
 	if provenance.Scope != dto.TargetScopeDockerHost || provenance.ContextExpiresAt != result.ReceiptExpiresAt || provenance.ExpiresInSeconds != int64((10*time.Minute)/time.Second) {
 		t.Fatalf("missing context lifetime provenance: %+v", provenance)
+	}
+}
+
+func TestTargetContextBindsNetworkToolPorts(t *testing.T) {
+	now := time.Date(2026, time.September, 4, 1, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.168.65.254:3000/", NetworkTarget: "192.168.65.254",
+			Port: 3000, Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret", &result, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach target contexts: %v", err)
+	}
+	context := result.Candidates[0].TargetContext
+
+	t.Run("Hydra receives signed port", func(t *testing.T) {
+		request := dto.HydraRequest{ScanOptions: dto.ScanOptions{TargetContext: context}}
+		normalized, err := targeting.ApplyContext("secret", request, now)
+		if err != nil || normalized.Port != 3000 {
+			t.Fatalf("Hydra port not bound: request=%+v err=%v", normalized, err)
+		}
+	})
+
+	t.Run("Metasploit receives signed RPORT", func(t *testing.T) {
+		request := dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}}
+		normalized, err := targeting.ApplyContext("secret", request, now)
+		if err != nil || normalized.Options["RPORT"] != "3000" {
+			t.Fatalf("Metasploit RPORT not bound: request=%+v err=%v", normalized, err)
+		}
+	})
+
+	for _, test := range []struct {
+		name      string
+		normalize func() (string, error)
+	}{
+		{name: "Nuclei host form retains port", normalize: func() (string, error) {
+			request, err := targeting.ApplyContext("secret", dto.NucleiRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "192.168.65.254",
+			}, now)
+			return request.Target, err
+		}},
+		{name: "WhatWeb host form retains port", normalize: func() (string, error) {
+			request, err := targeting.ApplyContext("secret", dto.WhatWebRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "192.168.65.254",
+			}, now)
+			return request.Target, err
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			target, err := test.normalize()
+			if err != nil || target != "http://192.168.65.254:3000/" {
+				t.Fatalf("URL-or-host target lost signed port: target=%q err=%v", target, err)
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name    string
+		request any
+	}{
+		{name: "Nmap mismatched port", request: dto.NmapRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Ports: "80"}},
+		{name: "Hydra mismatched port", request: dto.HydraRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Port: 22}},
+		{name: "Metasploit mismatched port", request: dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Options: map[string]string{"RPORT": "8080"}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var err error
+			switch request := test.request.(type) {
+			case dto.NmapRequest:
+				_, err = targeting.ApplyContext("secret", request, now)
+			case dto.HydraRequest:
+				_, err = targeting.ApplyContext("secret", request, now)
+			case dto.MetasploitRequest:
+				_, err = targeting.ApplyContext("secret", request, now)
+			}
+			if err == nil || !strings.Contains(err.Error(), "port") {
+				t.Fatalf("mismatched port accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestTargetContextRejectsVirtualHostOverrides(t *testing.T) {
+	now := time.Date(2026, time.September, 4, 1, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.168.65.254:3000/", NetworkTarget: "192.168.65.254",
+			Port: 3000, Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret", &result, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach target contexts: %v", err)
+	}
+	context := result.Candidates[0].TargetContext
+
+	tests := []struct {
+		name  string
+		apply func() error
+	}{
+		{name: "HTTP Host", apply: func() error {
+			_, err := targeting.ApplyContext("secret", dto.HTTPRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context}, Headers: map[string]string{"Host": "foreign.test"},
+			}, now)
+			return err
+		}},
+		{name: "SQLMap Host", apply: func() error {
+			_, err := targeting.ApplyContext("secret", dto.SQLMapRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context}, Headers: map[string]string{"host": "foreign.test"}, URL: "",
+			}, now)
+			return err
+		}},
+		{name: "JWT Host", apply: func() error {
+			_, err := targeting.ApplyContext("secret", dto.JWTRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context}, RequestHeader: "Host: foreign.test",
+			}, now)
+			return err
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.apply(); err == nil || !strings.Contains(err.Error(), "Host") {
+				t.Fatalf("virtual-host override accepted: %v", err)
+			}
+		})
 	}
 }
 

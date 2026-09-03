@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -40,6 +41,9 @@ func MetasploitArgs(rcFile string) []string { return []string{"msfconsole", "-q"
 
 func HydraArgs(r dto.HydraRequest) ([]string, error) {
 	args := []string{"hydra", "-t", "4"}
+	if r.Port > 0 {
+		args = append(args, "-s", strconv.Itoa(r.Port))
+	}
 	if r.Username != "" {
 		args = append(args, "-l", r.Username)
 	} else {
@@ -51,7 +55,7 @@ func HydraArgs(r dto.HydraRequest) ([]string, error) {
 		args = append(args, "-P", r.PasswordFile)
 	}
 	args = append(args, r.Target, r.Service)
-	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-M", "-R")
+	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-M", "-R", "-s")
 }
 
 func JohnArgs(r dto.JohnRequest) ([]string, error) {

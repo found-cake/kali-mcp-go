@@ -21,6 +21,9 @@ type SQLMapPlan struct {
 const maximumSQLMapRequestBytes = 16 * 1024 * 1024
 
 func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
+	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "-H", "--header", "--headers"); err != nil {
+		return nil, err
+	}
 	sourceCount := 0
 	for _, source := range []string{request.URL, request.RequestFile, request.RawRequest} {
 		if strings.TrimSpace(source) != "" {

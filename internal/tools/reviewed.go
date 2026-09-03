@@ -9,6 +9,9 @@ import (
 )
 
 func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
+	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "-H"); err != nil {
+		return nil, err
+	}
 	extra, err := splitArgs(request.AdditionalArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
@@ -40,6 +43,9 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 }
 
 func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
+	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "-H", "--headers"); err != nil {
+		return nil, err
+	}
 	extra, err := splitArgs(request.AdditionalArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
@@ -65,6 +71,9 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 }
 
 func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
+	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "-H", "-header", "--header"); err != nil {
+		return nil, err
+	}
 	additional, err := splitArgs(request.AdditionalArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
@@ -106,6 +115,9 @@ func validateNucleiSafety(request dto.NucleiRequest) error {
 }
 
 func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
+	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "--header"); err != nil {
+		return nil, err
+	}
 	if (request.Profile == dto.ProfileSafeRecon || request.Profile == dto.ProfileWebDiscoveryLowRate) && request.Aggression > 1 {
 		return nil, fmt.Errorf("WhatWeb aggression above 1 requires explicit-custom")
 	}
@@ -152,6 +164,9 @@ func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 }
 
 func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
+	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "-H", "--header"); err != nil {
+		return nil, err
+	}
 	args := []string{"dalfox", "scan", request.Target, "--format", "json", "--no-color"}
 	extra, err := splitArgs(request.AdditionalArgs)
 	if err != nil {

@@ -79,6 +79,9 @@ func validateHydraRequest(req dto.HydraRequest) error {
 	if req.Password == "" && req.PasswordFile == "" {
 		return fmt.Errorf("password or password_file is required")
 	}
+	if req.Port < 0 || req.Port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535, or 0 when unset")
+	}
 	return nil
 }
 

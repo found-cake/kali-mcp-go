@@ -88,7 +88,7 @@ func verifyTargetContext(secret, context string, now time.Time) (targetContextCl
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		return targetContextClaims{}, errInvalidTargetContext
 	}
-	if claims.ResolutionID == "" || claims.Original == "" || claims.NetworkTarget == "" {
+	if claims.ResolutionID == "" || claims.Original == "" || claims.NetworkTarget == "" || claims.Port < 0 || claims.Port > 65535 {
 		return targetContextClaims{}, errInvalidTargetContext
 	}
 	if !now.Before(time.Unix(claims.ExpiresAt, 0)) {

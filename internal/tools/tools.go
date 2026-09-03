@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 const (
@@ -97,6 +99,38 @@ func rejectArguments(parts []string, fieldName, reason string, forbiddenFlags ..
 		for _, forbidden := range forbiddenFlags {
 			if argumentMatchesFlag(argument, forbidden) {
 				return fmt.Errorf("%s must not set %s under this safety profile: %s", fieldName, forbidden, reason)
+			}
+		}
+	}
+	return nil
+}
+
+func rejectContextHostHeaders(options dto.ScanOptions, extra, fieldName string, headerFlags ...string) error {
+	if options.TargetContext == "" || strings.TrimSpace(extra) == "" {
+		return nil
+	}
+	parts, err := splitArgs(extra)
+	if err != nil {
+		return fmt.Errorf("invalid %s: %w", fieldName, err)
+	}
+	for index, argument := range parts {
+		for _, flag := range headerFlags {
+			if !argumentMatchesFlag(argument, flag) {
+				continue
+			}
+			value := ""
+			if _, inline, found := strings.Cut(argument, "="); found {
+				value = inline
+			} else if argument != flag && !strings.HasPrefix(flag, "--") {
+				value = strings.TrimPrefix(argument, flag)
+			} else if index+1 < len(parts) {
+				value = parts[index+1]
+			}
+			for line := range strings.Lines(strings.ReplaceAll(value, "\\n", "\n")) {
+				name, _, found := strings.Cut(line, ":")
+				if found && strings.EqualFold(strings.TrimSpace(name), "Host") {
+					return fmt.Errorf("%s must not override the Host header when target_context is supplied", fieldName)
+				}
 			}
 		}
 	}

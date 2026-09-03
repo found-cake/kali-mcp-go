@@ -118,3 +118,69 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 		})
 	}
 }
+
+func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
+	wordlist := filepath.Join(t.TempDir(), "words.txt")
+	if err := os.WriteFile(wordlist, []byte("admin\n"), 0o600); err != nil {
+		t.Fatalf("write wordlist: %v", err)
+	}
+	t.Setenv(defaultDirWordlistEnv, wordlist)
+	context := "signed-context"
+
+	tests := []struct {
+		name  string
+		build func() error
+	}{
+		{name: "Nuclei Host header", build: func() error {
+			_, err := NucleiArgs(dto.NucleiRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "-H 'Host: foreign.test'"})
+			return err
+		}},
+		{name: "FFUF Host header", build: func() error {
+			_, err := FFUFArgs(dto.FFUFRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/FUZZ", AdditionalArgs: "-H 'Host: foreign.test'"})
+			return err
+		}},
+		{name: "Ferox Host header", build: func() error {
+			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "--headers='Host: foreign.test'"})
+			return err
+		}},
+		{name: "Gobuster vhost mode", build: func() error {
+			_, err := GobusterArgs(dto.GobusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", Mode: "vhost"})
+			return err
+		}},
+		{name: "Nikto vhost", build: func() error {
+			_, err := NiktoArgs(dto.NiktoRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "-vhost=foreign.test"})
+			return err
+		}},
+		{name: "WhatWeb Host header", build: func() error {
+			_, err := WhatWebArgs(dto.WhatWebRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "--header='Host: foreign.test'"})
+			return err
+		}},
+		{name: "Dalfox Host header", build: func() error {
+			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "--header='Host: foreign.test'"})
+			return err
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.build(); err == nil {
+				t.Fatal("target_context accepted a virtual-host override")
+			}
+		})
+	}
+}
+
+func TestHydraArgsUseTypedPortAndRejectAdditionalOverride(t *testing.T) {
+	request := dto.HydraRequest{Target: "192.0.2.10", Port: 3000, Service: "http-get", Username: "user", Password: "pass"}
+	args, err := HydraArgs(request)
+	if err != nil {
+		t.Fatalf("build Hydra args: %v", err)
+	}
+	if !containsArg(args, "-s") || !containsArg(args, "3000") {
+		t.Fatalf("Hydra typed port missing: %v", args)
+	}
+	request.AdditionalArgs = "-s=22"
+	if _, err := HydraArgs(request); err == nil {
+		t.Fatal("Hydra accepted an additional port override")
+	}
+}

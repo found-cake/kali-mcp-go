@@ -13,6 +13,12 @@ func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 	if mode == "" {
 		mode = "dir"
 	}
+	if r.TargetContext != "" && mode == "vhost" {
+		return nil, fmt.Errorf("Gobuster vhost mode is not permitted with target_context")
+	}
+	if err := rejectContextHostHeaders(r.ScanOptions, r.AdditionalArgs, "additional_args", "-H", "--headers"); err != nil {
+		return nil, err
+	}
 	wordlist, err := resolveWordlist(r.Wordlist, defaultDirWordlistEnv, defaultDirWordlist)
 	if err != nil {
 		return nil, err
@@ -35,6 +41,9 @@ func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 }
 
 func DirbArgs(r dto.DirbRequest) ([]string, error) {
+	if err := rejectContextHostHeaders(r.ScanOptions, r.AdditionalArgs, "additional_args", "-H"); err != nil {
+		return nil, err
+	}
 	wordlist, err := resolveWordlist(r.Wordlist, defaultDirWordlistEnv, defaultDirWordlist)
 	if err != nil {
 		return nil, err
@@ -43,6 +52,15 @@ func DirbArgs(r dto.DirbRequest) ([]string, error) {
 }
 
 func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
+	if r.TargetContext != "" {
+		extra, err := splitArgs(r.AdditionalArgs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid additional_args: %w", err)
+		}
+		if err := rejectTargetSourceArgs(extra, "additional_args", false, "-vhost"); err != nil {
+			return nil, err
+		}
+	}
 	if r.Profile == dto.ProfileWebDiscoveryLowRate {
 		tuning := strings.TrimSpace(strings.ToLower(r.Tuning))
 		if !strings.HasPrefix(tuning, "x") && strings.ContainsAny(tuning, "68") {
@@ -70,5 +88,8 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 }
 
 func WPScanArgs(r dto.WPScanRequest) ([]string, error) {
+	if err := rejectContextHostHeaders(r.ScanOptions, r.AdditionalArgs, "additional_args", "--headers"); err != nil {
+		return nil, err
+	}
 	return appendTargetSafeArgs([]string{"wpscan", "--url", r.URL}, r.AdditionalArgs, "additional_args", false, "--url", "--config-file")
 }
