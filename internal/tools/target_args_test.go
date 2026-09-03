@@ -71,6 +71,12 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 			_, err := DirbArgs(dto.DirbRequest{URL: "https://example.test/", AdditionalArgs: "-resume=foreign.state"})
 			return err
 		}},
+		{name: "dirb discovery proxy", build: func() error {
+			_, err := DirbArgs(dto.DirbRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon}, URL: "https://example.test/", AdditionalArgs: "-p=http://foreign.test:8080",
+			})
+			return err
+		}},
 		{name: "nikto host", build: func() error {
 			_, err := NiktoArgs(dto.NiktoRequest{Target: "https://example.test/", AdditionalArgs: "-url=https://foreign.test/"})
 			return err
@@ -106,6 +112,10 @@ func TestTargetedToolArgumentsRejectAlternateSources(t *testing.T) {
 		}},
 		{name: "nuclei inline targets", build: func() error {
 			_, err := NucleiArgs(dto.NucleiRequest{Target: "https://example.test/", AllowUnsafe: true, AdditionalArgs: "--targets-inline=https://foreign.test/"})
+			return err
+		}},
+		{name: "nuclei config", build: func() error {
+			_, err := NucleiArgs(dto.NucleiRequest{Target: "https://example.test/", AllowUnsafe: true, AdditionalArgs: "-config=foreign.yaml"})
 			return err
 		}},
 		{name: "whatweb positional target", build: func() error {
@@ -207,6 +217,10 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 		}},
 		{name: "Nikto vhost", build: func() error {
 			_, err := NiktoArgs(dto.NiktoRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/", AdditionalArgs: "-vhost=foreign.test"})
+			return err
+		}},
+		{name: "Nikto resolved proxy", build: func() error {
+			_, err := NiktoArgs(dto.NiktoRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "https://example.test/", AdditionalArgs: "-useproxy=http://foreign.test:8080"})
 			return err
 		}},
 		{name: "WhatWeb Host header", build: func() error {

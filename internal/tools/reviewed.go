@@ -92,7 +92,7 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
 	if err := rejectTargetSourceArgs(additional, "additional_args", false,
-		"-u", "-target", "-l", "-list", "-targets-inline", "-resume"); err != nil {
+		"-u", "-target", "-l", "-list", "-targets-inline", "-resume", "-config"); err != nil {
 		return nil, err
 	}
 	if hasResolvedTarget(request.ScanOptions) {

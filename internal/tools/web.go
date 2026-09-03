@@ -57,8 +57,8 @@ func DirbArgs(r dto.DirbRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
-	if hasResolvedTarget(r.ScanOptions) {
-		if err := rejectArguments(extra, "additional_args", "resolved targets forbid proxy routing", "-p"); err != nil {
+	if isDiscoveryProfile(r.Profile) || hasResolvedTarget(r.ScanOptions) {
+		if err := rejectArguments(extra, "additional_args", "discovery profiles and resolved targets forbid proxy routing", "-p"); err != nil {
 			return nil, err
 		}
 	}
@@ -71,7 +71,7 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid additional_args: %w", err)
 		}
-		if err := rejectTargetSourceArgs(extra, "additional_args", false, "-vhost", "-followredirects"); err != nil {
+		if err := rejectTargetSourceArgs(extra, "additional_args", false, "-vhost", "-followredirects", "-useproxy"); err != nil {
 			return nil, err
 		}
 	}
