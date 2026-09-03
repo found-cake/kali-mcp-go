@@ -30,6 +30,15 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 	if sourceCount != 1 {
 		return nil, fmt.Errorf("provide exactly one of url, request_file, or raw_request")
 	}
+	additional, err := splitArgs(request.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if request.Profile == dto.ProfileSQLILowRisk {
+		if err := validateLowRiskSQLMapArguments(additional); err != nil {
+			return nil, err
+		}
+	}
 	tempDir, err := os.MkdirTemp("", "kali-mcp-sqlmap-*")
 	if err != nil {
 		return nil, fmt.Errorf("create sqlmap workspace: %w", err)
@@ -74,7 +83,19 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 		plan.Cleanup()
 		return nil, err
 	}
+	if request.Profile == dto.ProfileSQLILowRisk {
+		plan.args = append(plan.args, "--risk=1", "--level=1", "--technique=BEU")
+	}
 	return plan, nil
+}
+
+func validateLowRiskSQLMapArguments(args []string) error {
+	return rejectArguments(args, "additional_args", "sqli-verify-low-risk forbids takeover, writes, broad extraction, and risk escalation",
+		"--risk", "--level", "--technique", "--method", "--data", "--eval", "--alert", "--sql-query", "--sql-shell", "--sql-file",
+		"--os-cmd", "--os-shell", "--os-pwn", "--os-smbrelay", "--os-bof", "--priv-esc", "--udf-inject",
+		"--file-read", "--file-write", "--file-dest", "--reg-read", "--reg-add", "--reg-del", "--reg-key", "--reg-value", "--reg-data", "--reg-type",
+		"--all", "--dump", "--dump-all", "--passwords", "--dbs", "--tables", "--columns", "--schema", "--search", "--users", "--roles", "--privileges",
+		"--common-tables", "--common-columns", "--forms", "--crawl", "--scope", "--tamper", "--preprocess", "--postprocess")
 }
 
 func (p *SQLMapPlan) addSource(request dto.SQLMapRequest) error {

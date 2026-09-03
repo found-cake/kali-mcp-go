@@ -20,8 +20,12 @@ func Validate(request dto.HTTPRequest) error {
 	if err != nil || parsed.Hostname() == "" || parsed.User != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return fmt.Errorf("url must be an HTTP or HTTPS URL without userinfo")
 	}
-	if _, err := parseHTTPMethod(request.Method); err != nil {
+	method, err := parseHTTPMethod(request.Method)
+	if err != nil {
 		return err
+	}
+	if request.Profile == dto.ProfileSafeRecon && method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions {
+		return fmt.Errorf("safe-recon only permits GET, HEAD, or OPTIONS; use explicit-custom for state-changing methods")
 	}
 	if len(request.Headers) > maximumHTTPHeaders {
 		return fmt.Errorf("headers cannot contain more than %d entries", maximumHTTPHeaders)

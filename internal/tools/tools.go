@@ -83,18 +83,32 @@ func rejectTargetSourceArgs(parts []string, fieldName string, rejectPositionals 
 		if rejectPositionals && !strings.HasPrefix(argument, "-") {
 			return fmt.Errorf("%s must not contain positional targets; use attached option values such as --flag=value", fieldName)
 		}
-		name, _, _ := strings.Cut(argument, "=")
 		for _, forbidden := range forbiddenFlags {
-			matched := name == forbidden
-			if !strings.HasPrefix(forbidden, "--") {
-				matched = matched || strings.HasPrefix(argument, forbidden)
-			}
-			if matched {
+			if argumentMatchesFlag(argument, forbidden) {
 				return fmt.Errorf("%s must not override the selected target with %s", fieldName, forbidden)
 			}
 		}
 	}
 	return nil
+}
+
+func rejectArguments(parts []string, fieldName, reason string, forbiddenFlags ...string) error {
+	for _, argument := range parts {
+		for _, forbidden := range forbiddenFlags {
+			if argumentMatchesFlag(argument, forbidden) {
+				return fmt.Errorf("%s must not set %s under this safety profile: %s", fieldName, forbidden, reason)
+			}
+		}
+	}
+	return nil
+}
+
+func argumentMatchesFlag(argument, flag string) bool {
+	name, _, _ := strings.Cut(argument, "=")
+	if name == flag {
+		return true
+	}
+	return !strings.HasPrefix(flag, "--") && strings.HasPrefix(argument, flag)
 }
 
 func defaultWordlistPath(envKey, fallback string) string {

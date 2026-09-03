@@ -75,6 +75,7 @@ func TestValidateRejectsInvalidMethodAndConflictingBodies(t *testing.T) {
 		message string
 	}{
 		{name: "method", request: dto.HTTPRequest{URL: "http://example.test", Method: "TRACE"}, message: "method must be"},
+		{name: "safe profile method", request: dto.HTTPRequest{ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon}, URL: "http://example.test", Method: "DELETE"}, message: "safe-recon"},
 		{name: "bodies", request: dto.HTTPRequest{URL: "http://example.test", Body: "text", JSONBody: []byte(`{}`)}, message: "body and json_body"},
 	}
 	for _, test := range tests {

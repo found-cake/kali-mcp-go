@@ -9,6 +9,16 @@ import (
 )
 
 func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
+	extra, err := splitArgs(request.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if request.Profile == dto.ProfileSafeRecon || request.Profile == dto.ProfileWebDiscoveryLowRate {
+		if err := rejectArguments(extra, "additional_args", "discovery profiles use FFUF's default read-only request",
+			"-X", "-d", "-request", "-request-proto", "-input-cmd", "-input-num"); err != nil {
+			return nil, err
+		}
+	}
 	wordlist, err := resolveWordlist(request.Wordlist, defaultDirWordlistEnv, defaultDirWordlist)
 	if err != nil {
 		return nil, err
@@ -30,6 +40,16 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 }
 
 func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
+	extra, err := splitArgs(request.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if request.Profile == dto.ProfileSafeRecon || request.Profile == dto.ProfileWebDiscoveryLowRate {
+		if err := rejectArguments(extra, "additional_args", "discovery profiles use Feroxbuster's default GET request",
+			"-m", "--methods", "--data", "--data-json", "--data-urlencoded"); err != nil {
+			return nil, err
+		}
+	}
 	wordlist, err := resolveWordlist(request.Wordlist, defaultDirWordlistEnv, defaultDirWordlist)
 	if err != nil {
 		return nil, err
@@ -86,6 +106,9 @@ func validateNucleiSafety(request dto.NucleiRequest) error {
 }
 
 func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
+	if (request.Profile == dto.ProfileSafeRecon || request.Profile == dto.ProfileWebDiscoveryLowRate) && request.Aggression > 1 {
+		return nil, fmt.Errorf("WhatWeb aggression above 1 requires explicit-custom")
+	}
 	args := []string{"whatweb"}
 	if request.Aggression > 0 {
 		args = append(args, "--aggression", strconv.Itoa(request.Aggression))
@@ -137,6 +160,12 @@ func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
 	for _, argument := range extra {
 		if argument == "--worker" || argument == "--workers" || strings.HasPrefix(argument, "--worker=") || strings.HasPrefix(argument, "--workers=") {
 			return nil, fmt.Errorf("additional_args must not set Dalfox worker flags; use concurrency")
+		}
+	}
+	if request.Profile == dto.ProfileBrowserXSSConfirm {
+		if err := rejectArguments(extra, "additional_args", "browser-xss-confirm uses Dalfox's default GET request",
+			"-X", "--method", "-d", "--data"); err != nil {
+			return nil, err
 		}
 	}
 	if err := rejectTargetSourceArgs(extra, "additional_args", true,

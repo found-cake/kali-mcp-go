@@ -23,6 +23,15 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 	if extra == "" {
 		extra = "-T4 -Pn"
 	}
+	extraParts, err := splitArgs(extra)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if r.Profile == dto.ProfileSafeRecon {
+		if err := validateSafeNmapArguments(append(append([]string(nil), scanParts...), extraParts...)); err != nil {
+			return nil, err
+		}
+	}
 	args := append([]string{"nmap"}, scanParts...)
 	if r.Ports != "" {
 		args = append(args, "-p", r.Ports)
@@ -32,6 +41,35 @@ func NmapArgs(r dto.NmapRequest) ([]string, error) {
 		return nil, err
 	}
 	return append(args, r.Target), nil
+}
+
+var safeNmapScripts = map[string]bool{
+	"default": true, "safe": true, "version": true,
+	"banner": true, "http-title": true, "http-headers": true, "http-methods": true,
+	"http-server-header": true, "http-security-headers": true, "http-robots.txt": true,
+	"ssl-cert": true, "ssl-enum-ciphers": true, "ssh-hostkey": true, "ftp-syst": true,
+	"smtp-commands": true, "dns-recursion": true,
+}
+
+func validateSafeNmapArguments(args []string) error {
+	for _, argument := range args {
+		if argumentMatchesFlag(argument, "--script-args") {
+			return fmt.Errorf("Nmap script arguments require explicit-custom")
+		}
+		if !argumentMatchesFlag(argument, "--script") {
+			continue
+		}
+		_, selector, attached := strings.Cut(argument, "=")
+		if !attached || selector == "" {
+			return fmt.Errorf("Nmap safe-recon scripts must use --script=name")
+		}
+		for item := range strings.SplitSeq(strings.ToLower(selector), ",") {
+			if !safeNmapScripts[strings.TrimSpace(item)] {
+				return fmt.Errorf("Nmap script selector %q requires explicit-custom", item)
+			}
+		}
+	}
+	return nil
 }
 
 func TsharkArgs(r dto.TsharkRequest) ([]string, error) {

@@ -1,7 +1,9 @@
 package tools
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
@@ -14,6 +16,15 @@ func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 	wordlist, err := resolveWordlist(r.Wordlist, defaultDirWordlistEnv, defaultDirWordlist)
 	if err != nil {
 		return nil, err
+	}
+	extra, err := splitArgs(r.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if r.Profile == dto.ProfileSafeRecon || r.Profile == dto.ProfileWebDiscoveryLowRate {
+		if err := rejectArguments(extra, "additional_args", "discovery profiles use Gobuster's default GET request", "-m", "--method"); err != nil {
+			return nil, err
+		}
 	}
 	targetFlag := "-u"
 	if mode == "dns" {
@@ -32,6 +43,19 @@ func DirbArgs(r dto.DirbRequest) ([]string, error) {
 }
 
 func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
+	if r.Profile == dto.ProfileWebDiscoveryLowRate {
+		tuning := strings.TrimSpace(strings.ToLower(r.Tuning))
+		if !strings.HasPrefix(tuning, "x") && strings.ContainsAny(tuning, "68") {
+			return nil, fmt.Errorf("Nikto tuning 6 and 8 require explicit-custom")
+		}
+		extra, err := splitArgs(r.AdditionalArgs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid additional_args: %w", err)
+		}
+		if err := rejectArguments(extra, "additional_args", "Nikto tuning must use the validated tuning field", "-Tuning", "-tuning"); err != nil {
+			return nil, err
+		}
+	}
 	args := []string{"nikto", "-h", r.Target, "-nocheck", "-nointeractive"}
 	if r.PauseSeconds > 0 {
 		args = append(args, "-Pause", strconv.FormatFloat(r.PauseSeconds, 'f', -1, 64))
