@@ -160,15 +160,99 @@ func findToolCapability(t *testing.T, capabilities []dto.ScanToolCapability, nam
 	return dto.ScanToolCapability{}
 }
 
-func TestNucleiArgsRejectsUnsafeAdditionalArgsByDefault(t *testing.T) {
-	// Given: unsafe template tags are smuggled through additional_args.
-	request := dto.NucleiRequest{Target: "https://example.com", AdditionalArgs: "-tags dos"}
+func TestNucleiArgsRejectsSafetyOverridesByDefault(t *testing.T) {
+	// Given: arguments that select unsafe work or override mandatory safety flags.
+	tests := []string{
+		"-tags dos",
+		"--tags=dos",
+		"-itags dos",
+		"--include-tags=dos",
+		"-t=path/to/dos.yaml",
+		"--templates path/to/dos.yaml",
+		"-it path/to/excluded.yaml",
+		"--include-templates=path/to/excluded.yaml",
+		"-fuzz",
+		"-dast",
+		"-no-interactsh=false",
+		"--interactsh-server=https://oast.example",
+		"-itoken=secret",
+		"-etags=",
+		"--exclude-tags safe",
+	}
 
-	// When: Nuclei arguments are generated under the default safe policy.
-	_, err := NucleiArgs(request)
+	for _, additionalArgs := range tests {
+		t.Run(additionalArgs, func(t *testing.T) {
+			// When: Nuclei arguments are generated under the default safe policy.
+			_, err := NucleiArgs(dto.NucleiRequest{
+				Target:         "https://example.com",
+				AdditionalArgs: additionalArgs,
+			})
 
-	// Then: argument generation rejects the policy bypass.
-	if err == nil {
-		t.Fatal("expected unsafe Nuclei additional_args to be rejected")
+			// Then: the policy override is rejected before Nuclei starts.
+			if err == nil {
+				t.Fatalf("unsafe additional_args accepted: %q", additionalArgs)
+			}
+		})
+	}
+}
+
+func TestNucleiArgsAllowSafetyOverridesOnlyWhenExplicit(t *testing.T) {
+	// Given: the caller explicitly authorizes unsafe Nuclei behavior.
+	request := dto.NucleiRequest{
+		Target:         "https://example.com",
+		AllowUnsafe:    true,
+		AdditionalArgs: "--include-tags=dos -no-interactsh=false",
+	}
+
+	// When: Nuclei arguments are generated.
+	args, err := NucleiArgs(request)
+
+	// Then: the explicit override remains available and no safe-mode flags are injected.
+	if err != nil {
+		t.Fatalf("build explicitly unsafe Nuclei args: %v", err)
+	}
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--include-tags=dos") || strings.Contains(joined, "-etags dos,fuzz") || strings.Contains(joined, "-no-interactsh -") {
+		t.Fatalf("unexpected explicitly unsafe Nuclei args: %v", args)
+	}
+}
+
+func TestNucleiArgsKeepSafeModeFlagsAfterAllowedAdditionalArgs(t *testing.T) {
+	// Given: an authenticated safe scan using allowlisted operational flags.
+	request := dto.NucleiRequest{
+		Target:         "https://example.com",
+		AdditionalArgs: "-silent -H 'Authorization: Bearer test-token'",
+	}
+
+	// When: Nuclei arguments are generated.
+	args, err := NucleiArgs(request)
+
+	// Then: caller arguments are retained while immutable safety flags remain last.
+	if err != nil {
+		t.Fatalf("build safe Nuclei args: %v", err)
+	}
+	wantSuffix := []string{"-etags", "dos,fuzz", "-no-interactsh"}
+	if len(args) < len(wantSuffix) || !slices.Equal(args[len(args)-len(wantSuffix):], wantSuffix) {
+		t.Fatalf("safe-mode flags are not final: %v", args)
+	}
+}
+
+func TestNucleiArgsRejectsUnsafeTypedSelectorsByDefault(t *testing.T) {
+	// Given: unsafe selectors supplied through the typed fields.
+	tests := []dto.NucleiRequest{
+		{Target: "https://example.com", Tags: "dast"},
+		{Target: "https://example.com", Tags: "fuzzing"},
+		{Target: "https://example.com", Templates: []string{"http/dos/resource-exhaustion.yaml"}},
+		{Target: "https://example.com", Templates: []string{"http/oast/callback.yaml"}},
+	}
+
+	for index, request := range tests {
+		// When: typed selectors are converted into Nuclei arguments.
+		_, err := NucleiArgs(request)
+
+		// Then: unsafe selection still requires explicit authorization.
+		if err == nil {
+			t.Fatalf("unsafe typed selector %d was accepted: %+v", index, request)
+		}
 	}
 }
