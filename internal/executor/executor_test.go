@@ -220,13 +220,14 @@ func TestRedactArgsHidesInlineNucleiHeaders(t *testing.T) {
 	args := []string{
 		"-H=Authorization: Bearer private-token",
 		"--header=Cookie: session=private-cookie",
+		"-header=Authorization: Bearer alternate-token",
 	}
 
 	// When: reproducibility metadata is prepared for the MCP result.
 	redacted := redactArgs("nuclei", args)
 
 	// Then: flag names remain useful while their values are removed.
-	want := []string{"-H=[REDACTED]", "--header=[REDACTED]"}
+	want := []string{"-H=[REDACTED]", "--header=[REDACTED]", "-header=[REDACTED]"}
 	if !slices.Equal(redacted, want) {
 		t.Fatalf("inline header values remain in argv metadata\nwant: %v\n got: %v", want, redacted)
 	}

@@ -128,6 +128,12 @@ func redactArgs(name string, args []string) []string {
 }
 
 func sensitiveFlag(name, flag string) bool {
+	if name == "nuclei" {
+		normalized := strings.TrimLeft(flag, "-")
+		if normalized == "H" || strings.EqualFold(normalized, "header") {
+			return true
+		}
+	}
 	switch flag {
 	case "--cookie", "--header", "-H", "-rh", "-rc":
 		return true
