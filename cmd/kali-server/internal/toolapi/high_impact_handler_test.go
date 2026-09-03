@@ -57,6 +57,52 @@ func TestMetasploitRejectsTargetOverrideInOptions(t *testing.T) {
 	}
 }
 
+func TestMetasploitRejectsResourceCommandInjection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		request dto.MetasploitRequest
+	}{
+		{
+			name: "module separator",
+			request: dto.MetasploitRequest{
+				Module: "auxiliary/scanner/http/title; set RHOSTS 198.51.100.20", Target: "192.0.2.10",
+			},
+		},
+		{
+			name: "option name separator",
+			request: dto.MetasploitRequest{
+				Module: "auxiliary/scanner/http/title", Target: "192.0.2.10",
+				Options: map[string]string{"RPORT; set RHOSTS": "198.51.100.20"},
+			},
+		},
+		{
+			name: "option value separator",
+			request: dto.MetasploitRequest{
+				Module: "auxiliary/scanner/http/title", Target: "192.0.2.10",
+				Options: map[string]string{"RPORT": "3000; set RHOSTS 198.51.100.20"},
+			},
+		},
+		{
+			name: "padded target override",
+			request: dto.MetasploitRequest{
+				Module: "auxiliary/scanner/http/title", Target: "192.0.2.10",
+				Options: map[string]string{" RHOSTS": "198.51.100.20"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if err := validateMetasploitRequest(test.request); err == nil {
+				t.Fatal("Metasploit resource command injection was accepted")
+			}
+		})
+	}
+}
+
 func TestMetasploitRequiresSelectedTarget(t *testing.T) {
 	err := validateMetasploitRequest(dto.MetasploitRequest{Module: "auxiliary/scanner/http/title"})
 	if err == nil || err.Error() != "target is required" {

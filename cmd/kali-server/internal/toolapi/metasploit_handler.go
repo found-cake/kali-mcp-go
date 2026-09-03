@@ -3,7 +3,9 @@ package toolapi
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
+	"unicode"
 
 	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
@@ -11,6 +13,11 @@ import (
 	"github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
+)
+
+var (
+	metasploitModuleName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_./-]*$`)
+	metasploitOptionName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.:-]*$`)
 )
 
 func handleMetasploit(c fiber.Ctx) error {
@@ -37,15 +44,15 @@ func validateMetasploitRequest(request dto.MetasploitRequest) error {
 	if request.Module == "" {
 		return fmt.Errorf("module is required")
 	}
-	if containsLineBreak(request.Module) {
-		return fmt.Errorf("module must not contain line breaks")
+	if !metasploitModuleName.MatchString(request.Module) {
+		return fmt.Errorf("module contains unsupported resource-script characters")
 	}
 	for name, value := range request.Options {
-		if name == "" {
-			return fmt.Errorf("options keys must be non-empty")
+		if !metasploitOptionName.MatchString(name) {
+			return fmt.Errorf("option names contain unsupported resource-script characters")
 		}
-		if containsLineBreak(name) || containsLineBreak(value) {
-			return fmt.Errorf("options must not contain line breaks")
+		if strings.ContainsRune(value, ';') || strings.IndexFunc(value, unicode.IsControl) >= 0 {
+			return fmt.Errorf("option values contain unsupported resource-script characters")
 		}
 		if strings.EqualFold(name, "RHOST") || strings.EqualFold(name, "RHOSTS") {
 			return fmt.Errorf("RHOST and RHOSTS are set from target_context and cannot be supplied in options")
