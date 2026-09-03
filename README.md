@@ -138,6 +138,7 @@ Start one background server container:
 docker run -d \
   --name kali-mcp \
   --restart unless-stopped \
+  --init \
   --entrypoint kali-server \
   -e KALI_MCP_API_TOKEN="$(openssl rand -hex 32)" \
   ghcr.io/found-cake/kali-mcp-go:latest \
@@ -296,11 +297,12 @@ Use `/workspace/...` in tool requests. Add the same host mapping, mount, or netw
 
 `browser_check` always launches Chromium as the dedicated `kali-browser` user with the browser sandbox enabled. Docker must therefore allow Chromium's user-namespace syscalls. The repository includes Playwright's Docker seccomp profile as `chromium-seccomp.json`.
 
+The image entrypoint already uses `tini` to reap browser subprocesses. Persistent mode keeps Docker's `--init` because its `--entrypoint` option replaces the image entrypoint.
+
 Add the profile and shared IPC options to the initial `docker run` command when browser verification is needed:
 
 ```bash
 docker run --pull=always --rm -i \
-  --init \
   --ipc=host \
   --security-opt "seccomp=$PWD/chromium-seccomp.json" \
   ghcr.io/found-cake/kali-mcp-go:latest \

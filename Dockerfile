@@ -67,6 +67,7 @@ RUN set -eux; \
         python3-venv \
         sqlmap \
         tar \
+        tini \
         tshark \
         unzip \
         whatweb \
@@ -147,6 +148,7 @@ RUN set -eux; \
     osv-scanner --version; \
     playwright --version; \
     retire --version; \
+    tini --version; \
     whatweb --version
 
 RUN set -eux; \
@@ -157,4 +159,4 @@ RUN set -eux; \
 ENV KALI_MCP_BROWSER_OUTPUT_DIR=/var/lib/kali-mcp/browser \
     KALI_MCP_NUCLEI_TEMPLATES=/root/.local/nuclei-templates
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
