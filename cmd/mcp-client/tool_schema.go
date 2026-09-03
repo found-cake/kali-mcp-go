@@ -38,5 +38,8 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 		profileSchema.Description = "safety profile accepted by this tool"
 		profileSchema.Enum = profiles
 	}
-	return &mcp.Tool{Name: definition.Tool, Description: definition.Description, InputSchema: schema}, nil
+	return &mcp.Tool{
+		Name: definition.Tool, Description: definition.Description,
+		InputSchema: schema, OutputSchema: toolResultOutputSchema(),
+	}, nil
 }

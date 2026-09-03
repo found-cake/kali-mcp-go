@@ -16,9 +16,10 @@ func registerHTTPRequest(server *mcp.Server, kali *kaliclient.Client) error {
 		return err
 	}
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        definition.Tool,
-		Description: definition.Description,
-		InputSchema: httpRequestInputSchema(),
+		Name:         definition.Tool,
+		Description:  definition.Description,
+		InputSchema:  httpRequestInputSchema(),
+		OutputSchema: toolResultOutputSchema(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.HTTPRequest) (*mcp.CallToolResult, dto.ToolResult, error) {
 		result, err := kali.Post(ctx, definition.Endpoint, request)
 		return textResult(definition.Tool, result, err)

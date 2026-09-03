@@ -2,13 +2,12 @@ package main
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestJWTInputSchemaDistinguishesOfflineParsingFromLiveVerification(t *testing.T) {
+func TestJWTInputSchemaExposesOfflineAndLiveVerificationInputs(t *testing.T) {
 	// Given: the JWT tool schema exposed to an MCP orchestrator.
 	tool := listedToolByName(t, "jwt_analyze")
 
@@ -18,15 +17,20 @@ func TestJWTInputSchemaDistinguishesOfflineParsingFromLiveVerification(t *testin
 		t.Fatal("jwt_analyze has an invalid input schema")
 	}
 
-	// Then: offline parsing, live verification, and injection templates are unambiguous.
-	assertPropertyDescriptionContains(t, properties, "token", "offline")
-	assertPropertyDescriptionContains(t, properties, "target_url", "live")
-	assertPropertyDescriptionContains(t, properties, "request_header", "JWT_HERE")
-	assertPropertyDescriptionContains(t, properties, "request_cookie", "JWT_HERE")
-	for _, phrase := range []string{"offline", "live"} {
-		if !strings.Contains(tool.Description, phrase) {
-			t.Fatalf("jwt_analyze description is missing routing phrase %q: %q", phrase, tool.Description)
+	// Then: offline parsing and optional live request templates are separate fields.
+	for _, field := range []string{"token", "target_url", "request_header", "request_cookie"} {
+		fieldSchema, found := properties[field]
+		if !found {
+			t.Fatalf("jwt_analyze is missing %s", field)
 		}
+		object, ok := fieldSchema.(map[string]any)
+		if !ok || object["type"] != "string" {
+			t.Fatalf("jwt_analyze field %s is not a string schema: %+v", field, fieldSchema)
+		}
+	}
+	root, ok := tool.InputSchema.(map[string]any)
+	if !ok || !schemaRequiredField(root, "token") {
+		t.Fatal("jwt_analyze must require the offline token input")
 	}
 }
 
@@ -39,10 +43,13 @@ func TestToolOutputSchemaSeparatesExecutionFromFindingStatus(t *testing.T) {
 	}
 
 	// When: the orchestrator inspects the common status fields.
-	// Then: execution success and security findings describe separate outcomes.
-	assertPropertyDescriptionContains(t, properties, "success", "execution")
-	assertPropertyDescriptionContains(t, properties, "execution_status", "execution")
-	assertPropertyDescriptionContains(t, properties, "finding_status", "finding")
+	// Then: execution and finding outcomes expose independent value sets.
+	if got := schemaEnumValues(properties["execution_status"]); !slices.Equal(got, []string{"succeeded", "failed", "timed_out", "cancelled"}) {
+		t.Fatalf("unexpected execution status values: %v", got)
+	}
+	if got := schemaEnumValues(properties["finding_status"]); !slices.Equal(got, []string{"detected", "not_detected", "inconclusive", "unknown"}) {
+		t.Fatalf("unexpected finding status values: %v", got)
+	}
 }
 
 func TestToolInputSchemasExposeOnlyCompatibleProfiles(t *testing.T) {
@@ -98,14 +105,24 @@ func listedToolByName(t *testing.T, name string) *mcp.Tool {
 	return nil
 }
 
-func assertPropertyDescriptionContains(t *testing.T, properties map[string]any, property, phrase string) {
-	t.Helper()
-	field, ok := properties[property].(map[string]any)
+func schemaRequiredField(schema map[string]any, field string) bool {
+	required, _ := schema["required"].([]any)
+	return slices.Contains(required, any(field))
+}
+
+func schemaEnumValues(schema any) []string {
+	object, ok := schema.(map[string]any)
 	if !ok {
-		t.Fatalf("property %s has an invalid schema", property)
+		return nil
 	}
-	description, _ := field["description"].(string)
-	if !strings.Contains(description, phrase) {
-		t.Fatalf("property %s description is missing %q: %q", property, phrase, description)
+	values, _ := object["enum"].([]any)
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		text, ok := value.(string)
+		if !ok {
+			return nil
+		}
+		result = append(result, text)
 	}
+	return result
 }
