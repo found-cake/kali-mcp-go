@@ -82,7 +82,6 @@ func (s streamRun) run(w Writer) {
 
 	var streamedStderr strings.Builder
 	progress := dto.ProgressMetadata{Phase: dto.ProgressRunning}
-	wroteDone := false
 	linesCh := s.lines
 	doneCh := s.done
 	contextDone := contextDone(s.context)
@@ -147,7 +146,6 @@ func (s streamRun) run(w Writer) {
 				result.FinalizeProgress()
 			}
 			writeStreamDoneEvent(w, result, streamedStderr.String(), s.callID)
-			wroteDone = true
 			return
 		case <-ticker.Chan():
 			eventProgress := progress
@@ -170,9 +168,7 @@ func (s streamRun) run(w Writer) {
 		}
 	}
 
-	if !wroteDone {
-		writeStreamDoneFallback(w, s.callID, "internal error: stream ended without result")
-	}
+	writeStreamDoneFallback(w, s.callID, "internal error: stream ended without result")
 }
 
 func contextDone(ctx context.Context) <-chan struct{} {
