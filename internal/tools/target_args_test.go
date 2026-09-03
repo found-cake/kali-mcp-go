@@ -229,6 +229,18 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "-F"})
 			return err
 		}},
+		{name: "Dalfox resolved proxy", build: func() error {
+			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "--proxy=https://foreign.test:8080"})
+			return err
+		}},
+		{name: "Dalfox resolved stored XSS callback", build: func() error {
+			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "--sxss-url=https://foreign.test/callback"})
+			return err
+		}},
+		{name: "Dalfox resolved blind callback", build: func() error {
+			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context, Profile: dto.ProfileExplicitCustom}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "--blind=https://foreign.test/callback"})
+			return err
+		}},
 		{name: "Hydra Host module option", build: func() error {
 			_, err := HydraArgs(dto.HydraRequest{
 				ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "192.0.2.10", Service: "http-post-form",

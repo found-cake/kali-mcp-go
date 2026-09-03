@@ -181,7 +181,9 @@ func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
 		}
 	}
 	if hasResolvedTarget(request.ScanOptions) {
-		if err := rejectArguments(extra, "additional_args", "resolved targets forbid cross-host redirects", "-F", "--follow-redirects"); err != nil {
+		if err := rejectArguments(extra, "additional_args", "resolved targets forbid alternate outbound destinations",
+			"-F", "--follow-redirects", "-b", "--blind", "--blind-oob", "--blind-oob-secret",
+			"--custom-blind-xss-payload", "--remote-payloads", "--remote-wordlists", "--proxy", "--sxss-url"); err != nil {
 			return nil, err
 		}
 	}
