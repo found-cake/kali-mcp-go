@@ -30,4 +30,24 @@ function browserLaunchOptions(executablePath) {
   };
 }
 
-module.exports = { browserLaunchOptions, createBoundedCollector, truncateEvidenceText };
+function navigationEvidence(response) {
+  if (!response) {
+    return {
+      navigationResponseReceived: false,
+      navigationStatus: null,
+      navigationResponseUrl: null,
+    };
+  }
+  return {
+    navigationResponseReceived: true,
+    navigationStatus: response.status(),
+    navigationResponseUrl: response.url(),
+  };
+}
+
+module.exports = {
+  browserLaunchOptions,
+  createBoundedCollector,
+  navigationEvidence,
+  truncateEvidenceText,
+};

@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   browserLaunchOptions,
   createBoundedCollector,
+  navigationEvidence,
   truncateEvidenceText,
 } = require("./browser-evidence.cjs");
 
@@ -27,4 +28,37 @@ test("browser launch keeps the Chromium sandbox enabled", () => {
 
   assert.equal(options.chromiumSandbox, true);
   assert.equal(options.args.includes("--no-sandbox"), false);
+});
+
+test("navigation evidence reports the main document response", () => {
+  // Given: Chromium returned a response for the main document navigation.
+  const response = {
+    status: () => 200,
+    url: () => "https://example.test/app",
+  };
+
+  // When: the response is normalized for browser evidence.
+  const evidence = navigationEvidence(response);
+
+  // Then: consumers receive the response URL and HTTP status explicitly.
+  assert.deepEqual(evidence, {
+    navigationResponseReceived: true,
+    navigationStatus: 200,
+    navigationResponseUrl: "https://example.test/app",
+  });
+});
+
+test("navigation evidence distinguishes same-document routes without a response", () => {
+  // Given: a same-document or fragment navigation returned no new response.
+  const response = null;
+
+  // When: the missing response is normalized for browser evidence.
+  const evidence = navigationEvidence(response);
+
+  // Then: null status is not confused with a failed HTTP response.
+  assert.deepEqual(evidence, {
+    navigationResponseReceived: false,
+    navigationStatus: null,
+    navigationResponseUrl: null,
+  });
 });

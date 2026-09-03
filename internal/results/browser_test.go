@@ -28,7 +28,7 @@ func TestProtectResultExtractsOptInBrowserEvidenceArtifacts(t *testing.T) {
 	result := &executor.Result{
 		CallID: "call-browser", Tool: "browser-check", ReturnCode: 0,
 		BrowserScreenshotPath: screenshotPath,
-		Stdout:                `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","status":200,"title":"Example","dialogs":[],"console":[],"pageErrors":[],"dom":"<html>private-value</html>","networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/api?token=private-value","resourceType":"xhr","status":200}],"screenshotCaptured":true,"screenshotMediaType":"image/png"}`,
+		Stdout:                `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","navigationResponseReceived":true,"navigationStatus":200,"navigationResponseUrl":"http://example.test/","title":"Example","dialogs":[],"console":[],"pageErrors":[],"dom":"<html>private-value</html>","networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/api?token=private-value","resourceType":"xhr","status":200}],"screenshotCaptured":true,"screenshotMediaType":"image/png"}`,
 		Progress:              &dto.ProgressMetadata{LastObservedOutput: `{"network":[{"url":"http://example.test/api?token=private-value"}]}`},
 	}
 	request := dto.BrowserRequest{
@@ -83,7 +83,7 @@ func TestProtectResultPreservesBrowserEvidenceTruncationFlags(t *testing.T) {
 	})
 	result := &executor.Result{
 		CallID: "call-browser-bounded", Tool: "browser-check", ReturnCode: 0,
-		Stdout: `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","status":200,"title":"Example","dialogs":[],"dialogsTruncated":true,"console":[],"consoleTruncated":true,"pageErrors":[],"pageErrorsTruncated":true,"networkCaptured":true,"network":[]}`,
+		Stdout: `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","navigationResponseReceived":true,"navigationStatus":200,"navigationResponseUrl":"http://example.test/","title":"Example","dialogs":[],"dialogsTruncated":true,"console":[],"consoleTruncated":true,"pageErrors":[],"pageErrorsTruncated":true,"networkCaptured":true,"network":[]}`,
 	}
 
 	// When: browser evidence is normalized for the MCP response.
@@ -96,6 +96,31 @@ func TestProtectResultPreservesBrowserEvidenceTruncationFlags(t *testing.T) {
 	// Then: callers can distinguish complete empty collections from truncated ones.
 	if !report.DialogsTruncated || !report.ConsoleTruncated || !report.PageErrorsTruncated {
 		t.Fatalf("browser truncation metadata was dropped: %+v", report)
+	}
+}
+
+func TestProtectResultPreservesBrowserNavigationEvidence(t *testing.T) {
+	// Given: browser output with an explicit main-document navigation response.
+	store, err := artifactstore.New()
+	if err != nil {
+		t.Fatalf("create artifact store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	result := &executor.Result{
+		CallID: "call-browser-navigation", Tool: "browser-check", ReturnCode: 0,
+		Stdout: `{"requestedUrl":"http://example.test/#/route","finalUrl":"http://example.test/#/route","navigationResponseReceived":true,"navigationStatus":200,"navigationResponseUrl":"http://example.test/","dialogs":[],"console":[],"pageErrors":[],"networkCaptured":true,"network":[]}`,
+	}
+
+	// When: browser evidence is normalized for the MCP response.
+	protectBrowserEvidence(store, result, dto.BrowserRequest{CaptureNetwork: true})
+	var report browserReport
+	if err := json.Unmarshal([]byte(result.Stdout), &report); err != nil {
+		t.Fatalf("decode protected browser report: %v", err)
+	}
+
+	// Then: the main-document response remains distinct from the final SPA URL.
+	if !report.NavigationResponseReceived || report.NavigationStatus == nil || *report.NavigationStatus != 200 || report.NavigationResponseURL == nil || *report.NavigationResponseURL != "http://example.test/" {
+		t.Fatalf("browser navigation evidence was dropped: %+v", report)
 	}
 }
 
@@ -126,7 +151,7 @@ func TestProtectResultPreservesBrowserEvidenceByDefault(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	result := &executor.Result{
 		CallID: "call-browser-raw", Tool: "browser-check", ReturnCode: 0,
-		Stdout: `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","status":200,"dialogs":[],"console":[],"pageErrors":[],"dom":"<html>server-secret</html>","networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/api?token=server-secret","resourceType":"xhr","status":200}]}`,
+		Stdout: `{"requestedUrl":"http://example.test/","finalUrl":"http://example.test/","navigationResponseReceived":true,"navigationStatus":200,"navigationResponseUrl":"http://example.test/","dialogs":[],"console":[],"pageErrors":[],"dom":"<html>server-secret</html>","networkCaptured":true,"network":[{"method":"GET","url":"http://example.test/api?token=server-secret","resourceType":"xhr","status":200}]}`,
 	}
 	request := dto.BrowserRequest{IncludeDOM: true, CaptureNetwork: true}
 

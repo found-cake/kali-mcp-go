@@ -16,29 +16,31 @@ import (
 const maximumBrowserScreenshotBytes = 512 * 1024
 
 type browserReport struct {
-	RequestedURL         string                `json:"requestedUrl"`
-	FinalURL             string                `json:"finalUrl"`
-	Status               *int                  `json:"status"`
-	Title                string                `json:"title"`
-	Dialogs              []browserDialog       `json:"dialogs"`
-	DialogsTruncated     bool                  `json:"dialogsTruncated,omitempty"`
-	Console              []browserConsole      `json:"console"`
-	ConsoleTruncated     bool                  `json:"consoleTruncated,omitempty"`
-	PageErrors           []string              `json:"pageErrors"`
-	PageErrorsTruncated  bool                  `json:"pageErrorsTruncated,omitempty"`
-	DOM                  string                `json:"dom,omitempty"`
-	DOMTruncated         bool                  `json:"domTruncated,omitempty"`
-	DOMBytes             int                   `json:"domBytes,omitempty"`
-	DOMArtifactID        string                `json:"domArtifactId,omitempty"`
-	NetworkCaptured      bool                  `json:"networkCaptured"`
-	Network              []browserNetworkEvent `json:"network,omitempty"`
-	NetworkTruncated     bool                  `json:"networkTruncated"`
-	NetworkArtifactID    string                `json:"networkArtifactId,omitempty"`
-	NetworkEventCount    int                   `json:"networkEventCount,omitempty"`
-	ScreenshotCaptured   bool                  `json:"screenshotCaptured,omitempty"`
-	ScreenshotMediaType  string                `json:"screenshotMediaType,omitempty"`
-	ScreenshotError      string                `json:"screenshotError,omitempty"`
-	ScreenshotArtifactID string                `json:"screenshotArtifactId,omitempty"`
+	RequestedURL               string                `json:"requestedUrl"`
+	FinalURL                   string                `json:"finalUrl"`
+	NavigationResponseReceived bool                  `json:"navigationResponseReceived"`
+	NavigationStatus           *int                  `json:"navigationStatus"`
+	NavigationResponseURL      *string               `json:"navigationResponseUrl"`
+	Title                      string                `json:"title"`
+	Dialogs                    []browserDialog       `json:"dialogs"`
+	DialogsTruncated           bool                  `json:"dialogsTruncated,omitempty"`
+	Console                    []browserConsole      `json:"console"`
+	ConsoleTruncated           bool                  `json:"consoleTruncated,omitempty"`
+	PageErrors                 []string              `json:"pageErrors"`
+	PageErrorsTruncated        bool                  `json:"pageErrorsTruncated,omitempty"`
+	DOM                        string                `json:"dom,omitempty"`
+	DOMTruncated               bool                  `json:"domTruncated,omitempty"`
+	DOMBytes                   int                   `json:"domBytes,omitempty"`
+	DOMArtifactID              string                `json:"domArtifactId,omitempty"`
+	NetworkCaptured            bool                  `json:"networkCaptured"`
+	Network                    []browserNetworkEvent `json:"network,omitempty"`
+	NetworkTruncated           bool                  `json:"networkTruncated"`
+	NetworkArtifactID          string                `json:"networkArtifactId,omitempty"`
+	NetworkEventCount          int                   `json:"networkEventCount,omitempty"`
+	ScreenshotCaptured         bool                  `json:"screenshotCaptured,omitempty"`
+	ScreenshotMediaType        string                `json:"screenshotMediaType,omitempty"`
+	ScreenshotError            string                `json:"screenshotError,omitempty"`
+	ScreenshotArtifactID       string                `json:"screenshotArtifactId,omitempty"`
 }
 
 type browserDialog struct {

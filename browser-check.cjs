@@ -5,6 +5,7 @@ const { writeFile } = require("node:fs/promises");
 const {
   browserLaunchOptions,
   createBoundedCollector,
+  navigationEvidence,
   truncateEvidenceText,
 } = require("./browser-evidence.cjs");
 
@@ -94,7 +95,7 @@ async function main() {
     const result = {
       requestedUrl: options.url,
       finalUrl: page.url(),
-      status: response ? response.status() : null,
+      ...navigationEvidence(response),
       title: await page.title(),
       dialogs: dialogs.items,
       dialogsTruncated: dialogs.truncated,
