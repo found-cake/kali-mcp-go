@@ -40,6 +40,17 @@ func metasploitAction(module string) string {
 func MetasploitArgs(rcFile string) []string { return []string{"msfconsole", "-q", "-r", rcFile} }
 
 func HydraArgs(r dto.HydraRequest) ([]string, error) {
+	if r.TargetContext != "" {
+		extra, err := splitArgs(r.AdditionalArgs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid additional_args: %w", err)
+		}
+		for _, argument := range extra {
+			if strings.Contains(strings.ToLower(argument), "host:") {
+				return nil, fmt.Errorf("additional_args must not override the Host header when target_context is supplied")
+			}
+		}
+	}
 	args := []string{"hydra", "-t", "4"}
 	if r.Port > 0 {
 		args = append(args, "-s", strconv.Itoa(r.Port))

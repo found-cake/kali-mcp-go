@@ -159,6 +159,13 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 			_, err := DalfoxArgs(dto.DalfoxRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "https://example.test/?q=FUZZ", AdditionalArgs: "--header='Host: foreign.test'"})
 			return err
 		}},
+		{name: "Hydra Host module option", build: func() error {
+			_, err := HydraArgs(dto.HydraRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context}, Target: "192.0.2.10", Service: "http-post-form",
+				Username: "user", Password: "pass", AdditionalArgs: `"/:u=^USER^&p=^PASS^:F=bad:H=Host:foreign.test"`,
+			})
+			return err
+		}},
 	}
 
 	for _, test := range tests {

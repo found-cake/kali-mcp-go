@@ -142,10 +142,14 @@ func TestTargetContextBindsNetworkToolPorts(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		request any
+		message string
 	}{
-		{name: "Nmap mismatched port", request: dto.NmapRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Ports: "80"}},
-		{name: "Hydra mismatched port", request: dto.HydraRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Port: 22}},
-		{name: "Metasploit mismatched port", request: dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Options: map[string]string{"RPORT": "8080"}}},
+		{name: "Nmap mismatched port", request: dto.NmapRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Ports: "80"}, message: "port"},
+		{name: "Hydra mismatched port", request: dto.HydraRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Port: 22}, message: "port"},
+		{name: "Metasploit mismatched port", request: dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Options: map[string]string{"RPORT": "8080"}}, message: "port"},
+		{name: "Metasploit virtual host", request: dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Options: map[string]string{"VHOST": "foreign.test"}}, message: "VHOST"},
+		{name: "Gobuster DNS with port context", request: dto.GobusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Mode: "dns"}, message: "port"},
+		{name: "Enum4linux with port context", request: dto.Enum4linuxRequest{ScanOptions: dto.ScanOptions{TargetContext: context}}, message: "port"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var err error
@@ -156,8 +160,12 @@ func TestTargetContextBindsNetworkToolPorts(t *testing.T) {
 				_, err = targeting.ApplyContext("secret", request, now)
 			case dto.MetasploitRequest:
 				_, err = targeting.ApplyContext("secret", request, now)
+			case dto.GobusterRequest:
+				_, err = targeting.ApplyContext("secret", request, now)
+			case dto.Enum4linuxRequest:
+				_, err = targeting.ApplyContext("secret", request, now)
 			}
-			if err == nil || !strings.Contains(err.Error(), "port") {
+			if err == nil || !strings.Contains(err.Error(), test.message) {
 				t.Fatalf("mismatched port accepted: %v", err)
 			}
 		})

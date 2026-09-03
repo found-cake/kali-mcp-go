@@ -45,6 +45,9 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 		return bindStringPort(&value.Ports, claims.Port, "Nmap")
 	case *dto.GobusterRequest:
 		if strings.EqualFold(value.Mode, "dns") {
+			if claims.Port > 0 {
+				return fmt.Errorf("Gobuster DNS mode cannot enforce target_context port %d", claims.Port)
+			}
 			return setNetworkTarget(&value.URL, claims.NetworkTarget)
 		}
 		return setWebTarget(&value.URL, claims.BrowserTarget)
@@ -68,6 +71,9 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 	case *dto.WPScanRequest:
 		return setWebTarget(&value.URL, claims.BrowserTarget)
 	case *dto.Enum4linuxRequest:
+		if claims.Port > 0 {
+			return fmt.Errorf("Enum4linux cannot enforce target_context port %d", claims.Port)
+		}
 		return setNetworkTarget(&value.Target, claims.NetworkTarget)
 	case *dto.FFUFRequest:
 		return setWebTarget(&value.URL, claims.BrowserTarget)
@@ -135,6 +141,9 @@ func bindMetasploitPort(request *dto.MetasploitRequest, expected int) error {
 	}
 	options := make(map[string]string, len(request.Options)+1)
 	for name, value := range request.Options {
+		if strings.EqualFold(strings.TrimSpace(name), "VHOST") {
+			return fmt.Errorf("Metasploit VHOST is not permitted with target_context")
+		}
 		if strings.EqualFold(strings.TrimSpace(name), "RPORT") {
 			port, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil || port != expected {

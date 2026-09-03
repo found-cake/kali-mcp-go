@@ -8,7 +8,7 @@ type MetasploitRequest struct {
 	ScanOptions
 	Module       string            `json:"module" jsonschema:"required,module path e.g. auxiliary/scanner/http/title"`
 	Target       string            `json:"target,omitempty" jsonschema:"target IP or hostname; omit when target_context is supplied"`
-	Options      map[string]string `json:"options,omitempty" jsonschema:"module options excluding RHOST and RHOSTS; target_context also fills RPORT from the signed candidate and rejects mismatches"`
+	Options      map[string]string `json:"options,omitempty" jsonschema:"module options excluding RHOST and RHOSTS; target_context also fills RPORT from the signed candidate and rejects RPORT mismatches or VHOST overrides"`
 	DryRun       bool              `json:"dry_run,omitempty" jsonschema:"validate policy and return a redacted execution preview without running Metasploit"`
 	RedactValues []string          `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output; all other content is preserved verbatim"`
 	Timeout      int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
