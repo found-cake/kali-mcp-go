@@ -130,6 +130,7 @@ func TestSQLMapTargetContextPreservesExplicitNonURLSource(t *testing.T) {
 	}
 	tests := []dto.SQLMapRequest{
 		{RawRequest: "GET / HTTP/1.1\r\nHost: 192.168.65.254:3000\r\n\r\n"},
+		{RawRequest: "GET http://192.168.65.254:3000/rest/products HTTP/1.1\r\nHost: 192.168.65.254:3000\r\n\r\n"},
 		{RequestFile: requestFile},
 	}
 
@@ -176,10 +177,17 @@ func TestSQLMapTargetContextRejectsMismatchedNonURLSource(t *testing.T) {
 	if err := os.WriteFile(requestFile, []byte("GET / HTTP/1.1\r\nHost: 198.51.100.20:3000\r\n\r\n"), 0o600); err != nil {
 		t.Fatalf("write request file: %v", err)
 	}
+	absoluteRequestFile := filepath.Join(t.TempDir(), "absolute-foreign.txt")
+	if err := os.WriteFile(absoluteRequestFile, []byte("GET http://198.51.100.20:3000/ HTTP/1.1\r\nHost: 192.168.65.254:3000\r\n\r\n"), 0o600); err != nil {
+		t.Fatalf("write absolute request file: %v", err)
+	}
 	tests := []dto.SQLMapRequest{
 		{RawRequest: "GET / HTTP/1.1\r\nHost: 198.51.100.20:3000\r\n\r\n"},
 		{RawRequest: "GET / HTTP/1.1\r\nHost: 192.168.65.254:9999\r\n\r\n"},
+		{RawRequest: "GET http://198.51.100.20:3000/ HTTP/1.1\r\nHost: 192.168.65.254:3000\r\n\r\n"},
+		{RawRequest: "CONNECT 198.51.100.20:443 HTTP/1.1\r\nHost: 192.168.65.254:3000\r\n\r\n"},
 		{RequestFile: requestFile},
+		{RequestFile: absoluteRequestFile},
 	}
 
 	for _, request := range tests {

@@ -20,6 +20,9 @@ func handleSQLMapStream(c fiber.Ctx) error {
 	if err != nil {
 		return httpapi.BadRequest(c, err.Error())
 	}
+	if req.RequestFile != "" {
+		req.RequestFile = sqlmapPlan.RequestFile()
+	}
 	args := sqlmapPlan.Args()
 	scanPlan, err := prepareScanExecution(c, req, args)
 	if err != nil {

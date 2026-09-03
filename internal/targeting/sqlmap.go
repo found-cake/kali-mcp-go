@@ -27,7 +27,7 @@ func sqlMapContextTarget(request dto.SQLMapRequest, claims targetContextClaims) 
 		}
 		requestText = string(content)
 	}
-	authority, err := rawHTTPRequestAuthority(requestText)
+	authority, requestTarget, err := rawHTTPRequestDestination(requestText)
 	if err != nil {
 		return "", err
 	}
@@ -47,39 +47,75 @@ func sqlMapContextTarget(request dto.SQLMapRequest, claims targetContextClaims) 
 	if expectedPort == 0 {
 		expectedPort = defaultPort
 	}
-	hostMatches := strings.EqualFold(host, claims.NetworkTarget) || strings.EqualFold(host, expectedURL.Hostname())
+	hostMatches := sqlMapHostMatches(host, claims, expectedURL)
 	if !hostMatches || port != expectedPort {
 		return "", fmt.Errorf("SQLMap request Host %q does not match target_context destination %s:%d", authority, claims.NetworkTarget, expectedPort)
+	}
+	if err := validateSQLMapRequestTarget(requestTarget, claims, expectedURL, expectedPort); err != nil {
+		return "", err
 	}
 	return claims.NetworkTarget, nil
 }
 
-func rawHTTPRequestAuthority(request string) (string, error) {
+func rawHTTPRequestDestination(request string) (string, string, error) {
 	normalized := strings.ReplaceAll(request, "\r\n", "\n")
 	headerEnd := strings.Index(normalized, "\n\n")
 	if headerEnd < 0 {
 		if len(normalized) > maximumSQLMapRequestHeaderBytes {
-			return "", fmt.Errorf("SQLMap request headers exceed %d bytes", maximumSQLMapRequestHeaderBytes)
+			return "", "", fmt.Errorf("SQLMap request headers exceed %d bytes", maximumSQLMapRequestHeaderBytes)
 		}
 		headerEnd = len(normalized)
 	} else if headerEnd > maximumSQLMapRequestHeaderBytes {
-		return "", fmt.Errorf("SQLMap request headers exceed %d bytes", maximumSQLMapRequestHeaderBytes)
+		return "", "", fmt.Errorf("SQLMap request headers exceed %d bytes", maximumSQLMapRequestHeaderBytes)
+	}
+	header := normalized[:headerEnd]
+	lineEnd := strings.IndexByte(header, '\n')
+	if lineEnd < 0 {
+		return "", "", fmt.Errorf("SQLMap request must contain a request line and Host header")
+	}
+	requestLine := strings.Fields(header[:lineEnd])
+	if len(requestLine) != 3 || !strings.HasPrefix(requestLine[2], "HTTP/") {
+		return "", "", fmt.Errorf("SQLMap request contains an invalid request line")
 	}
 	var authority string
-	for line := range strings.Lines(normalized[:headerEnd]) {
+	for line := range strings.Lines(header[lineEnd+1:]) {
 		name, value, found := strings.Cut(line, ":")
 		if !found || !strings.EqualFold(strings.TrimSpace(name), "host") {
 			continue
 		}
 		if authority != "" {
-			return "", fmt.Errorf("SQLMap request contains multiple Host headers")
+			return "", "", fmt.Errorf("SQLMap request contains multiple Host headers")
 		}
 		authority = strings.TrimSpace(value)
 	}
 	if authority == "" {
-		return "", fmt.Errorf("SQLMap request must contain one Host header when target_context is supplied")
+		return "", "", fmt.Errorf("SQLMap request must contain one Host header when target_context is supplied")
 	}
-	return authority, nil
+	return authority, requestLine[1], nil
+}
+
+func validateSQLMapRequestTarget(requestTarget string, claims targetContextClaims, expectedURL *url.URL, expectedPort int) error {
+	if strings.HasPrefix(requestTarget, "/") || requestTarget == "*" {
+		return nil
+	}
+	parsed, err := url.Parse(requestTarget)
+	if err != nil || parsed.User != nil || parsed.Hostname() == "" || parsed.Fragment != "" ||
+		!strings.EqualFold(parsed.Scheme, expectedURL.Scheme) {
+		return fmt.Errorf("SQLMap request target %q does not match target_context destination", requestTarget)
+	}
+	defaultPort := 80
+	if strings.EqualFold(parsed.Scheme, "https") {
+		defaultPort = 443
+	}
+	host, port, err := splitHTTPAuthority(parsed.Host, defaultPort)
+	if err != nil || !sqlMapHostMatches(host, claims, expectedURL) || port != expectedPort {
+		return fmt.Errorf("SQLMap request target %q does not match target_context destination", requestTarget)
+	}
+	return nil
+}
+
+func sqlMapHostMatches(host string, claims targetContextClaims, expectedURL *url.URL) bool {
+	return strings.EqualFold(host, claims.NetworkTarget) || strings.EqualFold(host, expectedURL.Hostname())
 }
 
 func splitHTTPAuthority(authority string, defaultPort int) (string, int, error) {

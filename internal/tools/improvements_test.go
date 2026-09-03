@@ -2,6 +2,7 @@ package tools
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -89,8 +90,38 @@ func TestSQLMapPlanAcceptsExistingRequestFile(t *testing.T) {
 		t.Fatalf("prepare sqlmap: %v", err)
 	}
 	defer plan.Cleanup()
-	if !strings.Contains(strings.Join(plan.Args(), " "), "-r "+requestFile) {
-		t.Fatalf("expected request file in args: %v", plan.Args())
+	if plan.requestFile == requestFile || !strings.HasPrefix(plan.requestFile, plan.tempDir+string(os.PathSeparator)) {
+		t.Fatalf("request file was not copied into the private workspace: %q", plan.requestFile)
+	}
+	if !strings.Contains(strings.Join(plan.Args(), " "), "-r "+plan.requestFile) {
+		t.Fatalf("expected snapshot request file in args: %v", plan.Args())
+	}
+	if err := os.WriteFile(requestFile, []byte("GET http://198.51.100.20/ HTTP/1.1\r\nHost: 198.51.100.20\r\n\r\n"), 0o600); err != nil {
+		t.Fatalf("replace original request: %v", err)
+	}
+	snapshot, err := os.ReadFile(plan.requestFile)
+	if err != nil || string(snapshot) != "GET /?id=* HTTP/1.1\r\nHost: example.com\r\n\r\n" {
+		t.Fatalf("snapshot content mismatch: content=%q err=%v", snapshot, err)
+	}
+}
+
+func TestSQLMapPlanRejectsOversizedRequestFile(t *testing.T) {
+	t.Parallel()
+
+	requestFile := filepath.Join(t.TempDir(), "oversized.txt")
+	file, err := os.Create(requestFile)
+	if err != nil {
+		t.Fatalf("create request file: %v", err)
+	}
+	if err := file.Truncate(maximumSQLMapRequestBytes + 1); err != nil {
+		file.Close()
+		t.Fatalf("truncate request file: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close request file: %v", err)
+	}
+	if _, err := PrepareSQLMap(dto.SQLMapRequest{RequestFile: requestFile}); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized request file was not rejected: %v", err)
 	}
 }
 

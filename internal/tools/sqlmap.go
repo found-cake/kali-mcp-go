@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +17,8 @@ type SQLMapPlan struct {
 	trafficFile string
 	tempDir     string
 }
+
+const maximumSQLMapRequestBytes = 16 * 1024 * 1024
 
 func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 	sourceCount := 0
@@ -80,9 +83,7 @@ func (p *SQLMapPlan) addSource(request dto.SQLMapRequest) error {
 	if request.RawRequest != "" {
 		return p.writeRequest(request.RawRequest)
 	}
-	p.requestFile = request.RequestFile
-	p.args = append(p.args, "-r", request.RequestFile)
-	return nil
+	return p.copyRequest(request.RequestFile)
 }
 
 func (p *SQLMapPlan) writeRequest(content string) error {
@@ -94,12 +95,53 @@ func (p *SQLMapPlan) writeRequest(content string) error {
 	return nil
 }
 
+func (p *SQLMapPlan) copyRequest(source string) error {
+	input, err := os.Open(source)
+	if err != nil {
+		return fmt.Errorf("open raw request: %w", err)
+	}
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil {
+		return fmt.Errorf("inspect raw request: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("raw request file must be a regular file")
+	}
+	if info.Size() > maximumSQLMapRequestBytes {
+		return fmt.Errorf("raw request file exceeds %d bytes", maximumSQLMapRequestBytes)
+	}
+	p.requestFile = filepath.Join(p.tempDir, "request.txt")
+	output, err := os.OpenFile(p.requestFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return fmt.Errorf("create request snapshot: %w", err)
+	}
+	written, err := io.Copy(output, io.LimitReader(input, maximumSQLMapRequestBytes+1))
+	if err != nil {
+		_ = output.Close()
+		return fmt.Errorf("copy raw request: %w", err)
+	}
+	if written > maximumSQLMapRequestBytes {
+		_ = output.Close()
+		return fmt.Errorf("raw request file exceeds %d bytes", maximumSQLMapRequestBytes)
+	}
+	if err := output.Close(); err != nil {
+		return fmt.Errorf("close request snapshot: %w", err)
+	}
+	p.args = append(p.args, "-r", p.requestFile)
+	return nil
+}
+
 func (p *SQLMapPlan) Args() []string {
 	return append([]string(nil), p.args...)
 }
 
 func (p *SQLMapPlan) EphemeralPath() string {
 	return p.tempDir
+}
+
+func (p *SQLMapPlan) RequestFile() string {
+	return p.requestFile
 }
 
 func (p *SQLMapPlan) HTTPRequestCount() int {
