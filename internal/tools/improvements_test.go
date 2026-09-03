@@ -114,7 +114,7 @@ func TestNucleiArgsExcludeUnsafeTemplatesByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build nuclei args: %v", err)
 	}
-	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-disable-update-check", "-etags", "dos,fuzz", "-no-interactsh"}
+	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-disable-update-check", "-etags", "dos,fuzz,dast,oast,interactsh", "-no-interactsh"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}
@@ -134,6 +134,9 @@ func TestNucleiTemplatePreviewUsesOnlyLocalSelectionFilters(t *testing.T) {
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, " -tl ") || !strings.Contains(joined, "-tags exposure,misconfig") || strings.Contains(joined, "https://example.com") {
 		t.Fatalf("unexpected Nuclei preview args: %v", args)
+	}
+	if !strings.Contains(joined, "-etags dos,fuzz,dast,oast,interactsh") {
+		t.Fatalf("preview does not exclude all unsafe template tags: %v", args)
 	}
 	if count := CountNucleiTemplateList("one.yaml\n\ntwo.yaml\n"); count != 2 {
 		t.Fatalf("template count=%d want=2", count)

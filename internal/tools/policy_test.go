@@ -221,7 +221,7 @@ func TestNucleiArgsAllowSafetyOverridesOnlyWhenExplicit(t *testing.T) {
 		t.Fatalf("build explicitly unsafe Nuclei args: %v", err)
 	}
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "--include-tags=dos") || strings.Contains(joined, "-etags dos,fuzz") || strings.Contains(joined, "-no-interactsh -") {
+	if !strings.Contains(joined, "--include-tags=dos") || strings.Contains(joined, "-etags dos,fuzz,dast,oast,interactsh") || strings.Contains(joined, "-no-interactsh -") {
 		t.Fatalf("unexpected explicitly unsafe Nuclei args: %v", args)
 	}
 }
@@ -240,7 +240,7 @@ func TestNucleiArgsKeepSafeModeFlagsAfterAllowedAdditionalArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build safe Nuclei args: %v", err)
 	}
-	wantSuffix := []string{"-etags", "dos,fuzz", "-no-interactsh"}
+	wantSuffix := []string{"-etags", "dos,fuzz,dast,oast,interactsh", "-no-interactsh"}
 	if len(args) < len(wantSuffix) || !slices.Equal(args[len(args)-len(wantSuffix):], wantSuffix) {
 		t.Fatalf("safe-mode flags are not final: %v", args)
 	}

@@ -63,7 +63,7 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 		return nil, err
 	}
 	if !request.AllowUnsafe {
-		args = append(args, "-etags", "dos,fuzz", "-no-interactsh")
+		args = append(args, "-etags", safeNucleiExcludedTags, "-no-interactsh")
 	}
 	return args, nil
 }

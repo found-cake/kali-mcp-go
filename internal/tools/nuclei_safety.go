@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const safeNucleiExcludedTags = "dos,fuzz,dast,oast,interactsh"
+
 var safeNucleiAdditionalFlags = map[string]bool{
 	"H":                     true,
 	"header":                true,
