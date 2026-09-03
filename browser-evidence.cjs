@@ -21,6 +21,10 @@ function truncateEvidenceText(value, limit) {
   return String(value).slice(0, limit);
 }
 
+function networkEvidenceURL(value) {
+  return truncateEvidenceText(value, 2048);
+}
+
 function browserLaunchOptions(executablePath) {
   return {
     executablePath,
@@ -49,5 +53,6 @@ module.exports = {
   browserLaunchOptions,
   createBoundedCollector,
   navigationEvidence,
+  networkEvidenceURL,
   truncateEvidenceText,
 };

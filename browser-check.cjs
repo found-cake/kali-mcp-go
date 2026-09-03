@@ -6,6 +6,7 @@ const {
   browserLaunchOptions,
   createBoundedCollector,
   navigationEvidence,
+  networkEvidenceURL,
   truncateEvidenceText,
 } = require("./browser-evidence.cjs");
 
@@ -72,7 +73,7 @@ async function main() {
       const request = response.request();
       recordNetwork({
         method: request.method(),
-        url: redactQueryValues(request.url()).slice(0, 2048),
+        url: networkEvidenceURL(request.url()),
         resourceType: request.resourceType(),
         status: response.status(),
       });
@@ -80,7 +81,7 @@ async function main() {
     page.on("requestfailed", (request) => {
       recordNetwork({
         method: request.method(),
-        url: redactQueryValues(request.url()).slice(0, 2048),
+        url: networkEvidenceURL(request.url()),
         resourceType: request.resourceType(),
         status: null,
         failure: (request.failure()?.errorText || "request_failed").slice(0, 512),
@@ -126,19 +127,6 @@ async function main() {
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally {
     await browser.close();
-  }
-}
-
-function redactQueryValues(value) {
-  try {
-    const parsed = new URL(value);
-    for (const name of new Set(parsed.searchParams.keys())) {
-      parsed.searchParams.set(name, "[REDACTED]");
-    }
-    parsed.hash = "";
-    return parsed.toString();
-  } catch {
-    return "[INVALID_URL]";
   }
 }
 

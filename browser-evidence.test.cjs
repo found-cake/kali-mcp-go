@@ -5,6 +5,7 @@ const {
   browserLaunchOptions,
   createBoundedCollector,
   navigationEvidence,
+  networkEvidenceURL,
   truncateEvidenceText,
 } = require("./browser-evidence.cjs");
 
@@ -61,4 +62,15 @@ test("navigation evidence distinguishes same-document routes without a response"
     navigationStatus: null,
     navigationResponseUrl: null,
   });
+});
+
+test("network evidence preserves raw query and fragment values", () => {
+  // Given: a browser request URL carrying reproducibility and fragment evidence.
+  const url = "https://example.test/main.js?v=build-42&token=test-secret#/search?q=xss";
+
+  // When: the URL is bounded for network evidence.
+  const evidence = networkEvidenceURL(url);
+
+  // Then: the browser value remains exact when no caller redaction was requested.
+  assert.equal(evidence, url);
 });
