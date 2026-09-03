@@ -148,6 +148,7 @@ func TestTargetContextBindsNetworkToolPorts(t *testing.T) {
 		{name: "Hydra mismatched port", request: dto.HydraRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Port: 22}, message: "port"},
 		{name: "Metasploit mismatched port", request: dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Options: map[string]string{"RPORT": "8080"}}, message: "port"},
 		{name: "Metasploit virtual host", request: dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Options: map[string]string{"VHOST": "foreign.test"}}, message: "VHOST"},
+		{name: "Metasploit proxy", request: dto.MetasploitRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Options: map[string]string{"Proxies": "http:foreign.test:8080"}}, message: "Proxies"},
 		{name: "Gobuster DNS with port context", request: dto.GobusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, Mode: "dns"}, message: "port"},
 		{name: "Enum4linux with port context", request: dto.Enum4linuxRequest{ScanOptions: dto.ScanOptions{TargetContext: context}}, message: "port"},
 	} {
@@ -184,12 +185,14 @@ func TestTargetContextRejectsMetasploitVirtualHostWithoutPort(t *testing.T) {
 		t.Fatalf("attach target context: %v", err)
 	}
 
-	_, err := targeting.ApplyContext("secret", dto.MetasploitRequest{
-		ScanOptions: dto.ScanOptions{TargetContext: result.Candidates[0].TargetContext},
-		Options:     map[string]string{"VHOST": "foreign.test"},
-	}, now)
-	if err == nil || !strings.Contains(err.Error(), "VHOST") {
-		t.Fatalf("zero-port context accepted a virtual host override: %v", err)
+	for _, option := range []string{"VHOST", "Proxies"} {
+		_, err := targeting.ApplyContext("secret", dto.MetasploitRequest{
+			ScanOptions: dto.ScanOptions{TargetContext: result.Candidates[0].TargetContext},
+			Options:     map[string]string{option: "foreign.test"},
+		}, now)
+		if err == nil || !strings.Contains(err.Error(), option) {
+			t.Fatalf("zero-port context accepted %s override: %v", option, err)
+		}
 	}
 }
 

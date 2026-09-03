@@ -151,8 +151,12 @@ func bindIntPort(current *int, expected int, tool string) error {
 
 func bindMetasploitPort(request *dto.MetasploitRequest, expected int) error {
 	for name := range request.Options {
-		if strings.EqualFold(strings.TrimSpace(name), "VHOST") {
+		normalized := strings.ToUpper(strings.TrimSpace(name))
+		if normalized == "VHOST" {
 			return fmt.Errorf("Metasploit VHOST is not permitted with target_context")
+		}
+		if normalized == "PROXIES" || strings.Contains(normalized, "PROXY") {
+			return fmt.Errorf("Metasploit proxy option %s is not permitted with target_context", name)
 		}
 	}
 	if expected == 0 {
