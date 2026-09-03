@@ -108,6 +108,10 @@ func redactArgs(name string, args []string) []string {
 			redacted[index] = "[EPHEMERAL_FILE]"
 			continue
 		}
+		if flag, _, inline := strings.Cut(redacted[index], "="); inline && sensitiveFlag(name, flag) {
+			redacted[index] = flag + "=[REDACTED]"
+			continue
+		}
 		if index > 0 && sensitiveFlag(name, redacted[index-1]) {
 			redacted[index] = "[REDACTED]"
 			continue

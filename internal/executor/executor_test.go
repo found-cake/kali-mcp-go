@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -211,6 +212,23 @@ func TestRedactArgsHidesBrowserEvidencePath(t *testing.T) {
 	// Then: the ephemeral host path is not exposed to callers.
 	if strings.Contains(strings.Join(redacted, " "), "/tmp/private-evidence.jpg") {
 		t.Fatalf("ephemeral path remains in argv metadata: %v", redacted)
+	}
+}
+
+func TestRedactArgsHidesInlineNucleiHeaders(t *testing.T) {
+	// Given: safe Nuclei arguments containing sensitive inline header values.
+	args := []string{
+		"-H=Authorization: Bearer private-token",
+		"--header=Cookie: session=private-cookie",
+	}
+
+	// When: reproducibility metadata is prepared for the MCP result.
+	redacted := redactArgs("nuclei", args)
+
+	// Then: flag names remain useful while their values are removed.
+	want := []string{"-H=[REDACTED]", "--header=[REDACTED]"}
+	if !slices.Equal(redacted, want) {
+		t.Fatalf("inline header values remain in argv metadata\nwant: %v\n got: %v", want, redacted)
 	}
 }
 
