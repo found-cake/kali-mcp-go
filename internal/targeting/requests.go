@@ -100,7 +100,7 @@ func setWebTarget(current *string, expected string) error {
 		currentOrigin, currentOK := Origin(*current)
 		expectedOrigin, expectedOK := Origin(expected)
 		if !currentOK || !expectedOK || currentOrigin != expectedOrigin {
-			return fmt.Errorf("request URL does not match target_context browser origin")
+			return fmt.Errorf("request URL does not match target_context browser origin; use the selected candidate browser_target %s or omit the request URL", expected)
 		}
 		return nil
 	}

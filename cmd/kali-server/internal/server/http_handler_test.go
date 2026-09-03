@@ -44,6 +44,52 @@ func TestHTTPRequestRejectsMalformedBody(t *testing.T) {
 	}
 }
 
+func TestHTTPRequestOriginMismatchReturnsCandidateGuidance(t *testing.T) {
+	// Given: an authenticated HTTP tool request that repeats the original loopback URL.
+	now := time.Now().UTC()
+	resolution := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.168.65.254:3000/", NetworkTarget: "192.168.65.254",
+			Port: 3000, Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret-token", &resolution, now.Add(time.Hour)); err != nil {
+		t.Fatalf("attach target context: %v", err)
+	}
+	app := newApp("secret-token", false, httpapi.DefaultMaxConcurrentExecutions, t.Logf)
+	t.Cleanup(func() { _ = app.Shutdown() })
+	body, err := json.Marshal(dto.HTTPRequest{
+		ScanOptions: dto.ScanOptions{TargetContext: resolution.Candidates[0].TargetContext},
+		URL:         resolution.OriginalTarget,
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	request, err := http.NewRequest(http.MethodPost, "/api/tools/http-request", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer secret-token")
+	request.Header.Set("Content-Type", "application/json")
+
+	// When: the request crosses the authenticated HTTP boundary.
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+
+	// Then: HTTP 400 includes the selected browser target and URL-omission alternative.
+	if response.StatusCode != http.StatusBadRequest || !strings.Contains(string(payload), "browser_target http://192.168.65.254:3000/") || !strings.Contains(string(payload), "omit the request URL") {
+		t.Fatalf("origin mismatch response lacks guidance: status=%d body=%s", response.StatusCode, payload)
+	}
+}
+
 func TestHTTPRequestUsesTargetContextAndPreservesResponseByDefault(t *testing.T) {
 	// Given: an authorized local HTTP target and a signed browser context.
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

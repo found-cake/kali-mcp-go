@@ -82,6 +82,33 @@ func TestTargetContextSelectsNetworkFormWithoutServerState(t *testing.T) {
 	}
 }
 
+func TestTargetContextOriginMismatchExplainsCandidateUsage(t *testing.T) {
+	// Given: a signed Docker-host context and a request that repeats the original loopback URL.
+	now := time.Date(2026, time.September, 3, 10, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.168.65.254:3000/", NetworkTarget: "192.168.65.254",
+			Port: 3000, Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret", &result, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach target context: %v", err)
+	}
+	request := dto.HTTPRequest{
+		ScanOptions: dto.ScanOptions{TargetContext: result.Candidates[0].TargetContext},
+		URL:         result.OriginalTarget,
+	}
+
+	// When: the request is constrained to the selected browser origin.
+	_, err := targeting.ApplyContext("secret", request, now)
+
+	// Then: rejection identifies the selected browser_target and the URL-omission alternative.
+	if err == nil || !strings.Contains(err.Error(), "browser_target http://192.168.65.254:3000/") || !strings.Contains(err.Error(), "omit the request URL") {
+		t.Fatalf("origin mismatch lacks actionable guidance: %v", err)
+	}
+}
+
 func TestTargetContextWarnsWhenExpiryIsNear(t *testing.T) {
 	// Given: a verified target context with thirty seconds remaining.
 	now := time.Date(2026, time.August, 30, 9, 0, 0, 0, time.UTC)
