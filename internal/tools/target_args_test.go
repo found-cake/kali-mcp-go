@@ -193,6 +193,10 @@ func TestTargetContextRejectsCLIHostOverrides(t *testing.T) {
 			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "--headers='Host: foreign.test'"})
 			return err
 		}},
+		{name: "Ferox trailing Host header", build: func() error {
+			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "-H 'Authorization: test' 'Host: foreign.test'"})
+			return err
+		}},
 		{name: "Ferox additional scope", build: func() error {
 			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{ScanOptions: dto.ScanOptions{TargetContext: context}, URL: "https://example.test/", AdditionalArgs: "--scope=https://foreign.test/"})
 			return err

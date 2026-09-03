@@ -118,18 +118,22 @@ func rejectContextHostHeaders(options dto.ScanOptions, extra, fieldName string, 
 			if !argumentMatchesFlag(argument, flag) {
 				continue
 			}
-			value := ""
+			values := []string(nil)
 			if _, inline, found := strings.Cut(argument, "="); found {
-				value = inline
+				values = append(values, inline)
 			} else if argument != flag && !strings.HasPrefix(flag, "--") {
-				value = strings.TrimPrefix(argument, flag)
-			} else if index+1 < len(parts) {
-				value = parts[index+1]
+				values = append(values, strings.TrimPrefix(argument, flag))
+			} else {
+				for valueIndex := index + 1; valueIndex < len(parts) && !strings.HasPrefix(parts[valueIndex], "-"); valueIndex++ {
+					values = append(values, parts[valueIndex])
+				}
 			}
-			for line := range strings.Lines(strings.ReplaceAll(value, "\\n", "\n")) {
-				name, _, found := strings.Cut(line, ":")
-				if found && strings.EqualFold(strings.TrimSpace(name), "Host") {
-					return fmt.Errorf("%s must not override the Host header when target_context is supplied", fieldName)
+			for _, value := range values {
+				for line := range strings.Lines(strings.ReplaceAll(value, "\\n", "\n")) {
+					name, _, found := strings.Cut(line, ":")
+					if found && strings.EqualFold(strings.TrimSpace(name), "Host") {
+						return fmt.Errorf("%s must not override the Host header when target_context is supplied", fieldName)
+					}
 				}
 			}
 		}
