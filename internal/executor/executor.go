@@ -125,7 +125,7 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cmdSpec.name, cmdSpec.args...)
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	configureCommandCancellation(cmd)
 	cmd.WaitDelay = gracefulStopTimeout
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -191,6 +191,7 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	wg.Wait()
 	close(scanErrCh)
 	waitErr := cmd.Wait()
+	cleanupErr := cleanupCommandProcesses(cmd)
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	cancelled := ctx.Err() == context.Canceled
 
@@ -229,6 +230,14 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	if scanFailed && rc == 0 {
 		rc = -1
 		result.FailureCode = "output_read_failed"
+	}
+	if cleanupErr != nil {
+		if stderr.Len() > 0 {
+			stderr.WriteByte('\n')
+		}
+		fmt.Fprintf(&stderr, "cleanup process group: %v", cleanupErr)
+		result.FailureCode = "process_cleanup_failed"
+		rc = -1
 	}
 	if rc != 0 && result.FailureCode == "" {
 		result.FailureCode = "nonzero_exit"
