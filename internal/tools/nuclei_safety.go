@@ -38,8 +38,6 @@ var safeNucleiAdditionalFlags = map[string]bool{
 	"stop-at-first-match":   false,
 	"dr":                    false,
 	"disable-redirects":     false,
-	"fr":                    false,
-	"follow-redirects":      false,
 	"fhr":                   false,
 	"follow-host-redirects": false,
 	"dc":                    false,

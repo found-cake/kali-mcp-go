@@ -52,6 +52,10 @@ var safeNmapScripts = map[string]bool{
 }
 
 func validateSafeNmapArguments(args []string) error {
+	if err := rejectArguments(args, "Nmap arguments", "safe-recon forbids source spoofing, decoys, relays, and third-party routing",
+		"-D", "-S", "-e", "-g", "--proxies", "--spoof-mac", "--source-port", "--data", "--data-string", "--data-length", "--ip-options", "--ttl", "--dns-servers"); err != nil {
+		return err
+	}
 	for _, argument := range args {
 		if argumentMatchesFlag(argument, "--script-args") {
 			return fmt.Errorf("Nmap script arguments require explicit-custom")

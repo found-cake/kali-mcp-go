@@ -246,6 +246,16 @@ func TestNucleiArgsKeepSafeModeFlagsAfterAllowedAdditionalArgs(t *testing.T) {
 	}
 }
 
+func TestNucleiSafeModeRejectsCrossHostRedirects(t *testing.T) {
+	_, err := NucleiArgs(dto.NucleiRequest{
+		ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
+		Target:      "https://example.test", AdditionalArgs: "-fr",
+	})
+	if err == nil {
+		t.Fatal("safe Nuclei accepted cross-host redirects")
+	}
+}
+
 func TestNucleiArgsRejectsUnsafeTypedSelectorsByDefault(t *testing.T) {
 	// Given: unsafe selectors supplied through the typed fields.
 	tests := []dto.NucleiRequest{

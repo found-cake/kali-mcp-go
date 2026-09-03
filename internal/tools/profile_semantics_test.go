@@ -33,6 +33,13 @@ func TestSafetyProfilesRejectImpactEscalationArguments(t *testing.T) {
 			})
 			return err
 		}},
+		{name: "FFUF cross-origin redirect", build: func() error {
+			_, err := FFUFArgs(dto.FFUFRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
+				URL:         "https://example.test/FUZZ", AdditionalArgs: "-r",
+			})
+			return err
+		}},
 		{name: "Ferox state changing method", build: func() error {
 			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{
 				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
@@ -40,10 +47,24 @@ func TestSafetyProfilesRejectImpactEscalationArguments(t *testing.T) {
 			})
 			return err
 		}},
+		{name: "Ferox cross-origin redirect", build: func() error {
+			_, err := FeroxbusterArgs(dto.FeroxbusterRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
+				URL:         "https://example.test/", AdditionalArgs: "--redirects",
+			})
+			return err
+		}},
 		{name: "Gobuster state changing method", build: func() error {
 			_, err := GobusterArgs(dto.GobusterRequest{
 				ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
 				URL:         "https://example.test/", AdditionalArgs: "--method=DELETE",
+			})
+			return err
+		}},
+		{name: "Gobuster cross-origin redirect", build: func() error {
+			_, err := GobusterArgs(dto.GobusterRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
+				URL:         "https://example.test/", AdditionalArgs: "--follow-redirect",
 			})
 			return err
 		}},
@@ -61,10 +82,24 @@ func TestSafetyProfilesRejectImpactEscalationArguments(t *testing.T) {
 			})
 			return err
 		}},
+		{name: "Nmap spoofed source", build: func() error {
+			_, err := NmapArgs(dto.NmapRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
+				Target:      "192.0.2.10", AdditionalArgs: "-S=198.51.100.20",
+			})
+			return err
+		}},
 		{name: "Nikto DoS tuning", build: func() error {
 			_, err := NiktoArgs(dto.NiktoRequest{
 				ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
 				Target:      "https://example.test/", Tuning: "6",
+			})
+			return err
+		}},
+		{name: "Nikto redirects", build: func() error {
+			_, err := NiktoArgs(dto.NiktoRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
+				Target:      "https://example.test/", AdditionalArgs: "-followredirects",
 			})
 			return err
 		}},
@@ -82,6 +117,20 @@ func TestSafetyProfilesRejectImpactEscalationArguments(t *testing.T) {
 			_, err := DalfoxArgs(dto.DalfoxRequest{
 				ScanOptions: dto.ScanOptions{Profile: dto.ProfileBrowserXSSConfirm},
 				Target:      "https://example.test/?q=FUZZ", AdditionalArgs: "--method=POST",
+			})
+			return err
+		}},
+		{name: "Dalfox redirects", build: func() error {
+			_, err := DalfoxArgs(dto.DalfoxRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileBrowserXSSConfirm},
+				Target:      "https://example.test/?q=FUZZ", AdditionalArgs: "-F",
+			})
+			return err
+		}},
+		{name: "WhatWeb redirects", build: func() error {
+			_, err := WhatWebArgs(dto.WhatWebRequest{
+				ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
+				Target:      "https://example.test/", AdditionalArgs: "--follow-redirect=always",
 			})
 			return err
 		}},
@@ -106,7 +155,7 @@ func TestSQLMapLowRiskProfilePinsVerificationSettings(t *testing.T) {
 	}
 	defer plan.Cleanup()
 	args := plan.Args()
-	for _, expected := range []string{"--risk=1", "--level=1", "--technique=BEU"} {
+	for _, expected := range []string{"--risk=1", "--level=1", "--technique=BEU", "--ignore-redirects"} {
 		if !containsArg(args, expected) {
 			t.Fatalf("low-risk SQLMap args missing %q: %v", expected, args)
 		}

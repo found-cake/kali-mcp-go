@@ -87,7 +87,7 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 		return nil, err
 	}
 	if request.Profile == dto.ProfileSQLILowRisk {
-		plan.args = append(plan.args, "--risk=1", "--level=1", "--technique=BEU")
+		plan.args = append(plan.args, "--risk=1", "--level=1", "--technique=BEU", "--ignore-redirects")
 	}
 	return plan, nil
 }

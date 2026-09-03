@@ -28,7 +28,7 @@ func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
 	if r.Profile == dto.ProfileSafeRecon || r.Profile == dto.ProfileWebDiscoveryLowRate {
-		if err := rejectArguments(extra, "additional_args", "discovery profiles use Gobuster's default GET request", "-m", "--method"); err != nil {
+		if err := rejectArguments(extra, "additional_args", "discovery profiles use Gobuster's default GET request", "-m", "--method", "-r", "--follow-redirect"); err != nil {
 			return nil, err
 		}
 	}
@@ -70,7 +70,7 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid additional_args: %w", err)
 		}
-		if err := rejectArguments(extra, "additional_args", "Nikto tuning must use the validated tuning field", "-Tuning", "-tuning"); err != nil {
+		if err := rejectArguments(extra, "additional_args", "Nikto tuning must use the validated tuning field and cross-host redirects are disabled", "-Tuning", "-tuning", "-followredirects"); err != nil {
 			return nil, err
 		}
 	}
