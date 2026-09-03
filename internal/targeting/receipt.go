@@ -195,15 +195,21 @@ func Origin(target string) (string, bool) {
 }
 
 func ResolveProvenance(request any, secret string, now time.Time) (*dto.TargetProvenance, error) {
-	target := tools.RequestTarget(request)
-	if target == "" {
-		return nil, nil
-	}
 	scanRequest, ok := request.(dto.ScanRequest)
 	if ok && scanRequest.GetScanOptions().TargetContext != "" {
 		claims, err := verifyTargetContext(secret, scanRequest.GetScanOptions().TargetContext, now)
 		if err != nil {
 			return nil, err
+		}
+		target := tools.RequestTarget(request)
+		if sqlmapRequest, sqlmap := request.(dto.SQLMapRequest); sqlmap && (sqlmapRequest.RawRequest != "" || sqlmapRequest.RequestFile != "") {
+			target, err = sqlMapContextTarget(sqlmapRequest, claims)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if target == "" {
+			return nil, errResolutionTargetMismatch
 		}
 		if target != claims.NetworkTarget && !sameWebOrigin(target, claims.BrowserTarget) {
 			return nil, errResolutionTargetMismatch
@@ -216,6 +222,10 @@ func ResolveProvenance(request any, secret string, now time.Time) (*dto.TargetPr
 			ContextExpiresAt: expiresAt, ExpiresInSeconds: expiresIn,
 			ExpiringSoon: expiresIn <= int64(targetContextExpiryWarning/time.Second),
 		}, nil
+	}
+	target := tools.RequestTarget(request)
+	if target == "" {
+		return nil, nil
 	}
 	if !ok || scanRequest.GetScanOptions().ResolutionReceipt == "" {
 		if tools.IsLoopbackTarget(target) {
