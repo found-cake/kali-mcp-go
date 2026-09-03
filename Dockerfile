@@ -22,6 +22,8 @@ ARG KALI_APT_SECURE_MIRROR=https://kali.download/kali/
 
 # Nmap cannot exec when its NET_ADMIN file capability exceeds Docker's default bounding set.
 RUN set -eux; \
+    printf '%s\n' "$KALI_APT_MIRROR" | grep -Eq '^https?://[A-Za-z0-9._~:/-]+/$'; \
+    printf '%s\n' "$KALI_APT_SECURE_MIRROR" | grep -Eq '^https://[A-Za-z0-9._~:/-]+/$'; \
     for source in /etc/apt/sources.list /etc/apt/sources.list.d/kali.sources; do \
         if [ -f "$source" ]; then \
             sed -i \
