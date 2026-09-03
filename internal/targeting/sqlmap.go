@@ -62,6 +62,15 @@ func sqlMapRequestTarget(request dto.SQLMapRequest) (string, error) {
 		if err != nil || parsed.User != nil || parsed.Hostname() == "" || parsed.Fragment != "" {
 			return "", fmt.Errorf("SQLMap request contains an invalid absolute request target")
 		}
+		defaultPort := 80
+		if strings.EqualFold(parsed.Scheme, "https") {
+			defaultPort = 443
+		}
+		hostName, hostPort, hostErr := splitHTTPAuthority(authority, defaultPort)
+		targetName, targetPort, targetErr := splitHTTPAuthority(parsed.Host, defaultPort)
+		if hostErr != nil || targetErr != nil || !strings.EqualFold(hostName, targetName) || hostPort != targetPort {
+			return "", fmt.Errorf("SQLMap absolute request target does not match Host header")
+		}
 		return requestTarget, nil
 	}
 	if !strings.HasPrefix(requestTarget, "/") && requestTarget != "*" {
