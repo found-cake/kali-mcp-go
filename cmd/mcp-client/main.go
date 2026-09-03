@@ -31,7 +31,7 @@ func implementationVersion() string {
 func main() {
 	var (
 		serverURL = flag.String("server", "http://127.0.0.1:5000", "kali-server URL")
-		timeout   = flag.Int("timeout", dto.DefaultTimeoutSeconds, "base request timeout in seconds (execute_command can extend per call)")
+		timeout   = flag.Int("timeout", dto.DefaultTimeoutSeconds, "base request timeout in seconds (tool calls with a timeout field can extend per call)")
 		debug     = flag.Bool("debug", false, "verbose stderr logging")
 	)
 	flag.Parse()

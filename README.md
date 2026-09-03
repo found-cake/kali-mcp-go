@@ -333,7 +333,7 @@ For long scans, the MCP host timeout must be at least as large as `mcp-client --
 | Flag | Default | Description |
 |---|---|---|
 | `--server` | `http://127.0.0.1:5000` | kali-server URL |
-| `--timeout` | `300` | Base request timeout in seconds; individual streaming tools can raise this per request with their `timeout` field |
+| `--timeout` | `300` | Base request timeout in seconds; individual tool calls that expose `timeout` can raise it for that request |
 | `--debug` | `false` | Verbose stderr logging |
 
 #### kali-server flags
@@ -383,7 +383,7 @@ For long scans, the MCP host timeout must be at least as large as `mcp-client --
 | `enum4linux_scan` | Windows / Samba enumeration (SSE streaming) |
 | `ffuf_scan` | Web content discovery with automatic calibration, size filtering, and optional recursion |
 | `feroxbuster_scan` | Recursive web content discovery with automatic tuning |
-| `nuclei_scan` | Nuclei scan with local template-selection preview; DoS, fuzz, DAST, and OAST behavior is excluded unless explicitly enabled |
+| `nuclei_scan` | Nuclei scan with local template-selection preview; DoS, fuzz, DAST, OAST, and interactsh behavior is excluded unless explicitly enabled |
 | `whatweb_scan` | Web technology and framework fingerprinting |
 | `jwt_analyze` | JWT decoding and optional live playbook/forced-error/all-tests assessment |
 | `dalfox_scan` | XSS candidate scanning with JSON findings |
@@ -424,9 +424,14 @@ For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout
 Quiet streams may also emit lightweight heartbeat SSE events to keep the connection active until the final `done` event arrives.
 The bundled MCP client assigns the stream `call_id` before execution and sends an authenticated cancellation request if its caller context ends or the SSE stream becomes unreadable. On Unix servers, that cancellation stops the complete spawned process group after a short graceful-stop window and releases its execution slot. SSE flush failures provide a transport-level fallback, but custom HTTP consumers should explicitly call `POST /api/calls/{call_id}/cancel` when abandoning a stream. Keep the MCP host timeout at least as large as the client and request timeouts so an intermediary does not abandon useful work prematurely.
 
-These tools do not use SSE. `metasploit_run` and `john_crack` use a normal POST request/response flow, while `server_health` uses GET:
+These tools use ordinary request/response rather than SSE. `metasploit_run`, `hydra_attack`, `john_crack`, `http_request`, and `resolve_target` use POST; `get_scan_capabilities`, `result_artifact_read`, and `server_health` use GET:
 
+- `get_scan_capabilities`
+- `resolve_target`
+- `result_artifact_read`
+- `http_request`
 - `metasploit_run`
+- `hydra_attack`
 - `john_crack`
 - `server_health`
 
