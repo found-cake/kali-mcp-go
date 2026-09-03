@@ -2,6 +2,7 @@ package targeting
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,6 +68,28 @@ func TestResolutionReceiptAllowsPathSpecificScanOnResolvedOrigin(t *testing.T) {
 	}
 	if provenance.Selected != "http://172.17.0.1:3000/FUZZ" || !provenance.Verified {
 		t.Fatalf("unexpected provenance: %+v", provenance)
+	}
+}
+
+func TestResolutionReceiptRejectsVirtualHostOverride(t *testing.T) {
+	now := time.Date(2026, time.September, 4, 9, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			Target: "http://172.17.0.1:3000/", Reachable: true, Selectable: true,
+		}},
+	}
+	issued, err := issueResolutionReceipt("secret", result, now)
+	if err != nil {
+		t.Fatalf("issue receipt: %v", err)
+	}
+	request := dto.HTTPRequest{
+		ScanOptions: dto.ScanOptions{ResolutionReceipt: issued.Token},
+		URL:         result.Candidates[0].Target,
+		Headers:     map[string]string{"Host": "foreign.test"},
+	}
+	if _, err := ResolveProvenance(request, "secret", now); err == nil || !strings.Contains(err.Error(), "Host") {
+		t.Fatalf("resolution receipt accepted a virtual-host override: %v", err)
 	}
 }
 

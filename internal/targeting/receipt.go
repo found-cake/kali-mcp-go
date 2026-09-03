@@ -196,6 +196,11 @@ func Origin(target string) (string, bool) {
 
 func ResolveProvenance(request any, secret string, now time.Time) (*dto.TargetProvenance, error) {
 	scanRequest, ok := request.(dto.ScanRequest)
+	if ok && scanRequest.GetScanOptions().ResolutionReceipt != "" {
+		if err := rejectResolvedVirtualHost(request); err != nil {
+			return nil, err
+		}
+	}
 	if ok && scanRequest.GetScanOptions().TargetContext != "" {
 		claims, err := verifyTargetContext(secret, scanRequest.GetScanOptions().TargetContext, now)
 		if err != nil {
@@ -241,6 +246,19 @@ func ResolveProvenance(request any, secret string, now time.Time) (*dto.TargetPr
 		return &dto.TargetProvenance{Original: target, Selected: target, SelectionReason: "unverified_direct_target"}, nil
 	}
 	return verifyResolutionReceipt(secret, scanRequest.GetScanOptions().ResolutionReceipt, target, now)
+}
+
+func rejectResolvedVirtualHost(request any) error {
+	switch value := request.(type) {
+	case dto.HTTPRequest:
+		return rejectExplicitHostHeader(value.Headers)
+	case dto.SQLMapRequest:
+		return rejectExplicitHostHeader(value.Headers)
+	case dto.JWTRequest:
+		return rejectHostHeaderText(value.RequestHeader)
+	default:
+		return nil
+	}
 }
 
 func sameWebOrigin(selected, candidate string) bool {
