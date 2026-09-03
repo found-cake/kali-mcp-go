@@ -20,6 +20,9 @@ func previewNucleiTemplates(ctx context.Context, request dto.NucleiRequest) (*dt
 	}
 	result := executor.RunExec(ctx, nucleiPreviewTimeout, args[0], args[1:]...)
 	if result.ReturnCode != 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("list Nuclei templates: %w", err)
+		}
 		message := strings.TrimSpace(result.Stderr)
 		if message == "" {
 			message = strings.TrimSpace(result.Stdout)

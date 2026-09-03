@@ -21,6 +21,10 @@ func ServiceUnavailable(c fiber.Ctx, message string) error {
 	return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": message})
 }
 
+func Conflict(c fiber.Ctx, message string) error {
+	return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": message})
+}
+
 func ParseRequest[T any](c fiber.Ctx, validate func(T) error) (T, error) {
 	var request T
 	if err := c.Bind().Body(&request); err != nil {

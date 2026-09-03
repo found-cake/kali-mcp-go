@@ -20,13 +20,22 @@ const (
 )
 
 func SendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, cleanups ...func()) error {
+	unregister, err := RegisterCallCancellation(c, cancel)
+	if err != nil {
+		cancelAndCleanup(cancel, cleanups)
+		return Conflict(c, err.Error())
+	}
+	return SendRegisteredToolStream(c, lines, done, cancel, unregister, cleanups...)
+}
+
+func SendRegisteredToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, unregister func(), cleanups ...func()) error {
+	if unregister != nil {
+		cleanups = append(cleanups, unregister)
+	}
 	return sendToolStream(c, lines, done, cancel, streamDisconnectProbeInterval, cleanups...)
 }
 
 func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, disconnectProbeInterval time.Duration, cleanups ...func()) error {
-	if unregister := RegisterCallCancellation(c, cancel); unregister != nil {
-		cleanups = append(cleanups, unregister)
-	}
 	config := streaming.Config{
 		CallID: CallID(c), Lines: lines, Done: done, Cancel: cancel,
 		HeartbeatInterval: streamHeartbeatInterval, Cleanups: cleanups,
@@ -39,7 +48,22 @@ func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *execut
 			return stream.Err()
 		},
 	})
-	return handler(c)
+	if err := handler(c); err != nil {
+		cancelAndCleanup(cancel, cleanups)
+		return err
+	}
+	return nil
+}
+
+func cancelAndCleanup(cancel context.CancelFunc, cleanups []func()) {
+	if cancel != nil {
+		cancel()
+	}
+	for _, cleanup := range cleanups {
+		if cleanup != nil {
+			cleanup()
+		}
+	}
 }
 
 type ssePayloadWriter struct {

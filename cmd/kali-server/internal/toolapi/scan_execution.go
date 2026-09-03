@@ -32,6 +32,9 @@ var healthHTTPClient = &http.Client{
 }
 
 func scanPreparationError(c fiber.Ctx, err error) error {
+	if errors.Is(err, httpapi.ErrCallIDAlreadyActive) {
+		return httpapi.Conflict(c, err.Error())
+	}
 	if errors.Is(err, admission.ErrGlobalCapacityExceeded) || errors.Is(err, admission.ErrTargetCapacityExceeded) {
 		return httpapi.ServiceUnavailable(c, err.Error())
 	}
@@ -56,6 +59,8 @@ type scanExecutionPlan struct {
 	artifactStore         *artifactstore.Store
 	jwtAnalysis           *dto.JWTAnalysisMetadata
 	nucleiPreview         *dto.NucleiPreviewMetadata
+	streamCancel          context.CancelFunc
+	cancelRegistration    func()
 	browserScreenshotPath string
 	dryRun                bool
 }

@@ -52,7 +52,7 @@ func withPreparedTool[T any](c fiber.Ctx, spec toolExecutionSpec[T], execute fun
 	if spec.decorate != nil {
 		if err := spec.decorate(request, plan); err != nil {
 			plan.release()
-			return httpapi.BadRequest(c, err.Error())
+			return scanPreparationError(c, err)
 		}
 	}
 	return execute(plan)
@@ -68,7 +68,14 @@ func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
 		done <- result
 		close(done)
 		release := httpapi.RetainExecutionLease(c)
-		return httpapi.SendToolStream(c, lines, done, func() {}, release, plan.release)
+		cancel := plan.streamCancel
+		if cancel == nil {
+			cancel = func() {}
+		}
+		if plan.cancelRegistration != nil {
+			return httpapi.SendRegisteredToolStream(c, lines, done, cancel, plan.cancelRegistration, release, plan.release)
+		}
+		return httpapi.SendToolStream(c, lines, done, cancel, release, plan.release)
 	}
 	execCtx, cancel := context.WithCancel(c.Context())
 	lines, done := executor.StreamExec(execCtx, plan.timeout, plan.args[0], plan.args[1:]...)

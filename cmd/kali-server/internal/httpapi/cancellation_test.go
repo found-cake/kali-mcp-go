@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -12,7 +13,10 @@ func TestHandleCancelCallCancelsRegisteredExecution(t *testing.T) {
 	registry := NewCallCancellationRegistry()
 	ctx, cancel := context.WithCancel(context.Background())
 	id := "call_0123456789abcdef0123456789abcdef"
-	unregister := registry.Register(id, cancel)
+	unregister, err := registry.Register(id, cancel)
+	if err != nil {
+		t.Fatalf("register cancellation: %v", err)
+	}
 	t.Cleanup(unregister)
 	app := fiber.New()
 	app.Use(CallCancellationRegistryMiddleware(registry))
@@ -30,6 +34,34 @@ func TestHandleCancelCallCancelsRegisteredExecution(t *testing.T) {
 	case <-ctx.Done():
 	default:
 		t.Fatal("registered execution was not cancelled")
+	}
+}
+
+func TestCallCancellationRegistryRejectsDuplicateActiveIdentifier(t *testing.T) {
+	registry := NewCallCancellationRegistry()
+	firstContext, cancelFirst := context.WithCancel(context.Background())
+	secondContext, cancelSecond := context.WithCancel(context.Background())
+	id := "call_0123456789abcdef0123456789abcdef"
+	unregister, err := registry.Register(id, cancelFirst)
+	if err != nil {
+		t.Fatalf("register first cancellation: %v", err)
+	}
+	t.Cleanup(unregister)
+	if _, err := registry.Register(id, cancelSecond); !errors.Is(err, ErrCallIDAlreadyActive) {
+		t.Fatalf("duplicate registration error=%v", err)
+	}
+	if !registry.Cancel(id) {
+		t.Fatal("original registration was lost")
+	}
+	select {
+	case <-firstContext.Done():
+	default:
+		t.Fatal("original call was not cancelled")
+	}
+	select {
+	case <-secondContext.Done():
+		t.Fatal("duplicate call replaced the original registration")
+	default:
 	}
 }
 

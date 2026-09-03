@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/found-cake/kali-mcp-go/internal/callid"
@@ -9,6 +10,8 @@ import (
 )
 
 const callCancellationRegistryLocalKey = "call-cancellation-registry"
+
+var ErrCallIDAlreadyActive = errors.New("call ID is already active")
 
 type CallCancellationRegistry struct {
 	active sync.Map
@@ -22,15 +25,17 @@ func NewCallCancellationRegistry() *CallCancellationRegistry {
 	return &CallCancellationRegistry{}
 }
 
-func (registry *CallCancellationRegistry) Register(id string, cancel context.CancelFunc) func() {
+func (registry *CallCancellationRegistry) Register(id string, cancel context.CancelFunc) (func(), error) {
 	if registry == nil || cancel == nil || !callid.Valid(id) {
-		return nil
+		return nil, nil
 	}
 	entry := &callCancellation{cancel: cancel}
-	registry.active.Store(id, entry)
+	if _, loaded := registry.active.LoadOrStore(id, entry); loaded {
+		return nil, ErrCallIDAlreadyActive
+	}
 	return func() {
 		registry.active.CompareAndDelete(id, entry)
-	}
+	}, nil
 }
 
 func (registry *CallCancellationRegistry) Cancel(id string) bool {
@@ -53,7 +58,7 @@ func CallCancellationRegistryMiddleware(registry *CallCancellationRegistry) fibe
 	}
 }
 
-func RegisterCallCancellation(c fiber.Ctx, cancel context.CancelFunc) func() {
+func RegisterCallCancellation(c fiber.Ctx, cancel context.CancelFunc) (func(), error) {
 	registry, _ := c.Locals(callCancellationRegistryLocalKey).(*CallCancellationRegistry)
 	return registry.Register(CallID(c), cancel)
 }

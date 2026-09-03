@@ -127,11 +127,23 @@ func handleNucleiStream(c fiber.Ctx) error {
 			if !request.DryRun {
 				return nil
 			}
-			preview, err := previewNucleiTemplates(plan.context, request)
+			previewContext, cancel := context.WithCancel(plan.context)
+			unregister, err := httpapi.RegisterCallCancellation(c, cancel)
 			if err != nil {
+				cancel()
+				return err
+			}
+			preview, err := previewNucleiTemplates(previewContext, request)
+			if err != nil {
+				cancel()
+				if unregister != nil {
+					unregister()
+				}
 				return err
 			}
 			plan.nucleiPreview = preview
+			plan.streamCancel = cancel
+			plan.cancelRegistration = unregister
 			return nil
 		},
 	}, func(plan *scanExecutionPlan) error {
