@@ -16,7 +16,7 @@ import (
 
 const (
 	streamHeartbeatInterval       = 15 * time.Second
-	streamDisconnectProbeInterval = 2 * time.Second
+	streamDisconnectProbeInterval = time.Second
 )
 
 func SendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *executor.Result, cancel context.CancelFunc, cleanups ...func()) error {
@@ -43,6 +43,10 @@ func sendToolStream(c fiber.Ctx, lines <-chan executor.Line, done <-chan *execut
 	handler := sse.New(sse.Config{
 		HeartbeatInterval: disconnectProbeInterval,
 		Handler: func(_ fiber.Ctx, stream *sse.Stream) error {
+			if err := stream.Comment(""); err != nil {
+				cancelAndCleanup(cancel, cleanups)
+				return err
+			}
 			config.Context = stream.Context()
 			streaming.Run(&ssePayloadWriter{stream: stream}, config)
 			return stream.Err()

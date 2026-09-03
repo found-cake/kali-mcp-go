@@ -27,7 +27,7 @@ func mustParseSSEEvents(t *testing.T, body string) []dto.StreamEvent {
 	events := make([]dto.StreamEvent, 0, len(chunks))
 	for _, chunk := range chunks {
 		chunk = strings.TrimSpace(chunk)
-		if chunk == "" {
+		if chunk == "" || strings.HasPrefix(chunk, ":") {
 			continue
 		}
 		if !strings.HasPrefix(chunk, "data: ") {

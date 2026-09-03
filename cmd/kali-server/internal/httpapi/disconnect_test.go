@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bufio"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"testing"
@@ -75,5 +76,48 @@ func TestSendToolStreamReleasesExecutionLeaseAfterClientDisconnect(t *testing.T)
 	defer probe.Body.Close()
 	if probe.StatusCode != fiber.StatusOK {
 		t.Fatalf("execution lease remained held: status=%d", probe.StatusCode)
+	}
+}
+
+func TestSendToolStreamFlushesAnInitialFrame(t *testing.T) {
+	// Given: an SSE tool that produces no output before a long disconnect-probe interval.
+	app := fiber.New()
+	lines := make(chan executor.Line)
+	close(lines)
+	done := make(chan *executor.Result, 1)
+	app.Get("/stream", func(c fiber.Ctx) error {
+		return sendToolStream(c, lines, done, func() {}, 2*time.Second)
+	})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- app.Listener(listener, fiber.ListenConfig{DisableStartupMessage: true}) }()
+	t.Cleanup(func() {
+		_ = app.Shutdown()
+		<-serverDone
+	})
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+
+	// When: a client opens the quiet stream.
+	response, err := client.Get("http://" + listener.Addr().String() + "/stream")
+	if err != nil {
+		t.Fatalf("open quiet stream before the probe interval: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Then: headers and an initial SSE frame are available immediately.
+	reader := bufio.NewReader(response.Body)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read initial frame: %v", err)
+	}
+	if line != ":\n" {
+		t.Fatalf("unexpected initial frame: %q", line)
+	}
+	done <- &executor.Result{}
+	if _, err := io.ReadAll(response.Body); err != nil {
+		t.Fatalf("read terminal frame: %v", err)
 	}
 }
