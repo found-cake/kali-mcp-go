@@ -138,15 +138,16 @@ func TestRunWritesFallbackWhenDoneClosesWithoutValue(t *testing.T) {
 
 func TestWriteDoneFallbackEscapesJSONSafely(t *testing.T) {
 	// Given: a fallback error containing a JSON control character.
+	callID := "call-\"quoted\\value"
 	buffer := &strings.Builder{}
 	writer := bufio.NewWriter(buffer)
 
 	// When: the fallback event is serialized.
-	writeStreamDoneFallback(writer, "call-fallback", "bad\x00value")
+	writeStreamDoneFallback(writer, callID, "bad\x00value")
 
 	// Then: the decoded value round-trips while the payload remains escaped.
 	events := parseEvents(t, buffer.String())
-	if len(events) != 1 || events[0].CallID != "call-fallback" || events[0].Error != "bad\x00value" || !strings.Contains(buffer.String(), `\u0000`) {
+	if len(events) != 1 || events[0].CallID != callID || events[0].Error != "bad\x00value" || !strings.Contains(buffer.String(), `\u0000`) {
 		t.Fatalf("unexpected escaped fallback: events=%+v payload=%q", events, buffer.String())
 	}
 }

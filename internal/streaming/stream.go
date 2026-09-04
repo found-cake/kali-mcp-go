@@ -197,11 +197,22 @@ func writeStreamDoneFallback(w Writer, callID, message string) {
 	returnCode := -1
 	payload, err := json.Marshal(dto.StreamEvent{CallID: callID, Done: true, ReturnCode: &returnCode, Error: message})
 	if err != nil {
-		encodedCallID, _ := json.Marshal(callID)
-		_, _ = w.WriteString("data: {\"call_id\":" + string(encodedCallID) + ",\"done\":true,\"return_code\":-1,\"error\":\"internal error: failed to encode fallback event\"}\n\n")
-		_ = w.Flush()
+		payload, err = json.Marshal(struct {
+			CallID     string `json:"call_id"`
+			Done       bool   `json:"done"`
+			ReturnCode int    `json:"return_code"`
+			Error      string `json:"error"`
+		}{
+			CallID:     callID,
+			Done:       true,
+			ReturnCode: returnCode,
+			Error:      "internal error: failed to encode fallback event",
+		})
+		if err != nil {
+			payload = []byte(`{"done":true,"return_code":-1,"error":"internal error: failed to encode fallback event"}`)
+		}
+	}
+	if err := writeStreamPayload(w, payload); err != nil {
 		return
 	}
-	_, _ = w.WriteString("data: " + string(payload) + "\n\n")
-	_ = w.Flush()
 }
