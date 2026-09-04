@@ -173,7 +173,13 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		}
 	case "jwt_analyze":
 		if result.JWTAnalysis != nil && result.JWTAnalysis.ParseStatus == dto.JWTParsed {
-			result.ClassificationReason = "jwt_structure_parsed_without_reliable_finding_classifier"
+			if strings.Contains(output, "cannot find a valid jwt") {
+				result.FindingStatus = dto.FindingsInconclusive
+				result.PartialResults = true
+				result.ClassificationReason = "jwt_live_token_not_observed"
+			} else {
+				result.ClassificationReason = "jwt_structure_parsed_without_reliable_finding_classifier"
+			}
 		}
 	}
 	finalizeClassifiedResult(&result)

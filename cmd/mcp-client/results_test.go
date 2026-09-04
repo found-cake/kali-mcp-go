@@ -217,3 +217,22 @@ func TestClassifyJWTResultExplainsMalformedInput(t *testing.T) {
 		t.Fatalf("unexpected JWT classification: %+v", result)
 	}
 }
+
+func TestClassifyJWTResultMarksMissingLiveTokenInconclusive(t *testing.T) {
+	// Given: offline parsing succeeded, but jwt_tool could not obtain a token from the live target.
+	input := dto.ToolResult{
+		ReturnCode: 0,
+		Stderr:     "Cannot find a valid JWT",
+		JWTAnalysis: &dto.JWTAnalysisMetadata{
+			ParseStatus: dto.JWTParsed,
+		},
+	}
+
+	// When: the MCP boundary classifies the otherwise successful tool execution.
+	result := classifyToolResult("jwt_analyze", input)
+
+	// Then: successful execution is kept separate from the inconclusive live analysis.
+	if result.ExecutionStatus != dto.ExecutionSucceeded || result.FindingStatus != dto.FindingsInconclusive || !result.PartialResults || result.ClassificationReason != "jwt_live_token_not_observed" {
+		t.Fatalf("unexpected JWT live classification: %+v", result)
+	}
+}
