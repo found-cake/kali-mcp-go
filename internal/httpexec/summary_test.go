@@ -47,6 +47,11 @@ func TestSummarizeHTTPResponseDetectsHTMLRenderedStackFrames(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "semantic stack container without exposed frames",
+			body: `<html><ul id="stacktrace"></ul></html>`,
+			want: true,
+		},
+		{
 			name: "internal path without a frame",
 			body: `<html><p>Request failed in /srv/routes/search.js:42:15</p></html>`,
 			want: false,

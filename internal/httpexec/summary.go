@@ -18,10 +18,13 @@ import (
 const maximumHTTPBodyExcerptBytes = 1024
 
 var (
-	sensitiveResponsePattern = regexp.MustCompile(`(?i)(password|passwd|secret|token|api[-_]?key|authorization|cookie)["' ]*[:=]`)
-	stackTracePattern        = regexp.MustCompile(`(?im)(traceback \(most recent call last\)|^[[:space:]]+at[[:space:]]+[^[:space:]]+|"stack"[[:space:]]*:|panic:[[:space:]]|system\.[a-z.]*exception)`)
-	htmlLineBreakPattern     = regexp.MustCompile(`(?i)<\s*(?:br\s*/?|/?(?:li|pre|p|div|ul|ol)\b[^>]*)>`)
-	htmlStackFramePattern    = regexp.MustCompile(`(?im)^[[:space:]]*at[[:space:]]+(?:(?:[^[:space:]()]+[[:space:]]+)?\(?[^()\r\n]+:[0-9]+(?::[0-9]+)?\)?|[[:alnum:]_.$<>/]+\(.*:[0-9]+\))[[:space:]]*$`)
+	sensitiveResponsePattern  = regexp.MustCompile(`(?i)(password|passwd|secret|token|api[-_]?key|authorization|cookie)["' ]*[:=]`)
+	stackTracePattern         = regexp.MustCompile(`(?im)(traceback \(most recent call last\)|^[[:space:]]+at[[:space:]]+[^[:space:]]+|"stack"[[:space:]]*:|panic:[[:space:]]|system\.[a-z.]*exception)`)
+	htmlLineBreakPattern      = regexp.MustCompile(`(?i)<\s*(?:br\s*/?|/?(?:li|pre|p|div|ul|ol)\b[^>]*)>`)
+	htmlStackFramePattern     = regexp.MustCompile(`(?im)^[[:space:]]*at[[:space:]]+(?:(?:[^[:space:]()]+[[:space:]]+)?\(?[^()\r\n]+:[0-9]+(?::[0-9]+)?\)?|[[:alnum:]_.$<>/]+\(.*:[0-9]+\))[[:space:]]*$`)
+	htmlStackContainerPattern = regexp.MustCompile(
+		`(?i)<[^>]*\b(?:id|class)\s*=\s*["'][^"']*\b(?:stack[-_[:space:]]?trace|traceback)\b[^"']*["'][^>]*>`,
+	)
 )
 
 type httpResponseSummaryInput struct {
@@ -39,9 +42,10 @@ func summarizeHTTPResponse(input httpResponseSummaryInput) *dto.HTTPBodySummary 
 	htmlStackText = htmlLineBreakPattern.ReplaceAllString(htmlStackText, "\n")
 	bodySensitive := sensitiveResponsePattern.MatchString(bodyText)
 	summary := &dto.HTTPBodySummary{
-		BodySHA256:             hex.EncodeToString(digest[:]),
-		Location:               tools.RedactURL(input.Headers.Get("Location"), input.Secrets),
-		StackTraceSuspected:    stackTracePattern.MatchString(bodyText) || htmlStackFramePattern.MatchString(htmlStackText),
+		BodySHA256: hex.EncodeToString(digest[:]),
+		Location:   tools.RedactURL(input.Headers.Get("Location"), input.Secrets),
+		StackTraceSuspected: stackTracePattern.MatchString(bodyText) ||
+			htmlStackFramePattern.MatchString(htmlStackText) || htmlStackContainerPattern.MatchString(bodyText),
 		SensitiveDataSuspected: bodySensitive || input.Headers.Get("Set-Cookie") != "",
 	}
 	if input.UTF8 {
