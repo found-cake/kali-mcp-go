@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"html"
 	"net/http"
 	"regexp"
 	"slices"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/found-cake/kali-mcp-go/internal/tools"
@@ -18,6 +20,8 @@ const maximumHTTPBodyExcerptBytes = 1024
 var (
 	sensitiveResponsePattern = regexp.MustCompile(`(?i)(password|passwd|secret|token|api[-_]?key|authorization|cookie)["' ]*[:=]`)
 	stackTracePattern        = regexp.MustCompile(`(?im)(traceback \(most recent call last\)|^[[:space:]]+at[[:space:]]+[^[:space:]]+|"stack"[[:space:]]*:|panic:[[:space:]]|system\.[a-z.]*exception)`)
+	htmlLineBreakPattern     = regexp.MustCompile(`(?i)<\s*(?:br\s*/?|/?(?:li|pre|p|div|ul|ol)\b[^>]*)>`)
+	htmlStackFramePattern    = regexp.MustCompile(`(?im)^[[:space:]]*at[[:space:]]+(?:(?:[^[:space:]()]+[[:space:]]+)?\(?[^()\r\n]+:[0-9]+(?::[0-9]+)?\)?|[[:alnum:]_.$<>/]+\(.*:[0-9]+\))[[:space:]]*$`)
 )
 
 type httpResponseSummaryInput struct {
@@ -30,11 +34,14 @@ type httpResponseSummaryInput struct {
 func summarizeHTTPResponse(input httpResponseSummaryInput) *dto.HTTPBodySummary {
 	digest := sha256.Sum256(input.Body)
 	bodyText := string(input.Body)
+	htmlStackText := html.UnescapeString(bodyText)
+	htmlStackText = strings.ReplaceAll(htmlStackText, "\u00a0", " ")
+	htmlStackText = htmlLineBreakPattern.ReplaceAllString(htmlStackText, "\n")
 	bodySensitive := sensitiveResponsePattern.MatchString(bodyText)
 	summary := &dto.HTTPBodySummary{
 		BodySHA256:             hex.EncodeToString(digest[:]),
 		Location:               tools.RedactURL(input.Headers.Get("Location"), input.Secrets),
-		StackTraceSuspected:    stackTracePattern.MatchString(bodyText),
+		StackTraceSuspected:    stackTracePattern.MatchString(bodyText) || htmlStackFramePattern.MatchString(htmlStackText),
 		SensitiveDataSuspected: bodySensitive || input.Headers.Get("Set-Cookie") != "",
 	}
 	if input.UTF8 {

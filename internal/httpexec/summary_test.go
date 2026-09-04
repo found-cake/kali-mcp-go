@@ -29,6 +29,46 @@ func TestSummarizeHTTPResponsePreservesSensitiveJSONAndLocationValues(t *testing
 	}
 }
 
+func TestSummarizeHTTPResponseDetectsHTMLRenderedStackFrames(t *testing.T) {
+	// Given: different web backends render source frames through HTML separators and entities.
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{
+			name: "JavaScript frame after a break tag",
+			body: `<html><pre>Error: failed<br>&nbsp;&nbsp;at search (/srv/routes/search.js:42:15)</pre></html>`,
+			want: true,
+		},
+		{
+			name: "JVM frame in a list item",
+			body: `<html><ul class="error"><li>&#160;&#160;at com.example.Search.run(Search.java:42)</li></ul></html>`,
+			want: true,
+		},
+		{
+			name: "internal path without a frame",
+			body: `<html><p>Request failed in /srv/routes/search.js:42:15</p></html>`,
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// When: the raw HTTP body is summarized without altering its evidence.
+			summary := summarizeHTTPResponse(httpResponseSummaryInput{Body: []byte(test.body), UTF8: true})
+
+			// Then: only bodies containing stack-frame syntax are marked as suspected traces.
+			if summary.StackTraceSuspected != test.want {
+				t.Fatalf("StackTraceSuspected=%t want=%t body=%q", summary.StackTraceSuspected, test.want, test.body)
+			}
+			if summary.BodyExcerpt != test.body {
+				t.Fatalf("response evidence was altered: got=%q want=%q", summary.BodyExcerpt, test.body)
+			}
+		})
+	}
+}
+
 func TestHTTPClientRejectsCrossOriginRedirect(t *testing.T) {
 	// Given: a target that redirects to another origin.
 	destination := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
