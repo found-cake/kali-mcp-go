@@ -50,7 +50,7 @@ func handleBrowserStream(c fiber.Ctx) error {
 }
 
 func newBrowserScreenshotPath() (string, error) {
-	return newBrowserHandoffFile("kali-mcp-browser-*.jpg", nil)
+	return newBrowserHandoffFile("kali-mcp-browser-*.jpg", nil, 0o620)
 }
 
 func newBrowserHeadersPath(headers map[string]string) (string, error) {
@@ -58,10 +58,10 @@ func newBrowserHeadersPath(headers map[string]string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("encode browser headers: %w", err)
 	}
-	return newBrowserHandoffFile("kali-mcp-browser-headers-*.json", content)
+	return newBrowserHandoffFile("kali-mcp-browser-headers-*.json", content, 0o640)
 }
 
-func newBrowserHandoffFile(pattern string, content []byte) (string, error) {
+func newBrowserHandoffFile(pattern string, content []byte, containerMode os.FileMode) (string, error) {
 	directory := os.Getenv(browserOutputDirectoryEnv)
 	file, err := os.CreateTemp(directory, pattern)
 	if err != nil {
@@ -74,7 +74,7 @@ func newBrowserHandoffFile(pattern string, content []byte) (string, error) {
 		}
 	}
 	if directory != "" {
-		if err := file.Chmod(0o620); err != nil {
+		if err := file.Chmod(containerMode); err != nil {
 			return "", errors.Join(err, file.Close(), os.Remove(path))
 		}
 	}

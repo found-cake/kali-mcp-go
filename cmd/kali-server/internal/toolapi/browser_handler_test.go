@@ -50,7 +50,7 @@ func TestNewBrowserHeadersPathCreatesPrivateReadableHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat browser headers handoff: %v", err)
 	}
-	if filepath.Dir(path) != directory || info.Mode().Perm() != 0o620 {
+	if filepath.Dir(path) != directory || info.Mode().Perm() != 0o640 {
 		t.Fatalf("unexpected browser headers handoff: path=%s mode=%o", path, info.Mode().Perm())
 	}
 	if got["Authorization"] != want["Authorization"] || got["Cookie"] != want["Cookie"] {
