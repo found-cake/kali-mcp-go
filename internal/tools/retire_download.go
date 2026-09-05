@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"golang.org/x/net/html"
 )
 
@@ -25,12 +26,12 @@ type scriptAsset struct {
 	inline string
 }
 
-func downloadPageScripts(ctx context.Context, pageURL, destination string) error {
-	parsedURL, err := parsePublicScriptURL(pageURL)
+func downloadPageScripts(ctx context.Context, request dto.RetireRequest, destination string) error {
+	parsedURL, err := parsePublicScriptURL(request.URL)
 	if err != nil {
 		return fmt.Errorf("parse url: %w", err)
 	}
-	client := scopedHTTPClient(parsedURL)
+	client := scopedHTTPClient(parsedURL, request.Headers)
 	page, err := fetchBytes(ctx, client, parsedURL.String(), maxPageBytes)
 	if err != nil {
 		return fmt.Errorf("fetch page: %w", err)
@@ -61,7 +62,8 @@ func downloadPageScripts(ctx context.Context, pageURL, destination string) error
 	return nil
 }
 
-func downloadExplicitScripts(ctx context.Context, scriptURLs []string, destination string) error {
+func downloadExplicitScripts(ctx context.Context, request dto.RetireRequest, destination string) error {
+	scriptURLs := request.ScriptURLs
 	if len(scriptURLs) == 0 || len(scriptURLs) > maxScripts {
 		return fmt.Errorf("script_urls must contain between 1 and %d URLs", maxScripts)
 	}
@@ -69,7 +71,7 @@ func downloadExplicitScripts(ctx context.Context, scriptURLs []string, destinati
 	if err != nil {
 		return fmt.Errorf("parse script URL: %w", err)
 	}
-	client := scopedHTTPClient(first)
+	client := scopedHTTPClient(first, request.Headers)
 	seen := make(map[string]bool, len(scriptURLs))
 	index := 0
 	for _, address := range scriptURLs {
@@ -127,9 +129,29 @@ func fetchBytes(ctx context.Context, client *http.Client, address string, limit 
 	return content, nil
 }
 
-func scopedHTTPClient(origin *url.URL) *http.Client {
+type headerTransport struct {
+	headers http.Header
+}
+
+func (transport headerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	clone := request.Clone(request.Context())
+	clone.Header = request.Header.Clone()
+	for name, values := range transport.headers {
+		for _, value := range values {
+			clone.Header.Add(name, value)
+		}
+	}
+	return http.DefaultTransport.RoundTrip(clone)
+}
+
+func scopedHTTPClient(origin *url.URL, headers map[string]string) *http.Client {
+	requestHeaders := make(http.Header, len(headers))
+	for name, value := range headers {
+		requestHeaders.Set(name, value)
+	}
 	return &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		Transport: headerTransport{headers: requestHeaders},
 		CheckRedirect: func(request *http.Request, _ []*http.Request) error {
 			if !sameParsedOrigin(origin, request.URL) {
 				return fmt.Errorf("redirect outside selected target origin")

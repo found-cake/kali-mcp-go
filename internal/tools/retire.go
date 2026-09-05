@@ -37,9 +37,9 @@ func PrepareRetire(ctx context.Context, request dto.RetireRequest) (*RetirePlan,
 	plan := &RetirePlan{tempDir: tempDir}
 	var downloadErr error
 	if request.URL != "" {
-		downloadErr = downloadPageScripts(ctx, request.URL, tempDir)
+		downloadErr = downloadPageScripts(ctx, request, tempDir)
 	} else {
-		downloadErr = downloadExplicitScripts(ctx, request.ScriptURLs, tempDir)
+		downloadErr = downloadExplicitScripts(ctx, request, tempDir)
 	}
 	if downloadErr != nil {
 		plan.Cleanup()

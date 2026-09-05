@@ -34,6 +34,32 @@ function browserLaunchOptions(executablePath) {
   };
 }
 
+function browserAuthentication(headers, targetURL) {
+  const extraHTTPHeaders = {};
+  const cookies = [];
+  const origin = new URL(targetURL).origin;
+
+  for (const [name, value] of Object.entries(headers || {})) {
+    if (name.toLowerCase() !== "cookie") {
+      extraHTTPHeaders[name] = value;
+      continue;
+    }
+    for (const segment of value.split(";")) {
+      const separator = segment.indexOf("=");
+      const cookieName = segment.slice(0, separator).trim();
+      if (separator <= 0 || cookieName === "") {
+        throw new Error("Cookie header must contain name=value pairs");
+      }
+      cookies.push({
+        name: cookieName,
+        value: segment.slice(separator + 1).trim(),
+        url: origin,
+      });
+    }
+  }
+  return { extraHTTPHeaders, cookies };
+}
+
 function navigationEvidence(response) {
   if (!response) {
     return {
@@ -50,6 +76,7 @@ function navigationEvidence(response) {
 }
 
 module.exports = {
+  browserAuthentication,
   browserLaunchOptions,
   createBoundedCollector,
   navigationEvidence,

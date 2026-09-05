@@ -104,7 +104,7 @@ func versionLine(name, output string) string {
 func redactArgs(name string, args []string) []string {
 	redacted := append([]string(nil), args...)
 	for index := range redacted {
-		if index > 0 && name == "browser-check" && redacted[index-1] == "--screenshot-path" {
+		if index > 0 && name == "browser-check" && (redacted[index-1] == "--screenshot-path" || redacted[index-1] == "--headers-file") {
 			redacted[index] = "[EPHEMERAL_FILE]"
 			continue
 		}

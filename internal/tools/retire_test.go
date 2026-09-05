@@ -96,3 +96,26 @@ func TestPrepareRetireDownloadsPublicBundlesAndCleansWorkspace(t *testing.T) {
 		t.Fatalf("expected workspace cleanup, got %v", err)
 	}
 }
+
+func TestPrepareRetireSendsHeadersToPageAndBundleDownloads(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer test-token" || request.Header.Get("Cookie") != "session=alpha" {
+			t.Errorf("missing authenticated download headers: %#v", request.Header)
+		}
+		if request.URL.Path == "/app.js" {
+			_, _ = w.Write([]byte("window.authenticated = true;"))
+			return
+		}
+		_, _ = w.Write([]byte(`<script src="/app.js"></script>`))
+	}))
+	defer server.Close()
+
+	plan, err := PrepareRetire(context.Background(), dto.RetireRequest{
+		URL:     server.URL,
+		Headers: map[string]string{"Authorization": "Bearer test-token", "Cookie": "session=alpha"},
+	})
+	if err != nil {
+		t.Fatalf("prepare authenticated Retire scan: %v", err)
+	}
+	defer plan.Cleanup()
+}

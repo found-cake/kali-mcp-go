@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 const { chromium } = require("/usr/local/lib/node_modules/playwright");
-const { writeFile } = require("node:fs/promises");
+const { readFile, writeFile } = require("node:fs/promises");
 const {
+  browserAuthentication,
   browserLaunchOptions,
   createBoundedCollector,
   navigationEvidence,
@@ -34,6 +35,9 @@ function parseArgs(argv) {
       case "--screenshot-path":
         options.screenshotPath = argv[++index];
         break;
+      case "--headers-file":
+        options.headersFile = argv[++index];
+        break;
       default:
         throw new Error(`unknown argument: ${argv[index]}`);
     }
@@ -52,7 +56,15 @@ async function main() {
   const executablePath = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
   const browser = await chromium.launch(browserLaunchOptions(executablePath));
   try {
-    const page = await browser.newPage();
+    const headers = options.headersFile
+      ? JSON.parse(await readFile(options.headersFile, "utf8"))
+      : {};
+    const authentication = browserAuthentication(headers, options.url);
+    const context = await browser.newContext({ extraHTTPHeaders: authentication.extraHTTPHeaders });
+    if (authentication.cookies.length > 0) {
+      await context.addCookies(authentication.cookies);
+    }
+    const page = await context.newPage();
     const dialogs = createBoundedCollector(maxEvidenceEvents);
     const consoleMessages = createBoundedCollector(maxEvidenceEvents);
     const pageErrors = createBoundedCollector(maxEvidenceEvents);
@@ -125,6 +137,7 @@ async function main() {
       }
     }
     process.stdout.write(`${JSON.stringify(result)}\n`);
+    await context.close();
   } finally {
     await browser.close();
   }

@@ -185,23 +185,25 @@ func (r DalfoxRequest) GetRequestTimeout() int { return r.Timeout }
 
 type BrowserRequest struct {
 	ScanOptions
-	URL               string `json:"url,omitempty" jsonschema:"full page URL including SPA path, hash route, fragment payload, or query payload; may extend the browser origin from target_context"`
-	WaitMilliseconds  int    `json:"wait_milliseconds,omitempty" jsonschema:"time to observe dialogs and DOM changes after load"`
-	IncludeDOM        bool   `json:"include_dom,omitempty" jsonschema:"include up to 200KB of rendered DOM in the result"`
-	CaptureNetwork    bool   `json:"capture_network,omitempty" jsonschema:"capture a bounded raw network artifact whose script URLs can be passed to retirejs_scan"`
-	CaptureScreenshot bool   `json:"capture_screenshot,omitempty" jsonschema:"capture a viewport screenshot as a sensitive related artifact"`
-	Timeout           int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
+	URL               string            `json:"url,omitempty" jsonschema:"full page URL including SPA path, hash route, fragment payload, or query payload; may extend the browser origin from target_context"`
+	Headers           map[string]string `json:"headers,omitempty" jsonschema:"per-call HTTP headers; Cookie is installed in the isolated browser cookie jar and no values persist after the call"`
+	WaitMilliseconds  int               `json:"wait_milliseconds,omitempty" jsonschema:"time to observe dialogs and DOM changes after load"`
+	IncludeDOM        bool              `json:"include_dom,omitempty" jsonschema:"include up to 200KB of rendered DOM in the result"`
+	CaptureNetwork    bool              `json:"capture_network,omitempty" jsonschema:"capture a bounded raw network artifact whose script URLs can be passed to retirejs_scan"`
+	CaptureScreenshot bool              `json:"capture_screenshot,omitempty" jsonschema:"capture a viewport screenshot as a sensitive related artifact"`
+	Timeout           int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds (0 = default 300s)"`
 }
 
 func (r BrowserRequest) GetRequestTimeout() int { return r.Timeout }
 
 type RetireRequest struct {
 	ScanOptions
-	Path           string   `json:"path,omitempty" jsonschema:"file or directory containing JavaScript bundles; mutually exclusive with url and script_urls"`
-	URL            string   `json:"url,omitempty" jsonschema:"page URL whose same-origin public JavaScript bundles should be downloaded and scanned; mutually exclusive with path and script_urls"`
-	ScriptURLs     []string `json:"script_urls,omitempty" jsonschema:"explicit same-origin public JavaScript bundle URLs observed by browser_check; requires target_context and is mutually exclusive with path and url"`
-	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Retire.js arguments excluding path overrides"`
-	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
+	Path           string            `json:"path,omitempty" jsonschema:"file or directory containing JavaScript bundles; mutually exclusive with url and script_urls"`
+	URL            string            `json:"url,omitempty" jsonschema:"page URL whose same-origin public JavaScript bundles should be downloaded and scanned; mutually exclusive with path and script_urls"`
+	ScriptURLs     []string          `json:"script_urls,omitempty" jsonschema:"explicit same-origin public JavaScript bundle URLs observed by browser_check; requires target_context and is mutually exclusive with path and url"`
+	Headers        map[string]string `json:"headers,omitempty" jsonschema:"per-call HTTP headers used only for URL or script_urls downloads; no values persist after the call"`
+	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra Retire.js arguments excluding path overrides"`
+	Timeout        int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
 func (r RetireRequest) GetRequestTimeout() int { return r.Timeout }

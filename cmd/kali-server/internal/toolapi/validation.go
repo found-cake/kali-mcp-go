@@ -217,7 +217,7 @@ func validateBrowserRequest(req dto.BrowserRequest) error {
 	if req.WaitMilliseconds < 0 || req.WaitMilliseconds > maxBrowserWaitMilliseconds {
 		return fmt.Errorf("wait_milliseconds must be between 0 and %d", maxBrowserWaitMilliseconds)
 	}
-	return nil
+	return validateAuthenticatedHeaders(req.Headers)
 }
 
 func validateOSVRequest(req dto.OSVRequest) error {

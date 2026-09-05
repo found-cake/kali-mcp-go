@@ -19,6 +19,12 @@ func validateRetireRequest(request dto.RetireRequest) error {
 	if provided != 1 {
 		return fmt.Errorf("provide exactly one of path, url, or script_urls")
 	}
+	if request.Path != "" && len(request.Headers) > 0 {
+		return fmt.Errorf("headers are only used for url or script_urls downloads")
+	}
+	if err := validateAuthenticatedHeaders(request.Headers); err != nil {
+		return err
+	}
 	if len(request.ScriptURLs) == 0 {
 		return nil
 	}

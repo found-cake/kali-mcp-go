@@ -2,12 +2,26 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  browserAuthentication,
   browserLaunchOptions,
   createBoundedCollector,
   navigationEvidence,
   networkEvidenceURL,
   truncateEvidenceText,
 } = require("./browser-evidence.cjs");
+
+test("browser authentication separates Cookie into the isolated jar", () => {
+  const authentication = browserAuthentication(
+    { Authorization: "Bearer test-token", Cookie: "session=alpha; preference=dark=mode" },
+    "https://example.test/app",
+  );
+
+  assert.deepEqual(authentication.extraHTTPHeaders, { Authorization: "Bearer test-token" });
+  assert.deepEqual(authentication.cookies, [
+    { name: "session", value: "alpha", url: "https://example.test" },
+    { name: "preference", value: "dark=mode", url: "https://example.test" },
+  ]);
+});
 
 test("collector rejects events after its evidence limit", () => {
   const collector = createBoundedCollector(2);

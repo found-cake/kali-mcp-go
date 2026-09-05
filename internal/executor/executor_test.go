@@ -215,6 +215,16 @@ func TestRedactArgsHidesBrowserEvidencePath(t *testing.T) {
 	}
 }
 
+func TestRedactArgsHidesBrowserHeadersPath(t *testing.T) {
+	args := []string{"--url", "https://example.com", "--headers-file", "/tmp/private-headers.json"}
+
+	redacted := redactArgs("browser-check", args)
+
+	if strings.Contains(strings.Join(redacted, " "), "/tmp/private-headers.json") {
+		t.Fatalf("ephemeral headers path remains in argv metadata: %v", redacted)
+	}
+}
+
 func TestRedactArgsHidesInlineNucleiHeaders(t *testing.T) {
 	// Given: safe Nuclei arguments containing sensitive inline header values.
 	args := []string{
