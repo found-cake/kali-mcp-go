@@ -76,8 +76,9 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 			Then: &jsonschema.Schema{Properties: profileProperties},
 		})
 	}
+	description := applyToolInputExample(definition.Tool, definition.Description, schema)
 	return &mcp.Tool{
-		Name: definition.Tool, Description: definition.Description,
+		Name: definition.Tool, Description: description,
 		InputSchema: schema, OutputSchema: toolResultOutputSchema(),
 	}, nil
 }
