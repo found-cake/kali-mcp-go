@@ -140,13 +140,24 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 			result.FindingStatus = dto.FindingsInconclusive
 			result.ClassificationReason = "nuclei_output_not_valid_jsonl"
 		}
-	case "ffuf_scan", "feroxbuster_scan":
+	case "ffuf_scan":
 		if strings.TrimSpace(result.Stdout) == "" {
 			result.FindingStatus = dto.FindingsNotDetected
 			result.ClassificationReason = "scanner_completed_without_output"
-		} else {
+		} else if ffufReportedFinding(result.Stdout) {
 			result.FindingStatus = dto.FindingsDetected
 			result.ClassificationReason = "scanner_emitted_findings"
+		} else {
+			result.FindingStatus = dto.FindingsInconclusive
+			result.ClassificationReason = "ffuf_output_not_valid_jsonl"
+		}
+	case "feroxbuster_scan":
+		if feroxbusterReportedFinding(result.Stdout) {
+			result.FindingStatus = dto.FindingsDetected
+			result.ClassificationReason = "scanner_emitted_findings"
+		} else {
+			result.FindingStatus = dto.FindingsNotDetected
+			result.ClassificationReason = "scanner_completed_without_findings"
 		}
 	case "whatweb_scan":
 		if strings.TrimSpace(output) == "" || strings.Contains(output, "error opening:") {

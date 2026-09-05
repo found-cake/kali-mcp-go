@@ -145,7 +145,24 @@ func TestNucleiArgsExcludeUnsafeTemplatesByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build nuclei args: %v", err)
 	}
-	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-disable-update-check", "-etags", "dos,fuzz,dast,oast,interactsh", "-no-interactsh"}
+	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-disable-update-check", "-stats-json", "-stats-interval", "5", "-etags", "dos,fuzz,dast,oast,interactsh", "-no-interactsh"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
+	}
+}
+
+func TestFeroxbusterArgsEnableMachineReadableFinalStatistics(t *testing.T) {
+	wordlist := filepath.Join(t.TempDir(), "words.txt")
+	if err := os.WriteFile(wordlist, []byte("admin\n"), 0o600); err != nil {
+		t.Fatalf("write wordlist: %v", err)
+	}
+	t.Setenv(defaultDirWordlistEnv, wordlist)
+
+	args, err := FeroxbusterArgs(dto.FeroxbusterRequest{URL: "https://example.com"})
+	if err != nil {
+		t.Fatalf("build Feroxbuster args: %v", err)
+	}
+	want := []string{"feroxbuster", "--url", "https://example.com", "--wordlist", wordlist, "--auto-tune", "--json", "--output", "/dev/stdout"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}

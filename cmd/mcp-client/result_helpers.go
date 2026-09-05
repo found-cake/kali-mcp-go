@@ -57,6 +57,20 @@ func ffufReportedFinding(output string) bool {
 	return false
 }
 
+func feroxbusterReportedFinding(output string) bool {
+	for line := range strings.Lines(output) {
+		var result struct {
+			Type   string `json:"type"`
+			URL    string `json:"url"`
+			Status int    `json:"status"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &result); err == nil && result.Type == "response" && result.URL != "" && result.Status >= 100 && result.Status <= 599 {
+			return true
+		}
+	}
+	return false
+}
+
 func niktoReportedFinding(output string) bool {
 	for line := range strings.Lines(output) {
 		fields := strings.Fields(strings.ToLower(line))

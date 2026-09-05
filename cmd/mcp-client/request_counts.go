@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -8,15 +9,74 @@ import (
 )
 
 func attachReportedRequestCount(tool string, result *dto.ToolResult) {
-	if tool != "nikto_scan" || result.HTTPRequests != nil {
+	if result.HTTPRequests != nil {
 		return
 	}
-	count, ok := parseNiktoRequestCount(result.Stdout + "\n" + result.Stderr)
+	output := result.Stdout + "\n" + result.Stderr
+	var count int
+	var ok bool
+	switch tool {
+	case "nikto_scan":
+		count, ok = parseNiktoRequestCount(output)
+	case "feroxbuster_scan":
+		count, ok = parseFeroxbusterRequestCount(output)
+	case "nuclei_scan":
+		count, ok = parseNucleiRequestCount(output)
+	}
 	if !ok {
 		return
 	}
 	result.HTTPRequests = &count
 	result.RequestCountSource = dto.RequestCountParsed
+}
+
+func parseFeroxbusterRequestCount(output string) (int, bool) {
+	return parseStructuredRequestCount(output, func(event scannerStatistics) bool {
+		return event.Type == "statistics"
+	})
+}
+
+func parseNucleiRequestCount(output string) (int, bool) {
+	return parseStructuredRequestCount(output, func(event scannerStatistics) bool {
+		return event.Duration != "" && event.StartedAt != ""
+	})
+}
+
+type scannerStatistics struct {
+	Type      string          `json:"type"`
+	Duration  string          `json:"duration"`
+	StartedAt string          `json:"startedAt"`
+	Requests  json.RawMessage `json:"requests"`
+}
+
+func parseStructuredRequestCount(output string, matches func(scannerStatistics) bool) (int, bool) {
+	maximum := 0
+	found := false
+	for line := range strings.Lines(output) {
+		var event scannerStatistics
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &event); err != nil || !matches(event) {
+			continue
+		}
+		count, ok := parseJSONInteger(event.Requests)
+		if ok && (!found || count > maximum) {
+			maximum = count
+			found = true
+		}
+	}
+	return maximum, found
+}
+
+func parseJSONInteger(raw json.RawMessage) (int, bool) {
+	var count int
+	if err := json.Unmarshal(raw, &count); err == nil && count >= 0 {
+		return count, true
+	}
+	var encoded string
+	if err := json.Unmarshal(raw, &encoded); err != nil {
+		return 0, false
+	}
+	count, err := strconv.Atoi(encoded)
+	return count, err == nil && count >= 0
 }
 
 func parseNiktoRequestCount(output string) (int, bool) {

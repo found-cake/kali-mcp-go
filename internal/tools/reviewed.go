@@ -73,7 +73,7 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"feroxbuster", "--url", request.URL, "--wordlist", wordlist, "--auto-tune"}
+	args := []string{"feroxbuster", "--url", request.URL, "--wordlist", wordlist, "--auto-tune", "--json", "--output", "/dev/stdout"}
 	if request.FilterSize != "" {
 		args = append(args, "--filter-size", request.FilterSize)
 	}
@@ -104,7 +104,7 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 	if err := validateNucleiSafety(request); err != nil {
 		return nil, err
 	}
-	args := []string{"nuclei", "-u", request.Target, "-jsonl", "-disable-update-check"}
+	args := []string{"nuclei", "-u", request.Target, "-jsonl", "-disable-update-check", "-stats-json", "-stats-interval", "5"}
 	if request.Severity != "" {
 		args = append(args, "-severity", request.Severity)
 	}
