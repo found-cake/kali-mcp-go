@@ -16,6 +16,9 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	wpscanNonWordPress := toolName == "wpscan_analyze" && result.ReturnCode == 4 && strings.Contains(
 		output, "does not seem to be running wordpress",
 	)
+	ffufMissingKeyword := toolName == "ffuf_scan" && strings.Contains(
+		output, "keyword fuzz defined, but not found in headers, method, url or post data",
+	)
 	switch {
 	case niktoInternalTimeout:
 		result.ExecutionStatus = dto.ExecutionTimedOut
@@ -27,6 +30,9 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	case result.Cancelled:
 		result.ExecutionStatus = dto.ExecutionCancelled
 		result.ClassificationReason = "execution_cancelled"
+	case ffufMissingKeyword:
+		result.ExecutionStatus = dto.ExecutionFailed
+		result.ClassificationReason = "ffuf_missing_fuzz_keyword"
 	case toolName == "osv_scan" && result.ReturnCode == 1 && osvFindingStatus(result.Stdout) == dto.FindingsDetected:
 		result.ExecutionStatus = dto.ExecutionSucceeded
 		result.Success = true
@@ -43,6 +49,13 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		result.ClassificationReason = "no_reliable_finding_classifier"
 	}
 	result.FindingStatus = dto.FindingsUnknown
+	if ffufMissingKeyword {
+		result.FindingStatus = dto.FindingsInconclusive
+		result.Failure = &dto.FailureInfo{
+			Code:    "invalid_fuzz_input",
+			Message: "FFUF did not find its FUZZ input placeholder",
+		}
+	}
 	if wpscanNonWordPress {
 		result.FindingStatus = dto.FindingsNotDetected
 		result.PartialResults = false
