@@ -11,10 +11,13 @@ func TestToolInputExamplesAreExposedInSchemaAndDescription(t *testing.T) {
 	t.Parallel()
 
 	want := map[string]string{
+		"browser_check":        `{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"profile":"browser-xss-confirm"}`,
 		"nmap_scan":            `{"target":"host","scan_type":"-sCV"}`,
 		"nuclei_scan":          `{"target":"https://host","severity":"medium,high,critical"}`,
 		"dalfox_scan":          `{"target":"https://host/?q=FUZZ"}`,
 		"result_artifact_read": `{"artifact_id":"...","limit":65536}`,
+		"retirejs_scan":        `{"url":"https://host/app","headers":{"Authorization":"Bearer ..."},"profile":"safe-recon"}`,
+		"sqlmap_scan":          `{"url":"https://host/search?q=1","test_parameters":"q","profile":"sqli-verify-low-risk"}`,
 	}
 
 	for name, encoded := range want {
