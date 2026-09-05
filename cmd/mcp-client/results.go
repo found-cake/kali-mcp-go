@@ -19,6 +19,7 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	ffufMissingKeyword := toolName == "ffuf_scan" && strings.Contains(
 		output, "keyword fuzz defined, but not found in headers, method, url or post data",
 	)
+	jwtLiveTransportFailed := toolName == "jwt_analyze" && jwtLiveTransportFailure(result)
 	switch {
 	case niktoInternalTimeout:
 		result.ExecutionStatus = dto.ExecutionTimedOut
@@ -33,6 +34,9 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	case ffufMissingKeyword:
 		result.ExecutionStatus = dto.ExecutionFailed
 		result.ClassificationReason = "ffuf_missing_fuzz_keyword"
+	case jwtLiveTransportFailed:
+		result.ExecutionStatus = dto.ExecutionFailed
+		result.ClassificationReason = "jwt_live_transport_failed"
 	case toolName == "osv_scan" && result.ReturnCode == 1 && osvFindingStatus(result.Stdout) == dto.FindingsDetected:
 		result.ExecutionStatus = dto.ExecutionSucceeded
 		result.Success = true
@@ -54,6 +58,15 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		result.Failure = &dto.FailureInfo{
 			Code:    "invalid_fuzz_input",
 			Message: "FFUF did not find its FUZZ input placeholder",
+		}
+	}
+	if jwtLiveTransportFailed {
+		result.FindingStatus = dto.FindingsInconclusive
+		result.PartialResults = true
+		result.Failure = &dto.FailureInfo{
+			Code:      "jwt_live_transport_failed",
+			Message:   "jwt_tool could not reach the live verification target",
+			Retryable: true,
 		}
 	}
 	if wpscanNonWordPress {

@@ -10,7 +10,7 @@ import (
 func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 	args := []string{"jwt_tool", request.Token}
 	if request.TargetURL != "" {
-		args = append(args, "-t", request.TargetURL)
+		args = append(args, "-t", request.TargetURL, "-np")
 	}
 	if request.RequestHeader != "" {
 		args = append(args, "-rh", strings.Replace(request.RequestHeader, "JWT_HERE", request.Token, 1))

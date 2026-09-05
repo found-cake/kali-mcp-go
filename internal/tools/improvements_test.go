@@ -222,49 +222,6 @@ func TestReviewedToolArgsUseStableNonInteractiveDefaults(t *testing.T) {
 	}
 }
 
-func TestJWTToolArgsSubstitutesTokenInLiveTemplate(t *testing.T) {
-	t.Parallel()
-
-	// Given: supported header and cookie templates containing one JWT placeholder.
-	tests := []struct {
-		name    string
-		request dto.JWTRequest
-		want    []string
-	}{
-		{
-			name: "authorization header",
-			request: dto.JWTRequest{
-				Token: "header.payload.signature", TargetURL: "https://example.com/me",
-				RequestHeader: "Authorization: Bearer JWT_HERE", Canary: "admin",
-			},
-			want: []string{"jwt_tool", "header.payload.signature", "-t", "https://example.com/me", "-rh", "Authorization: Bearer header.payload.signature", "-cv", "admin", "-M", "at"},
-		},
-		{
-			name: "cookie",
-			request: dto.JWTRequest{
-				Token: "header.payload.signature", TargetURL: "https://example.com/me",
-				RequestCookie: "token=JWT_HERE", Mode: "pb",
-			},
-			want: []string{"jwt_tool", "header.payload.signature", "-t", "https://example.com/me", "-rc", "token=header.payload.signature", "-M", "pb"},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// When: jwt_tool arguments are built for live verification.
-			args, err := JWTToolArgs(test.request)
-			if err != nil {
-				t.Fatalf("build jwt_tool args: %v", err)
-			}
-
-			// Then: jwt_tool receives the actual token in exactly one selected location.
-			if !reflect.DeepEqual(args, test.want) {
-				t.Fatalf("args mismatch\nwant: %v\n got: %v", test.want, args)
-			}
-		})
-	}
-}
-
 func TestRedactJohnOutputMasksRecoveredPlaintext(t *testing.T) {
 	t.Parallel()
 

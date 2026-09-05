@@ -2,10 +2,34 @@ package main
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func jwtLiveTransportFailure(result dto.ToolResult) bool {
+	if result.JWTAnalysis == nil || result.JWTAnalysis.ParseStatus != dto.JWTParsed || !slices.Contains(result.Execution.ArgvRedacted, "-t") {
+		return false
+	}
+	output := strings.ToLower(result.Stdout + "\n" + result.Stderr)
+	for _, signature := range []string{
+		"proxyerror",
+		"connectionerror",
+		"nameresolutionerror",
+		"failed to establish a new connection",
+		"failed to resolve",
+		"name or service not known",
+		"temporary failure in name resolution",
+		"nodename nor servname provided",
+		"max retries exceeded with url:",
+	} {
+		if strings.Contains(output, signature) {
+			return true
+		}
+	}
+	return false
+}
 
 func gobusterReportedFinding(output string) bool {
 	for line := range strings.Lines(output) {
