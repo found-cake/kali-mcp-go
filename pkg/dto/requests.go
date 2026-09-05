@@ -165,9 +165,10 @@ type JWTRequest struct {
 	RequestHeader  string `json:"request_header,omitempty" jsonschema:"full request header template containing the literal JWT_HERE placeholder; used only with target_url"`
 	RequestCookie  string `json:"request_cookie,omitempty" jsonschema:"request cookie template containing the literal JWT_HERE placeholder; used only with target_url"`
 	Canary         string `json:"canary,omitempty" jsonschema:"response text indicating an accepted token during live verification"`
-	Mode           string `json:"mode,omitempty" jsonschema:"jwt_tool scan mode pb|er|at; defaults to at for live targets"`
+	Mode           string `json:"mode,omitempty" jsonschema:"jwt_tool live mode er|pb|at; defaults to low-risk forced-error mode er; pb and at include command-injection timing probes and require allow_unsafe"`
+	AllowUnsafe    bool   `json:"allow_unsafe,omitempty" jsonschema:"explicitly allow pb or at playbooks that send command-injection timing, path-traversal, SQLi, external-interaction, and common-key probes"`
 	PublicKey      string `json:"public_key,omitempty" jsonschema:"public key path for RS/HS confusion testing"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra jwt_tool arguments excluding live-target overrides"`
+	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra jwt_tool arguments excluding live-target and scan-mode overrides"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 

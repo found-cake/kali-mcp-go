@@ -32,6 +32,10 @@ func TestJWTInputSchemaExposesOfflineAndLiveVerificationInputs(t *testing.T) {
 	if !ok || !schemaRequiredField(root, "token") {
 		t.Fatal("jwt_analyze must require the offline token input")
 	}
+	unsafeSchema, found := properties["allow_unsafe"].(map[string]any)
+	if !found || unsafeSchema["type"] != "boolean" {
+		t.Fatalf("jwt_analyze allow_unsafe schema is missing or invalid: %+v", properties["allow_unsafe"])
+	}
 }
 
 func TestToolOutputSchemaSeparatesExecutionFromFindingStatus(t *testing.T) {

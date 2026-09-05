@@ -8,6 +8,16 @@ import (
 )
 
 func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
+	extra, err := splitArgs(request.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if err := rejectArguments(extra, "additional_args", "use the typed mode and allow_unsafe fields", "-M", "--mode"); err != nil {
+		return nil, err
+	}
+	if err := rejectTargetSourceArgs(extra, "additional_args", false, "-t", "-r", "--request"); err != nil {
+		return nil, err
+	}
 	args := []string{"jwt_tool", request.Token}
 	if request.TargetURL != "" {
 		args = append(args, "-t", request.TargetURL, "-np")
@@ -23,10 +33,13 @@ func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 	}
 	mode := request.Mode
 	if mode == "" && request.TargetURL != "" {
-		mode = "at"
+		mode = "er"
 	}
 	if err := validateJWTMode(mode); err != nil {
 		return nil, err
+	}
+	if (mode == "pb" || mode == "at") && !request.AllowUnsafe {
+		return nil, fmt.Errorf("mode %s requires allow_unsafe because it includes command-injection timing probes", mode)
 	}
 	if mode != "" {
 		args = append(args, "-M", mode)
@@ -34,7 +47,7 @@ func JWTToolArgs(request dto.JWTRequest) ([]string, error) {
 	if request.PublicKey != "" {
 		args = append(args, "-pk", request.PublicKey)
 	}
-	return appendTargetSafeArgs(args, request.AdditionalArgs, "additional_args", false, "-t", "-r", "--request")
+	return append(args, extra...), nil
 }
 
 func validateJWTMode(mode string) error {
