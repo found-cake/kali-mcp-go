@@ -27,7 +27,7 @@ func TestClientJSONOperationsPreserveWireContracts(t *testing.T) {
 	t.Parallel()
 
 	// Given: a wire peer that records each dedicated JSON operation.
-	requests := make(chan observedRequest, 3)
+	requests := make(chan observedRequest, 4)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		body, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -64,11 +64,18 @@ func TestClientJSONOperationsPreserveWireContracts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read artifact: %v", err)
 	}
+	lineArtifact, err := client.ReadArtifact(context.Background(), dto.ArtifactReadRequest{
+		ArtifactID: "artifact/a", Section: dto.ArtifactSectionStdout, StartLine: 2, LineCount: 100,
+	})
+	if err != nil {
+		t.Fatalf("read artifact lines: %v", err)
+	}
 
 	// Then: every method, path, query, body, auth header, and call ID remains stable.
 	capabilitiesRequest := <-requests
 	resolutionRequest := <-requests
 	artifactRequest := <-requests
+	lineArtifactRequest := <-requests
 	if capabilitiesRequest.method != http.MethodGet || capabilitiesRequest.path != "/api/tools/capabilities" {
 		t.Fatalf("unexpected capabilities request: %s %s", capabilitiesRequest.method, capabilitiesRequest.path)
 	}
@@ -85,13 +92,16 @@ func TestClientJSONOperationsPreserveWireContracts(t *testing.T) {
 	if artifactRequest.method != http.MethodGet || artifactRequest.escapedPath != "/api/artifacts/artifact%2Fa/page" || artifactRequest.rawQuery != "limit=512&offset=7" {
 		t.Fatalf("unexpected artifact request: %+v", artifactRequest)
 	}
-	for _, request := range []observedRequest{capabilitiesRequest, resolutionRequest, artifactRequest} {
+	if lineArtifactRequest.rawQuery != "line_count=100&section=stdout&start_line=2" {
+		t.Fatalf("unexpected line artifact request: %+v", lineArtifactRequest)
+	}
+	for _, request := range []observedRequest{capabilitiesRequest, resolutionRequest, artifactRequest, lineArtifactRequest} {
 		if request.headers.Get("Authorization") != "Bearer secret-token" {
 			t.Fatalf("missing bearer authorization on %s", request.path)
 		}
 	}
-	if capabilities.CallID != "call_from_header" || resolution.CallID != "call_from_header" || artifact.CallID != "call_from_header" {
-		t.Fatalf("call ID fallback changed: capabilities=%q resolution=%q artifact=%q", capabilities.CallID, resolution.CallID, artifact.CallID)
+	if capabilities.CallID != "call_from_header" || resolution.CallID != "call_from_header" || artifact.CallID != "call_from_header" || lineArtifact.CallID != "call_from_header" {
+		t.Fatalf("call ID fallback changed: capabilities=%q resolution=%q artifact=%q line=%q", capabilities.CallID, resolution.CallID, artifact.CallID, lineArtifact.CallID)
 	}
 }
 

@@ -46,10 +46,21 @@ func HandleGetArtifactPage(c fiber.Ctx) error {
 	if err != nil {
 		return BadRequest(c, "limit must be an integer")
 	}
+	startLine, err := strconv.Atoi(c.Query("start_line", "0"))
+	if err != nil {
+		return BadRequest(c, "start_line must be an integer")
+	}
+	lineCount, err := strconv.Atoi(c.Query("line_count", "0"))
+	if err != nil {
+		return BadRequest(c, "line_count must be an integer")
+	}
 	page, err := ArtifactStore(c).ReadPage(dto.ArtifactReadRequest{
 		ArtifactID: c.Params("id"),
+		Section:    dto.ArtifactSection(c.Query("section")),
 		Offset:     offset,
 		Limit:      limit,
+		StartLine:  startLine,
+		LineCount:  lineCount,
 	}, time.Now().UTC())
 	if errors.Is(err, artifactstore.ErrNotFound) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": artifactstore.ErrNotFound.Error()})

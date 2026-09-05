@@ -25,6 +25,14 @@ const (
 	ArtifactRelationBrowserDOM        ArtifactRelation = "browser_dom"
 )
 
+type ArtifactSection string
+
+const (
+	ArtifactSectionRaw    ArtifactSection = "raw"
+	ArtifactSectionStdout ArtifactSection = "stdout"
+	ArtifactSectionStderr ArtifactSection = "stderr"
+)
+
 type ArtifactRef struct {
 	ID             string                 `json:"id"`
 	Kind           string                 `json:"kind"`
@@ -50,9 +58,12 @@ type EvidenceManifest struct {
 }
 
 type ArtifactReadRequest struct {
-	ArtifactID string `json:"artifact_id" jsonschema:"opaque result artifact ID returned by a scan"`
-	Offset     int64  `json:"offset,omitempty" jsonschema:"UTF-8 byte offset returned by the previous page (default 0)"`
-	Limit      int    `json:"limit,omitempty" jsonschema:"page size in bytes (default 16384, minimum 256, maximum 65536)"`
+	ArtifactID string          `json:"artifact_id" jsonschema:"opaque result artifact ID returned by a scan"`
+	Section    ArtifactSection `json:"section,omitempty" jsonschema:"raw|stdout|stderr section to read (default raw); stdout and stderr require a tool-result-json artifact"`
+	Offset     int64           `json:"offset,omitempty" jsonschema:"byte offset returned by the previous page (default 0); mutually exclusive with start_line and line_count"`
+	Limit      int             `json:"limit,omitempty" jsonschema:"page size in bytes (default 16384, minimum 256, maximum 65536); mutually exclusive with start_line and line_count"`
+	StartLine  int             `json:"start_line,omitempty" jsonschema:"1-based first line to read; enables line mode and is mutually exclusive with offset and limit"`
+	LineCount  int             `json:"line_count,omitempty" jsonschema:"number of lines to read (default 100, maximum 500); enables line mode and is mutually exclusive with offset and limit"`
 }
 
 type ArtifactReadResult struct {
@@ -63,6 +74,12 @@ type ArtifactReadResult struct {
 	NextOffset       int64                  `json:"next_offset"`
 	HasMore          bool                   `json:"has_more"`
 	TotalBytes       int64                  `json:"total_bytes"`
+	Section          ArtifactSection        `json:"section"`
+	StartLine        int                    `json:"start_line,omitempty"`
+	EndLine          int                    `json:"end_line,omitempty"`
+	NextLine         int                    `json:"next_line,omitempty"`
+	TotalLines       int                    `json:"total_lines,omitempty"`
+	LineTruncated    bool                   `json:"line_truncated,omitempty"`
 	ExpiresAt        time.Time              `json:"expires_at"`
 	ExpiresInSeconds int64                  `json:"expires_in_seconds"`
 	ExpiringSoon     bool                   `json:"expiring_soon"`

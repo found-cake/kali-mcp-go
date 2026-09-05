@@ -366,7 +366,7 @@ For long scans, the MCP host timeout must be at least as large as `mcp-client --
 | `server_health` | Check server status and tool availability |
 | `get_scan_capabilities` | Inspect profile compatibility, target formats, supported controls, and effective default wordlists |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
-| `result_artifact_read` | Read a bounded UTF-8 or base64 page from a bearer-protected result or evidence artifact retained for one hour |
+| `result_artifact_read` | Read a retained artifact completely through bounded byte pages or UTF-8 line ranges, including extracted tool stdout/stderr sections |
 | `http_request` | Send one bounded HTTP request with structured status, headers, body preview, provenance, and artifact output |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
@@ -456,7 +456,19 @@ Tool process failures and timeouts set MCP `isError`; a successful scan with no 
 
 Every HTTP call also emits one JSON telemetry record containing its `call_id`, MCP operation, path, start/end time, duration, and HTTP status. Target and credential values remain in the protected structured result rather than server logs.
 
-`http_requests` is populated only from an authoritative counter emitted or measured by the tool; `request_count_source` distinguishes `measured`, `parsed`, and `unknown`, and the count remains `null` rather than being estimated. Nikto's own maximum-execution-time termination is normalized to `timed_out` with partial, inconclusive results even when Nikto exits with code zero. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the original output sizes. HTTP response metadata, SQLMap differential analysis, JWT structural analysis, and Nuclei preview metadata are also appended as one compact JSON summary for MCP hosts that do not surface structured content. Use `result_artifact_read` with offset 0, then continue with `next_offset` while `has_more` is true.
+`http_requests` is populated only from an authoritative counter emitted or measured by the tool; `request_count_source` distinguishes `measured`, `parsed`, and `unknown`, and the count remains `null` rather than being estimated. Nikto's own maximum-execution-time termination is normalized to `timed_out` with partial, inconclusive results even when Nikto exits with code zero. A failure with output sets `partial_results`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; `stdout_bytes` and `stderr_bytes` report the original output sizes. HTTP response metadata, SQLMap differential analysis, JWT structural analysis, and Nuclei preview metadata are also appended as one compact JSON summary for MCP hosts that do not surface structured content.
+
+### Artifact paging
+
+`result_artifact_read` never searches, summarizes, or filters evidence. It only returns the requested section and range, so the orchestrator retains control over what it inspects:
+
+- Byte mode uses `offset` plus `limit` and works for every artifact. The default page is 16 KiB and each call may request 256 bytes through 64 KiB. Continue with `next_offset` while `has_more` is true; there is no cumulative read cap, so the complete artifact remains readable.
+- Line mode uses the 1-based `start_line` plus `line_count` for UTF-8 artifacts. It defaults to 100 lines and accepts at most 500 lines per call, while the returned content remains capped at 64 KiB. Continue with `next_line` unless `line_truncated` is true.
+- `section` defaults to `raw`. `stdout` and `stderr` decode those fields only from a `tool-result-json` artifact. Their offsets and byte/line totals are relative to the selected section.
+- If a single line exceeds 64 KiB, the response sets `line_truncated`. Continue that selected section in byte mode from `next_offset`; this preserves access to the remainder without silently dropping data.
+- Byte and line range parameters are mutually exclusive. Binary/base64 artifacts support byte mode only.
+
+The authenticated raw HTTP endpoint `GET /api/artifacts/:id` also remains available for consumers that intentionally retrieve the entire artifact in one response.
 
 Executable tools share one compact top-level MCP output contract. Detailed nested evidence remains in structured content and artifacts, while the common schema keeps status, classification, request-count provenance, target provenance, and artifact fields discoverable without repeating the full nested schema for every tool.
 

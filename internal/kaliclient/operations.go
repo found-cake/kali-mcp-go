@@ -42,9 +42,25 @@ func (c *Client) ResolveTarget(ctx context.Context, body dto.ResolveTargetReques
 
 func (c *Client) ReadArtifact(ctx context.Context, body dto.ArtifactReadRequest) (*dto.ArtifactReadResult, error) {
 	query := url.Values{}
-	query.Set("offset", strconv.FormatInt(body.Offset, 10))
-	query.Set("limit", strconv.Itoa(body.Limit))
-	endpoint := "/api/artifacts/" + url.PathEscape(body.ArtifactID) + "/page?" + query.Encode()
+	if body.Section != "" {
+		query.Set("section", string(body.Section))
+	}
+	if body.Offset != 0 {
+		query.Set("offset", strconv.FormatInt(body.Offset, 10))
+	}
+	if body.Limit != 0 {
+		query.Set("limit", strconv.Itoa(body.Limit))
+	}
+	if body.StartLine != 0 {
+		query.Set("start_line", strconv.Itoa(body.StartLine))
+	}
+	if body.LineCount != 0 {
+		query.Set("line_count", strconv.Itoa(body.LineCount))
+	}
+	endpoint := "/api/artifacts/" + url.PathEscape(body.ArtifactID) + "/page"
+	if encoded := query.Encode(); encoded != "" {
+		endpoint += "?" + encoded
+	}
 	var result dto.ArtifactReadResult
 	callID, err := c.doJSON(ctx, jsonRequestSpec{
 		method: http.MethodGet, endpoint: endpoint, authorize: true, checkStatus: true,

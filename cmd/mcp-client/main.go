@@ -67,8 +67,8 @@ func main() {
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) error {
 	registerTargetResolver(srv, kali)
 	registerScanCapabilities(srv, kali)
-	registerResultArtifacts(srv, kali)
 	registrations := []error{
+		registerResultArtifacts(srv, kali),
 		registerHTTPRequest(srv, kali),
 		addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan"),
 		addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run"),
