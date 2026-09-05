@@ -11,15 +11,15 @@ const (
 )
 
 type ScanOptions struct {
-	ResolutionReceipt string        `json:"resolution_receipt,omitempty" jsonschema:"receipt returned by resolve_target for the selected target"`
-	TargetContext     string        `json:"target_context,omitempty" jsonschema:"signed candidate context returned by resolve_target; use instead of target plus resolution_receipt"`
-	Profile           SafetyProfile `json:"profile,omitempty" jsonschema:"safe-recon|web-discovery-low-rate|sqli-verify-low-risk|browser-xss-confirm|explicit-custom"`
-	MaxRequests       int           `json:"max_requests,omitempty" jsonschema:"request-count budget combined with rate_limit to derive an outer timeout; not a hard request counter; 0 means unset"`
-	RateLimit         int           `json:"rate_limit,omitempty" jsonschema:"maximum requests per second when enforceable; 0 means unset, not unlimited"`
-	Concurrency       int           `json:"concurrency,omitempty" jsonschema:"maximum tool-level concurrency when supported; 0 means unset, not unlimited"`
-	HealthURL         string        `json:"health_url,omitempty" jsonschema:"optional same-service target health URL checked before and after the scan; cross-origin redirects are rejected"`
-	Max5xxResponses   int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when supported; 0 means unset, not unlimited"`
-	RedactValues      []string      `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output and artifacts; all other content is preserved verbatim"`
+	ResolutionReceipt    string        `json:"resolution_receipt,omitempty" jsonschema:"receipt returned by resolve_target for the selected target"`
+	TargetContext        string        `json:"target_context,omitempty" jsonschema:"signed candidate context returned by resolve_target; use instead of target plus resolution_receipt"`
+	Profile              SafetyProfile `json:"profile,omitempty" jsonschema:"safe-recon|web-discovery-low-rate|sqli-verify-low-risk|browser-xss-confirm|explicit-custom"`
+	TimeoutRequestBudget int           `json:"timeout_request_budget,omitempty" jsonschema:"estimated request budget combined with rate_limit to derive an outer timeout; not a hard request limit; 0 means unset"`
+	RateLimit            int           `json:"rate_limit,omitempty" jsonschema:"maximum requests per second when enforceable; 0 means unset, not unlimited"`
+	Concurrency          int           `json:"concurrency,omitempty" jsonschema:"maximum tool-level concurrency when supported; 0 means unset, not unlimited"`
+	HealthURL            string        `json:"health_url,omitempty" jsonschema:"optional same-service target health URL checked before and after the scan; cross-origin redirects are rejected"`
+	Max5xxResponses      int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when supported; 0 means unset, not unlimited"`
+	RedactValues         []string      `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output and artifacts; all other content is preserved verbatim"`
 }
 
 func (o ScanOptions) GetScanOptions() ScanOptions { return o }

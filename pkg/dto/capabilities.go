@@ -18,12 +18,12 @@ const (
 type ScanControl string
 
 const (
-	ScanControlRateLimit   ScanControl = "rate_limit"
-	ScanControlConcurrency ScanControl = "concurrency"
-	ScanControlMaxRequests ScanControl = "max_requests"
-	ScanControlMax5xx      ScanControl = "max_5xx_responses"
-	ScanControlTimeout     ScanControl = "timeout"
-	ScanControlDryRun      ScanControl = "dry_run"
+	ScanControlRateLimit            ScanControl = "rate_limit"
+	ScanControlConcurrency          ScanControl = "concurrency"
+	ScanControlTimeoutRequestBudget ScanControl = "timeout_request_budget"
+	ScanControlMax5xx               ScanControl = "max_5xx_responses"
+	ScanControlTimeout              ScanControl = "timeout"
+	ScanControlDryRun               ScanControl = "dry_run"
 )
 
 type ControlEnforcement string
@@ -60,10 +60,10 @@ const (
 )
 
 type ScanLimits struct {
-	MaxRequests     int `json:"max_requests"`
-	RateLimit       int `json:"rate_limit"`
-	Concurrency     int `json:"concurrency"`
-	Max5xxResponses int `json:"max_5xx_responses"`
+	TimeoutRequestBudget int `json:"timeout_request_budget"`
+	RateLimit            int `json:"rate_limit"`
+	Concurrency          int `json:"concurrency"`
+	Max5xxResponses      int `json:"max_5xx_responses"`
 }
 
 type ScanProfileCapability struct {

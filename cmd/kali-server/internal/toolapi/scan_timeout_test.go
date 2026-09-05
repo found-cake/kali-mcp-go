@@ -33,7 +33,7 @@ func TestPrepareScanExecution_preserves_explicit_timeout_when_request_budget_is_
 	var effectiveTimeout time.Duration
 	app.Get("/prepare", func(c fiber.Ctx) error {
 		plan, err := prepareScanExecution(c, dto.FFUFRequest{
-			ScanOptions: dto.ScanOptions{MaxRequests: 200, RateLimit: 5},
+			ScanOptions: dto.ScanOptions{TimeoutRequestBudget: 200, RateLimit: 5},
 			URL:         "https://example.com/FUZZ",
 			Timeout:     120,
 		}, []string{"ffuf", "-u", "https://example.com/FUZZ"})
@@ -69,7 +69,7 @@ func TestPrepareScanExecution_adds_startup_grace_to_derived_request_budget(t *te
 	var planning *dto.TimeoutPlanning
 	app.Get("/prepare", func(c fiber.Ctx) error {
 		plan, err := prepareScanExecution(c, dto.FFUFRequest{
-			ScanOptions: dto.ScanOptions{MaxRequests: 200, RateLimit: 5},
+			ScanOptions: dto.ScanOptions{TimeoutRequestBudget: 200, RateLimit: 5},
 			URL:         "https://example.com/FUZZ",
 		}, []string{"ffuf", "-u", "https://example.com/FUZZ"})
 		if err != nil {
@@ -96,7 +96,7 @@ func TestPrepareScanExecution_adds_startup_grace_to_derived_request_budget(t *te
 	if response.StatusCode != fiber.StatusNoContent || planTimeout != 45*time.Second {
 		t.Fatalf("unexpected derived timeout: status=%d timeout=%s", response.StatusCode, planTimeout)
 	}
-	if planning == nil || planning.Source != dto.TimeoutSourceRequestBudget || planning.RequestBudgetEstimateMS != 40000 || planning.StartupGraceMS != 5000 || planning.MaxRequestsHardLimit {
+	if planning == nil || planning.Source != dto.TimeoutSourceRequestBudget || planning.RequestBudgetEstimateMS != 40000 || planning.StartupGraceMS != 5000 || planning.RequestBudgetHardLimit {
 		t.Fatalf("unexpected timeout planning metadata: %+v", planning)
 	}
 }
@@ -109,7 +109,7 @@ func TestPrepareScanExecution_warns_when_nuclei_timeout_is_below_estimated_budge
 	var warnings []string
 	app.Get("/prepare", func(c fiber.Ctx) error {
 		plan, err := prepareScanExecution(c, dto.NucleiRequest{
-			ScanOptions: dto.ScanOptions{MaxRequests: 1000, RateLimit: 10},
+			ScanOptions: dto.ScanOptions{TimeoutRequestBudget: 1000, RateLimit: 10},
 			Target:      "https://example.com",
 			Tags:        "http",
 			Timeout:     60,

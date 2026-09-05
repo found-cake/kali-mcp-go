@@ -119,7 +119,7 @@ func TestEffectiveScanOptionsAppliesOnlyEnforceableProfileDefaults(t *testing.T)
 	if err != nil {
 		t.Fatalf("apply WhatWeb profile: %v", err)
 	}
-	if whatweb.RateLimit != 0 || whatweb.Concurrency != 0 || whatweb.MaxRequests != 0 || whatweb.Max5xxResponses != 0 {
+	if whatweb.RateLimit != 0 || whatweb.Concurrency != 0 || whatweb.TimeoutRequestBudget != 0 || whatweb.Max5xxResponses != 0 {
 		t.Fatalf("unsupported defaults were presented as effective: %+v", whatweb)
 	}
 
@@ -127,21 +127,21 @@ func TestEffectiveScanOptionsAppliesOnlyEnforceableProfileDefaults(t *testing.T)
 	if err != nil {
 		t.Fatalf("apply Nmap profile: %v", err)
 	}
-	if nmap.RateLimit != 10 || nmap.MaxRequests != 2000 || nmap.Concurrency != 0 || nmap.Max5xxResponses != 0 {
+	if nmap.RateLimit != 10 || nmap.TimeoutRequestBudget != 2000 || nmap.Concurrency != 0 || nmap.Max5xxResponses != 0 {
 		t.Fatalf("Nmap profile did not preserve only enforceable defaults: %+v", nmap)
 	}
 }
 
 func TestScanControlApplicationReportsEnforcementMethod(t *testing.T) {
-	requested := dto.ScanOptions{MaxRequests: 50}
-	effective := dto.ScanOptions{RateLimit: 10, Concurrency: 2, MaxRequests: 50, Max5xxResponses: 20}
+	requested := dto.ScanOptions{TimeoutRequestBudget: 50}
+	effective := dto.ScanOptions{RateLimit: 10, Concurrency: 2, TimeoutRequestBudget: 50, Max5xxResponses: 20}
 	application := ScanControlApplication("ffuf", requested, effective)
 
 	methods := make(map[dto.ScanControl]dto.AppliedScanControl)
 	for _, control := range application.Controls {
 		methods[control.Control] = control
 	}
-	if methods[dto.ScanControlMaxRequests].Enforcement != dto.ControlDerivedTimeout || !methods[dto.ScanControlMaxRequests].Applied {
+	if methods[dto.ScanControlTimeoutRequestBudget].Enforcement != dto.ControlDerivedTimeout || !methods[dto.ScanControlTimeoutRequestBudget].Applied {
 		t.Fatalf("max request enforcement is not explicit: %+v", application)
 	}
 	if methods[dto.ScanControlMax5xx].Enforcement != dto.ControlOutputObserver || !methods[dto.ScanControlMax5xx].Applied {

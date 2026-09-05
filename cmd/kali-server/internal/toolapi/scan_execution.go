@@ -137,8 +137,8 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if requestedTimeout > 0 {
 		timeoutPlanning.Source = dto.TimeoutSourceRequest
 	}
-	if effective.MaxRequests > 0 && effective.RateLimit > 0 {
-		budgetSeconds := (effective.MaxRequests + effective.RateLimit - 1) / effective.RateLimit
+	if effective.TimeoutRequestBudget > 0 && effective.RateLimit > 0 {
+		budgetSeconds := (effective.TimeoutRequestBudget + effective.RateLimit - 1) / effective.RateLimit
 		budgetTimeout := time.Duration(budgetSeconds) * time.Second
 		startupGrace := scanStartupGrace(controlledArgs[0])
 		estimatedTimeout := budgetTimeout + startupGrace

@@ -32,11 +32,11 @@ func EffectiveScanOptions(tool string, options dto.ScanOptions) (dto.ScanOptions
 			return dto.ScanOptions{}, fmt.Errorf("concurrency exceeds profile maximum %d", limits.Concurrency)
 		}
 	}
-	if supportsRuntimeControl(tool, dto.ScanControlMaxRequests) && limits.MaxRequests > 0 {
-		if options.MaxRequests == 0 {
-			options.MaxRequests = limits.MaxRequests
-		} else if options.MaxRequests > limits.MaxRequests {
-			return dto.ScanOptions{}, fmt.Errorf("max_requests exceeds profile maximum %d", limits.MaxRequests)
+	if supportsRuntimeControl(tool, dto.ScanControlTimeoutRequestBudget) && limits.TimeoutRequestBudget > 0 {
+		if options.TimeoutRequestBudget == 0 {
+			options.TimeoutRequestBudget = limits.TimeoutRequestBudget
+		} else if options.TimeoutRequestBudget > limits.TimeoutRequestBudget {
+			return dto.ScanOptions{}, fmt.Errorf("timeout_request_budget exceeds profile maximum %d", limits.TimeoutRequestBudget)
 		}
 	}
 	if supportsRuntimeControl(tool, dto.ScanControlMax5xx) && limits.Max5xxResponses > 0 {
@@ -46,8 +46,8 @@ func EffectiveScanOptions(tool string, options dto.ScanOptions) (dto.ScanOptions
 			return dto.ScanOptions{}, fmt.Errorf("max_5xx_responses exceeds profile maximum %d", limits.Max5xxResponses)
 		}
 	}
-	if options.MaxRequests > 0 && options.RateLimit == 0 {
-		return dto.ScanOptions{}, fmt.Errorf("max_requests requires rate_limit for timeout budgeting")
+	if options.TimeoutRequestBudget > 0 && options.RateLimit == 0 {
+		return dto.ScanOptions{}, fmt.Errorf("timeout_request_budget requires rate_limit")
 	}
 	return options, nil
 }
@@ -59,8 +59,8 @@ func validateControlRanges(options dto.ScanOptions) error {
 	if options.Concurrency < 0 || options.Concurrency > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlConcurrency) {
 		return fmt.Errorf("concurrency must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlConcurrency))
 	}
-	if options.MaxRequests < 0 || options.MaxRequests > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMaxRequests) {
-		return fmt.Errorf("max_requests must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMaxRequests))
+	if options.TimeoutRequestBudget < 0 || options.TimeoutRequestBudget > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlTimeoutRequestBudget) {
+		return fmt.Errorf("timeout_request_budget must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlTimeoutRequestBudget))
 	}
 	if options.Max5xxResponses < 0 || options.Max5xxResponses > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMax5xx) {
 		return fmt.Errorf("max_5xx_responses must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMax5xx))
@@ -75,7 +75,7 @@ func validateSupportedControls(tool string, options dto.ScanOptions) error {
 	}{
 		{dto.ScanControlRateLimit, options.RateLimit},
 		{dto.ScanControlConcurrency, options.Concurrency},
-		{dto.ScanControlMaxRequests, options.MaxRequests},
+		{dto.ScanControlTimeoutRequestBudget, options.TimeoutRequestBudget},
 		{dto.ScanControlMax5xx, options.Max5xxResponses},
 	}
 	for _, request := range requested {
@@ -210,8 +210,8 @@ func controlValues(control dto.ScanControl, requested, effective dto.ScanOptions
 		return requested.RateLimit, effective.RateLimit
 	case dto.ScanControlConcurrency:
 		return requested.Concurrency, effective.Concurrency
-	case dto.ScanControlMaxRequests:
-		return requested.MaxRequests, effective.MaxRequests
+	case dto.ScanControlTimeoutRequestBudget:
+		return requested.TimeoutRequestBudget, effective.TimeoutRequestBudget
 	case dto.ScanControlMax5xx:
 		return requested.Max5xxResponses, effective.Max5xxResponses
 	default:
@@ -222,13 +222,13 @@ func controlValues(control dto.ScanControl, requested, effective dto.ScanOptions
 func profileLimits(profile dto.SafetyProfile) dto.ScanOptions {
 	switch profile {
 	case dto.ProfileSafeRecon:
-		return dto.ScanOptions{RateLimit: 10, Concurrency: 2, MaxRequests: 2000, Max5xxResponses: 20}
+		return dto.ScanOptions{RateLimit: 10, Concurrency: 2, TimeoutRequestBudget: 2000, Max5xxResponses: 20}
 	case dto.ProfileWebDiscoveryLowRate:
-		return dto.ScanOptions{RateLimit: 5, Concurrency: 2, MaxRequests: 1000, Max5xxResponses: 10}
+		return dto.ScanOptions{RateLimit: 5, Concurrency: 2, TimeoutRequestBudget: 1000, Max5xxResponses: 10}
 	case dto.ProfileSQLILowRisk:
-		return dto.ScanOptions{RateLimit: 2, Concurrency: 1, MaxRequests: 500, Max5xxResponses: 5}
+		return dto.ScanOptions{RateLimit: 2, Concurrency: 1, TimeoutRequestBudget: 500, Max5xxResponses: 5}
 	case dto.ProfileBrowserXSSConfirm:
-		return dto.ScanOptions{RateLimit: 2, Concurrency: 1, MaxRequests: 200, Max5xxResponses: 5}
+		return dto.ScanOptions{RateLimit: 2, Concurrency: 1, TimeoutRequestBudget: 200, Max5xxResponses: 5}
 	default:
 		return dto.ScanOptions{}
 	}

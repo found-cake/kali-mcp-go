@@ -50,7 +50,7 @@ func Validate(request dto.HTTPRequest) error {
 	if request.Timeout < 0 || time.Duration(request.Timeout)*time.Second > maximumHTTPRequestTime {
 		return fmt.Errorf("timeout must be between 1 and 300 seconds")
 	}
-	if request.MaxRequests != 0 || request.RateLimit != 0 || request.Concurrency != 0 || request.HealthURL != "" || request.Max5xxResponses != 0 {
+	if request.TimeoutRequestBudget != 0 || request.RateLimit != 0 || request.Concurrency != 0 || request.HealthURL != "" || request.Max5xxResponses != 0 {
 		return fmt.Errorf("single HTTP requests do not accept multi-request scan controls")
 	}
 	return nil

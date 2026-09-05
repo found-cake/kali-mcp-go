@@ -30,7 +30,7 @@ func TestFormatScanCapabilitiesIncludesProfileLimits(t *testing.T) {
 		Profile: dto.ProfileWebDiscoveryLowRate,
 		Tools:   []string{"ffuf_scan", "feroxbuster_scan"},
 		Limits: dto.ScanLimits{
-			RateLimit: 5, Concurrency: 2, MaxRequests: 1000, Max5xxResponses: 10,
+			RateLimit: 5, Concurrency: 2, TimeoutRequestBudget: 1000, Max5xxResponses: 10,
 		},
 	}}}
 
@@ -38,7 +38,7 @@ func TestFormatScanCapabilitiesIncludesProfileLimits(t *testing.T) {
 	formatted := formatScanCapabilities(result)
 
 	// Then: the model sees every effective profile limit before choosing options.
-	for _, value := range []string{"rate_limit=5", "concurrency=2", "max_requests=1000", "max_5xx_responses=10"} {
+	for _, value := range []string{"rate_limit=5", "concurrency=2", "timeout_request_budget=1000", "max_5xx_responses=10"} {
 		if !strings.Contains(formatted, value) {
 			t.Fatalf("profile limit summary is missing %q: %s", value, formatted)
 		}

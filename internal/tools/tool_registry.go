@@ -73,7 +73,7 @@ func rateAndConcurrencyControls(observe5xx bool) []dto.ScanControlCapability {
 }
 
 func appendBudgetControls(controls []dto.ScanControlCapability, observe5xx bool) []dto.ScanControlCapability {
-	controls = append(controls, dto.ScanControlCapability{Control: dto.ScanControlMaxRequests, Enforcement: dto.ControlDerivedTimeout})
+	controls = append(controls, dto.ScanControlCapability{Control: dto.ScanControlTimeoutRequestBudget, Enforcement: dto.ControlDerivedTimeout})
 	if observe5xx {
 		controls = append(controls, dto.ScanControlCapability{Control: dto.ScanControlMax5xx, Enforcement: dto.ControlOutputObserver})
 	}
