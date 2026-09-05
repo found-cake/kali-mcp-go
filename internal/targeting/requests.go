@@ -64,11 +64,11 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 			}
 			return setNetworkTarget(&value.URL, claims.NetworkTarget)
 		}
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.DirbRequest:
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.NiktoRequest:
-		return setWebTarget(&value.Target, claims.BrowserTarget)
+		return setWebTarget(&value.Target, claims.BrowserTarget, claims.Original)
 	case *dto.SQLMapRequest:
 		if err := rejectExplicitHostHeader(value.Headers); err != nil {
 			return err
@@ -76,23 +76,23 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 		if value.RequestFile != "" || value.RawRequest != "" {
 			return nil
 		}
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.HydraRequest:
 		if err := setNetworkTarget(&value.Target, claims.NetworkTarget); err != nil {
 			return err
 		}
 		return bindIntPort(&value.Port, claims.Port, "Hydra")
 	case *dto.WPScanRequest:
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.Enum4linuxRequest:
 		if claims.Port > 0 {
 			return fmt.Errorf("Enum4linux cannot enforce target_context port %d", claims.Port)
 		}
 		return setNetworkTarget(&value.Target, claims.NetworkTarget)
 	case *dto.FFUFRequest:
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.FeroxbusterRequest:
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.NucleiRequest:
 		return setURLOrHostTarget(&value.Target, claims)
 	case *dto.WhatWebRequest:
@@ -101,26 +101,26 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 		if err := rejectHostHeaderText(value.RequestHeader); err != nil {
 			return err
 		}
-		return setWebTarget(&value.TargetURL, claims.BrowserTarget)
+		return setWebTarget(&value.TargetURL, claims.BrowserTarget, claims.Original)
 	case *dto.DalfoxRequest:
-		return setWebTarget(&value.Target, claims.BrowserTarget)
+		return setWebTarget(&value.Target, claims.BrowserTarget, claims.Original)
 	case *dto.BrowserRequest:
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.RetireRequest:
 		if len(value.ScriptURLs) > 0 {
 			for index := range value.ScriptURLs {
-				if err := setWebTarget(&value.ScriptURLs[index], claims.BrowserTarget); err != nil {
+				if err := setWebTarget(&value.ScriptURLs[index], claims.BrowserTarget, claims.Original); err != nil {
 					return fmt.Errorf("script_urls[%d]: %w", index, err)
 				}
 			}
 			return nil
 		}
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	case *dto.HTTPRequest:
 		if err := rejectExplicitHostHeader(value.Headers); err != nil {
 			return err
 		}
-		return setWebTarget(&value.URL, claims.BrowserTarget)
+		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)
 	default:
 		return fmt.Errorf("target_context is not supported for this request")
 	}
@@ -203,37 +203,4 @@ func setNetworkTarget(current *string, expected string) error {
 	}
 	*current = expected
 	return nil
-}
-
-func setWebTarget(current *string, expected string) error {
-	if expected == "" {
-		return fmt.Errorf("target_context does not contain a browser target")
-	}
-	if *current != "" {
-		currentOrigin, currentOK := Origin(*current)
-		expectedOrigin, expectedOK := Origin(expected)
-		if !currentOK || !expectedOK || currentOrigin != expectedOrigin {
-			return fmt.Errorf("request URL does not match target_context browser origin; use the selected candidate browser_target %s or omit the request URL", expected)
-		}
-		return nil
-	}
-	*current = expected
-	return nil
-}
-
-func setURLOrHostTarget(current *string, claims targetContextClaims) error {
-	if *current != "" && !strings.Contains(*current, "://") {
-		if claims.BrowserTarget != "" && claims.Port > 0 {
-			if !strings.EqualFold(strings.Trim(strings.TrimSpace(*current), "[]"), strings.Trim(strings.TrimSpace(claims.NetworkTarget), "[]")) {
-				return fmt.Errorf("request target does not match target_context network target")
-			}
-			*current = claims.BrowserTarget
-			return nil
-		}
-		return setNetworkTarget(current, claims.NetworkTarget)
-	}
-	if claims.BrowserTarget != "" {
-		return setWebTarget(current, claims.BrowserTarget)
-	}
-	return setNetworkTarget(current, claims.NetworkTarget)
 }
