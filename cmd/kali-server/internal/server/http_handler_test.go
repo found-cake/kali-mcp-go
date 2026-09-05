@@ -44,8 +44,8 @@ func TestHTTPRequestRejectsMalformedBody(t *testing.T) {
 	}
 }
 
-func TestHTTPRequestOriginMismatchReturnsCandidateGuidance(t *testing.T) {
-	// Given: an authenticated HTTP tool request that repeats the original loopback URL.
+func TestHTTPRequestForeignOriginReturnsCandidateGuidance(t *testing.T) {
+	// Given: an authenticated HTTP tool request that changes to a foreign origin.
 	now := time.Now().UTC()
 	resolution := dto.TargetResolutionResult{
 		OriginalTarget: "http://127.0.0.1:3000/",
@@ -61,7 +61,7 @@ func TestHTTPRequestOriginMismatchReturnsCandidateGuidance(t *testing.T) {
 	t.Cleanup(func() { _ = app.Shutdown() })
 	body, err := json.Marshal(dto.HTTPRequest{
 		ScanOptions: dto.ScanOptions{TargetContext: resolution.Candidates[0].TargetContext},
-		URL:         resolution.OriginalTarget,
+		URL:         "http://foreign.example:3000/",
 	})
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
