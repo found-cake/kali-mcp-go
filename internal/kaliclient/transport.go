@@ -141,11 +141,11 @@ func (c *Client) Post(ctx context.Context, endpoint string, body any) (*dto.Tool
 }
 
 func serverResponseError(response *http.Response, body []byte) error {
-	callID := response.Header.Get(dto.CallIDHeader)
-	if callID == "" {
-		return fmt.Errorf("server error %d: %s", response.StatusCode, body)
+	return &ServerError{
+		StatusCode: response.StatusCode,
+		CallID:     response.Header.Get(dto.CallIDHeader),
+		Body:       string(body),
 	}
-	return fmt.Errorf("server error %d (call_id %s): %s", response.StatusCode, callID, body)
 }
 
 func (c *Client) Health(ctx context.Context) (*dto.HealthResult, error) {

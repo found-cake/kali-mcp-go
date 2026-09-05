@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -181,7 +183,20 @@ func executableToolDefinition(name string) (dto.ScanToolCapability, error) {
 
 func textResult(name string, r *dto.ToolResult, err error) (*mcp.CallToolResult, dto.ToolResult, error) {
 	if err != nil {
-		return nil, dto.ToolResult{}, err
+		var serverError *kaliclient.ServerError
+		if !errors.As(err, &serverError) || serverError.StatusCode != http.StatusBadRequest {
+			return nil, dto.ToolResult{}, err
+		}
+		structured := dto.ToolResult{
+			CallID: serverError.CallID, Stderr: serverError.Message(), ReturnCode: -1,
+			ExecutionStatus: dto.ExecutionFailed, FindingStatus: dto.FindingsInconclusive,
+			ClassificationReason: "request_validation_failed",
+			Failure:              &dto.FailureInfo{Code: "invalid_input", Message: serverError.Message()},
+		}
+		structured.Finalize()
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: structured.Format()}}, IsError: true,
+		}, structured, nil
 	}
 	structured := classifyToolResult(name, *r)
 	structured = structured.Compact(defaultInlineOutputBytes)
