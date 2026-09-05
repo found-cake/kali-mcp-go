@@ -114,7 +114,7 @@ docker build -t kali-mcp-go:local .
 
 | Mode | Best for | MCP launcher |
 |---|---|---|
-| One-shot Docker | Fastest setup and automatic image updates | `docker run ...` |
+| One-shot Docker | Fastest setup and automatic image updates | `/path/to/kali-mcp-docker ...` |
 | Persistent Docker | Repeated use without container startup time | `docker exec ...` |
 | Separate processes | A VM, remote Kali host, or existing Linux installation | `mcp-client --server ...` |
 
@@ -122,23 +122,29 @@ The **MCP launcher** is the local STDIO command registered with your AI client. 
 
 #### One-shot Docker
 
-This is the simplest setup. Docker starts both services, creates an ephemeral internal API token, and removes the container when the MCP session closes. No host port is exposed.
+This is the simplest setup. Download the launcher once; it verifies and caches the Chromium seccomp profile, applies the required Docker isolation options, starts both services, and removes the container when the MCP session closes. No host port is exposed.
 
 ```bash
-docker run --pull=always --rm -i \
-  ghcr.io/found-cake/kali-mcp-go:latest \
-  --timeout 3600
+curl -fsSLo kali-mcp-docker \
+  https://raw.githubusercontent.com/found-cake/kali-mcp-go/master/scripts/run-docker.sh
+chmod +x kali-mcp-docker
+./kali-mcp-docker --timeout 3600
 ```
+
+When running from a repository checkout, use `./scripts/run-docker.sh` instead. Set `KALI_MCP_DOCKER_IMAGE` to select a different image tag. For a locally built image, also set `KALI_MCP_DOCKER_PULL=never`.
 
 #### Persistent Docker
 
-Start one background server container:
+Start one background server container. The launcher can prepare and print the verified seccomp profile path for the direct Docker command:
 
 ```bash
+seccomp_profile="$(/absolute/path/to/kali-mcp-docker --print-seccomp-profile)"
 docker run -d \
   --name kali-mcp \
   --restart unless-stopped \
   --init \
+  --ipc=host \
+  --security-opt "seccomp=$seccomp_profile" \
   --entrypoint kali-server \
   -e KALI_MCP_API_TOKEN="$(openssl rand -hex 32)" \
   ghcr.io/found-cake/kali-mcp-go:latest \
@@ -193,8 +199,7 @@ The following examples use one-shot Docker. To use persistent Docker, replace th
 
 ```bash
 claude mcp add kali-mcp -- \
-  docker run --pull=always --rm -i \
-  ghcr.io/found-cake/kali-mcp-go:latest \
+  /absolute/path/to/kali-mcp-docker \
   --timeout 3600
 ```
 
@@ -206,10 +211,8 @@ Add a local STDIO server to the desktop configuration:
 {
   "mcpServers": {
     "kali-mcp": {
-      "command": "docker",
+      "command": "/absolute/path/to/kali-mcp-docker",
       "args": [
-        "run", "--pull=always", "--rm", "-i",
-        "ghcr.io/found-cake/kali-mcp-go:latest",
         "--timeout", "3600"
       ]
     }
@@ -221,8 +224,7 @@ Add a local STDIO server to the desktop configuration:
 
 ```bash
 codex mcp add kali-mcp -- \
-  docker run --pull=always --rm -i \
-  ghcr.io/found-cake/kali-mcp-go:latest \
+  /absolute/path/to/kali-mcp-docker \
   --timeout 3600
 ```
 
@@ -230,8 +232,8 @@ For explicit startup and tool timeouts, use `~/.codex/config.toml` instead:
 
 ```toml
 [mcp_servers.kali-mcp]
-command = "docker"
-args = ["run", "--pull=always", "--rm", "-i", "ghcr.io/found-cake/kali-mcp-go:latest", "--timeout", "3600"]
+command = "/absolute/path/to/kali-mcp-docker"
+args = ["--timeout", "3600"]
 startup_timeout_sec = 300
 tool_timeout_sec = 3600
 ```
@@ -249,8 +251,7 @@ Add a local STDIO server to `opencode.jsonc`:
     "kali-mcp": {
       "type": "local",
       "command": [
-        "docker", "run", "--pull=always", "--rm", "-i",
-        "ghcr.io/found-cake/kali-mcp-go:latest",
+        "/absolute/path/to/kali-mcp-docker",
         "--timeout", "3600"
       ],
       "enabled": true,
@@ -299,7 +300,7 @@ Use `/workspace/...` in tool requests. Add the same host mapping, mount, or netw
 
 The image entrypoint already uses `tini` to reap browser subprocesses. Persistent mode keeps Docker's `--init` because its `--entrypoint` option replaces the image entrypoint.
 
-Add the profile and shared IPC options to the initial `docker run` command when browser verification is needed:
+The one-shot launcher applies the profile and shared IPC option automatically. For direct `docker run` commands, add them explicitly:
 
 ```bash
 docker run --pull=always --rm -i \
@@ -309,7 +310,7 @@ docker run --pull=always --rm -i \
   --timeout 3600
 ```
 
-If you use the published image without cloning the repository, download the matching profile first:
+If you use the published image without the launcher or a repository checkout, download the matching profile first:
 
 ```bash
 curl -fsSLo chromium-seccomp.json \
