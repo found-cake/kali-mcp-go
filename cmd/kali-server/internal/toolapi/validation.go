@@ -236,8 +236,21 @@ func validateJWTRequest(req dto.JWTRequest) error {
 	default:
 		return fmt.Errorf("mode must be pb|er|at")
 	}
-	if req.TargetURL != "" && req.RequestHeader == "" && req.RequestCookie == "" {
-		return fmt.Errorf("request_header or request_cookie is required for a live target")
+	if req.TargetURL == "" {
+		if req.RequestHeader != "" || req.RequestCookie != "" {
+			return fmt.Errorf("target_url is required with request_header or request_cookie")
+		}
+		return nil
+	}
+	if (req.RequestHeader == "") == (req.RequestCookie == "") {
+		return fmt.Errorf("exactly one of request_header or request_cookie is required for a live target")
+	}
+	template := req.RequestHeader
+	if template == "" {
+		template = req.RequestCookie
+	}
+	if strings.Count(template, "JWT_HERE") != 1 {
+		return fmt.Errorf("live request template must contain JWT_HERE exactly once")
 	}
 	return nil
 }

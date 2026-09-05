@@ -42,6 +42,10 @@ func TestToolHandlerValidation(t *testing.T) {
 		{name: "hydra stream password conflict", path: "/hydra/stream", handler: handleHydraStream, body: `{"target":"127.0.0.1","service":"ssh","username":"root","password":"toor","password_file":"/tmp/passwords.txt"}`, message: "password and password_file cannot be used together"},
 		{name: "nmap malformed additional arguments", path: "/nmap/stream", handler: handleNmapStream, body: `{"target":"127.0.0.1","additional_args":"--script \"bad"}`, message: "invalid additional_args"},
 		{name: "browser excessive wait", path: "/browser/stream", handler: handleBrowserStream, body: `{"url":"https://example.com","wait_milliseconds":30001}`, message: "wait_milliseconds must be between 0 and 30000"},
+		{name: "JWT missing template", path: "/jwt/stream", handler: handleJWTStream, body: `{"token":"a.b.c","target_url":"https://example.com/me"}`, message: "exactly one of request_header or request_cookie is required"},
+		{name: "JWT conflicting templates", path: "/jwt/stream", handler: handleJWTStream, body: `{"token":"a.b.c","target_url":"https://example.com/me","request_header":"Authorization: Bearer JWT_HERE","request_cookie":"token=JWT_HERE"}`, message: "exactly one of request_header or request_cookie is required"},
+		{name: "JWT placeholder missing", path: "/jwt/stream", handler: handleJWTStream, body: `{"token":"a.b.c","target_url":"https://example.com/me","request_header":"Authorization: Bearer literal"}`, message: "template must contain JWT_HERE exactly once"},
+		{name: "JWT duplicate placeholder", path: "/jwt/stream", handler: handleJWTStream, body: `{"token":"a.b.c","target_url":"https://example.com/me","request_cookie":"first=JWT_HERE; second=JWT_HERE"}`, message: "template must contain JWT_HERE exactly once"},
 	}
 
 	for _, test := range tests {
