@@ -136,11 +136,11 @@ func (r FeroxbusterRequest) GetRequestTimeout() int { return r.Timeout }
 type NucleiRequest struct {
 	ScanOptions
 	Target         string   `json:"target,omitempty" jsonschema:"target URL or host; omit when target_context is supplied"`
-	Severity       string   `json:"severity,omitempty" jsonschema:"comma-separated severities"`
-	Tags           string   `json:"tags,omitempty" jsonschema:"comma-separated template tags to include"`
-	Templates      []string `json:"templates,omitempty" jsonschema:"specific template paths or IDs"`
+	Severity       string   `json:"severity,omitempty" jsonschema:"comma-separated severities; safe-recon execution requires this, tags, or templates"`
+	Tags           string   `json:"tags,omitempty" jsonschema:"comma-separated template tags to include; safe-recon execution requires this, severity, or templates"`
+	Templates      []string `json:"templates,omitempty" jsonschema:"specific template paths or IDs; safe-recon execution requires this, severity, or tags"`
 	AllowUnsafe    bool     `json:"allow_unsafe,omitempty" jsonschema:"allow DoS, fuzz, DAST, OAST, and interactsh behavior only with explicit-custom or an omitted profile; false excludes these behaviors"`
-	DryRun         bool     `json:"dry_run,omitempty" jsonschema:"enumerate matching local templates and preview the command without contacting the target"`
+	DryRun         bool     `json:"dry_run,omitempty" jsonschema:"enumerate matching local templates and preview the command without contacting the target; may preview all safe templates without a selector"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Nuclei arguments excluding single, list, inline, resume, and config target sources; resolved targets also forbid cross-host redirects, TLS-name overrides, and proxy routing"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds; 0 derives it from request and rate budgets, while shorter explicit values are preserved with a warning"`
 }

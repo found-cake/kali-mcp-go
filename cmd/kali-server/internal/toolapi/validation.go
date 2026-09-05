@@ -180,6 +180,9 @@ func validateNucleiRequest(req dto.NucleiRequest) error {
 	if req.Target == "" {
 		return fmt.Errorf("target is required")
 	}
+	if req.Profile == dto.ProfileSafeRecon && !req.DryRun && strings.TrimSpace(req.Severity) == "" && strings.TrimSpace(req.Tags) == "" && len(req.Templates) == 0 {
+		return fmt.Errorf("safe-recon execution requires severity, tags, or templates; use dry_run to preview all safe templates")
+	}
 	for _, template := range req.Templates {
 		if strings.TrimSpace(template) == "" {
 			return fmt.Errorf("templates must not contain empty values")
