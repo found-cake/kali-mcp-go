@@ -60,6 +60,10 @@ function browserAuthentication(headers, targetURL) {
   return { extraHTTPHeaders, cookies };
 }
 
+function browserRequestInScope(requestURL, targetURL) {
+  return new URL(requestURL).origin === new URL(targetURL).origin;
+}
+
 function navigationEvidence(response) {
   if (!response) {
     return {
@@ -78,6 +82,7 @@ function navigationEvidence(response) {
 module.exports = {
   browserAuthentication,
   browserLaunchOptions,
+  browserRequestInScope,
   createBoundedCollector,
   navigationEvidence,
   networkEvidenceURL,

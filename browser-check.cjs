@@ -5,6 +5,7 @@ const { readFile, writeFile } = require("node:fs/promises");
 const {
   browserAuthentication,
   browserLaunchOptions,
+  browserRequestInScope,
   createBoundedCollector,
   navigationEvidence,
   networkEvidenceURL,
@@ -60,11 +61,20 @@ async function main() {
       ? JSON.parse(await readFile(options.headersFile, "utf8"))
       : {};
     const authentication = browserAuthentication(headers, options.url);
-    const context = await browser.newContext({ extraHTTPHeaders: authentication.extraHTTPHeaders });
+    const context = await browser.newContext();
     if (authentication.cookies.length > 0) {
       await context.addCookies(authentication.cookies);
     }
     const page = await context.newPage();
+    if (Object.keys(authentication.extraHTTPHeaders).length > 0) {
+      await page.route(
+        (url) => browserRequestInScope(url.toString(), options.url),
+        async (route) => {
+          const headers = await route.request().allHeaders();
+          await route.continue({ headers: { ...headers, ...authentication.extraHTTPHeaders } });
+        },
+      );
+    }
     const dialogs = createBoundedCollector(maxEvidenceEvents);
     const consoleMessages = createBoundedCollector(maxEvidenceEvents);
     const pageErrors = createBoundedCollector(maxEvidenceEvents);

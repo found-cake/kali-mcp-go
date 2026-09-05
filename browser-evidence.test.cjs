@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   browserAuthentication,
   browserLaunchOptions,
+  browserRequestInScope,
   createBoundedCollector,
   navigationEvidence,
   networkEvidenceURL,
@@ -21,6 +22,11 @@ test("browser authentication separates Cookie into the isolated jar", () => {
     { name: "session", value: "alpha", url: "https://example.test" },
     { name: "preference", value: "dark=mode", url: "https://example.test" },
   ]);
+});
+
+test("browser authentication headers stay on the selected origin", () => {
+  assert.equal(browserRequestInScope("https://example.test/api", "https://example.test/app"), true);
+  assert.equal(browserRequestInScope("https://cdn.example.test/app.js", "https://example.test/app"), false);
 });
 
 test("collector rejects events after its evidence limit", () => {
