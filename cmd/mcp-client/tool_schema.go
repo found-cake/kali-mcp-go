@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	toolmeta "github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,6 +38,43 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 		profiles = append(profiles, string(dto.ProfileExplicitCustom))
 		profileSchema.Description = "safety profile accepted by this tool"
 		profileSchema.Enum = profiles
+	}
+	for _, control := range []dto.ScanControl{
+		dto.ScanControlRateLimit,
+		dto.ScanControlConcurrency,
+		dto.ScanControlMaxRequests,
+		dto.ScanControlMax5xx,
+	} {
+		controlSchema, ok := schema.Properties[string(control)]
+		if !ok {
+			continue
+		}
+		maximum := float64(toolmeta.ScanControlMaximum(dto.ProfileExplicitCustom, control))
+		controlSchema.Maximum = &maximum
+	}
+	for _, profile := range definition.Profiles {
+		profileProperties := make(map[string]*jsonschema.Schema)
+		for _, control := range definition.Controls {
+			maximum := toolmeta.ScanControlMaximum(profile, control.Control)
+			if maximum == 0 {
+				continue
+			}
+			maximumValue := float64(maximum)
+			profileProperties[string(control.Control)] = &jsonschema.Schema{Maximum: &maximumValue}
+		}
+		if len(profileProperties) == 0 {
+			continue
+		}
+		profileValue := any(string(profile))
+		schema.AllOf = append(schema.AllOf, &jsonschema.Schema{
+			If: &jsonschema.Schema{
+				Required: []string{"profile"},
+				Properties: map[string]*jsonschema.Schema{
+					"profile": {Const: &profileValue},
+				},
+			},
+			Then: &jsonschema.Schema{Properties: profileProperties},
+		})
 	}
 	return &mcp.Tool{
 		Name: definition.Tool, Description: definition.Description,

@@ -53,17 +53,17 @@ func EffectiveScanOptions(tool string, options dto.ScanOptions) (dto.ScanOptions
 }
 
 func validateControlRanges(options dto.ScanOptions) error {
-	if options.RateLimit < 0 || options.RateLimit > 1000 {
-		return fmt.Errorf("rate_limit must be between 1 and 1000")
+	if options.RateLimit < 0 || options.RateLimit > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlRateLimit) {
+		return fmt.Errorf("rate_limit must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlRateLimit))
 	}
-	if options.Concurrency < 0 || options.Concurrency > 100 {
-		return fmt.Errorf("concurrency must be between 1 and 100")
+	if options.Concurrency < 0 || options.Concurrency > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlConcurrency) {
+		return fmt.Errorf("concurrency must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlConcurrency))
 	}
-	if options.MaxRequests < 0 || options.MaxRequests > 1000000 {
-		return fmt.Errorf("max_requests must be between 1 and 1000000")
+	if options.MaxRequests < 0 || options.MaxRequests > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMaxRequests) {
+		return fmt.Errorf("max_requests must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMaxRequests))
 	}
-	if options.Max5xxResponses < 0 || options.Max5xxResponses > 1000 {
-		return fmt.Errorf("max_5xx_responses must be between 1 and 1000")
+	if options.Max5xxResponses < 0 || options.Max5xxResponses > ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMax5xx) {
+		return fmt.Errorf("max_5xx_responses must be between 1 and %d", ScanControlMaximum(dto.ProfileExplicitCustom, dto.ScanControlMax5xx))
 	}
 	return nil
 }

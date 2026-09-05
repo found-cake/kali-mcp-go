@@ -97,6 +97,59 @@ func TestToolSchemasExposeOnlySupportedScanControls(t *testing.T) {
 	}
 }
 
+func TestToolSchemasExposeProfileControlMaximums(t *testing.T) {
+	t.Parallel()
+
+	// Given: tools whose safe profile limits are lower than explicit-custom limits.
+	tests := []struct {
+		tool        string
+		profile     string
+		control     string
+		profileMax  float64
+		explicitMax float64
+	}{
+		{tool: "nmap_scan", profile: "safe-recon", control: "rate_limit", profileMax: 10, explicitMax: 1000},
+		{tool: "nuclei_scan", profile: "safe-recon", control: "concurrency", profileMax: 2, explicitMax: 100},
+		{tool: "feroxbuster_scan", profile: "web-discovery-low-rate", control: "max_requests", profileMax: 1000, explicitMax: 1_000_000},
+	}
+
+	for _, test := range tests {
+		t.Run(test.tool+"/"+test.control, func(t *testing.T) {
+			// When: an orchestrator inspects the executable tool schema.
+			schema := listedToolByName(t, test.tool).InputSchema.(map[string]any)
+			properties, _ := schemaProperties(schema)
+			controlSchema := properties[test.control].(map[string]any)
+
+			// Then: both the explicit-custom ceiling and selected-profile ceiling are machine-readable.
+			if controlSchema["maximum"] != test.explicitMax {
+				t.Fatalf("tool %s %s maximum=%v want=%v", test.tool, test.control, controlSchema["maximum"], test.explicitMax)
+			}
+			if got, found := conditionalControlMaximum(schema, test.profile, test.control); !found || got != test.profileMax {
+				t.Fatalf("tool %s profile %s %s maximum=%v found=%t want=%v", test.tool, test.profile, test.control, got, found, test.profileMax)
+			}
+		})
+	}
+}
+
+func conditionalControlMaximum(schema map[string]any, profile, control string) (float64, bool) {
+	constraints, _ := schema["allOf"].([]any)
+	for _, rawConstraint := range constraints {
+		constraint, _ := rawConstraint.(map[string]any)
+		condition, _ := constraint["if"].(map[string]any)
+		conditionProperties, _ := condition["properties"].(map[string]any)
+		profileSchema, _ := conditionProperties["profile"].(map[string]any)
+		if profileSchema["const"] != profile {
+			continue
+		}
+		thenSchema, _ := constraint["then"].(map[string]any)
+		thenProperties, _ := thenSchema["properties"].(map[string]any)
+		controlSchema, _ := thenProperties[control].(map[string]any)
+		maximum, ok := controlSchema["maximum"].(float64)
+		return maximum, ok
+	}
+	return 0, false
+}
+
 func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	t.Parallel()
 
