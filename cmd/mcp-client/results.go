@@ -69,6 +69,11 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 			Retryable: true,
 		}
 	}
+	if toolName == "nuclei_scan" && result.ExecutionStatus != dto.ExecutionSucceeded && nucleiReportedFinding(result.Stdout) {
+		result.FindingStatus = dto.FindingsDetected
+		result.PartialResults = true
+		result.ClassificationReason = "nuclei_partial_finding_reported"
+	}
 	if wpscanNonWordPress {
 		result.FindingStatus = dto.FindingsNotDetected
 		result.PartialResults = false
@@ -127,7 +132,19 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 			result.FindingStatus = dto.FindingsNotDetected
 			result.ClassificationReason = "gobuster_completed_without_result"
 		}
-	case "nuclei_scan", "ffuf_scan", "feroxbuster_scan":
+	case "nuclei_scan":
+		switch {
+		case strings.TrimSpace(result.Stdout) == "":
+			result.FindingStatus = dto.FindingsNotDetected
+			result.ClassificationReason = "scanner_completed_without_output"
+		case nucleiReportedFinding(result.Stdout):
+			result.FindingStatus = dto.FindingsDetected
+			result.ClassificationReason = "scanner_emitted_findings"
+		default:
+			result.FindingStatus = dto.FindingsInconclusive
+			result.ClassificationReason = "nuclei_output_not_valid_jsonl"
+		}
+	case "ffuf_scan", "feroxbuster_scan":
 		if strings.TrimSpace(result.Stdout) == "" {
 			result.FindingStatus = dto.FindingsNotDetected
 			result.ClassificationReason = "scanner_completed_without_output"

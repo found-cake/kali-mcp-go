@@ -31,6 +31,18 @@ func jwtLiveTransportFailure(result dto.ToolResult) bool {
 	return false
 }
 
+func nucleiReportedFinding(output string) bool {
+	for line := range strings.Lines(output) {
+		var event struct {
+			TemplateID string `json:"template-id"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &event); err == nil && event.TemplateID != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func gobusterReportedFinding(output string) bool {
 	for line := range strings.Lines(output) {
 		line = strings.TrimSpace(line)
@@ -62,7 +74,7 @@ func finalizeClassifiedResult(result *dto.ToolResult) {
 		result.Failure = &dto.FailureInfo{Code: code, Message: message, Retryable: retryable}
 	}
 	result.Finalize()
-	if result.ExecutionStatus == dto.ExecutionTimedOut || result.ExecutionStatus == dto.ExecutionCancelled || result.ExecutionStatus == dto.ExecutionFailed && result.PartialResults {
+	if result.FindingStatus != dto.FindingsDetected && (result.ExecutionStatus == dto.ExecutionTimedOut || result.ExecutionStatus == dto.ExecutionCancelled || result.ExecutionStatus == dto.ExecutionFailed && result.PartialResults) {
 		result.FindingStatus = dto.FindingsInconclusive
 	}
 }
