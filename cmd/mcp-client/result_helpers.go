@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -41,6 +42,56 @@ func nucleiReportedFinding(output string) bool {
 		}
 	}
 	return false
+}
+
+func ffufReportedFinding(output string) bool {
+	for line := range strings.Lines(output) {
+		var result struct {
+			URL    string `json:"url"`
+			Status int    `json:"status"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &result); err == nil && result.URL != "" && result.Status >= 100 && result.Status <= 599 {
+			return true
+		}
+	}
+	return false
+}
+
+func niktoReportedFinding(output string) bool {
+	for line := range strings.Lines(output) {
+		fields := strings.Fields(strings.ToLower(line))
+		for index := 1; index+1 < len(fields); index++ {
+			if fields[index] != "item" && fields[index] != "items" && fields[index] != "item(s)" {
+				continue
+			}
+			count, err := strconv.Atoi(fields[index-1])
+			if err == nil && count > 0 && strings.Trim(fields[index+1], ":.,") == "reported" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func applyIncompleteReportedFinding(toolName string, result *dto.ToolResult, combinedOutput string) {
+	if result.ExecutionStatus == dto.ExecutionSucceeded {
+		return
+	}
+	found := false
+	switch toolName {
+	case "nuclei_scan":
+		found = nucleiReportedFinding(result.Stdout)
+	case "ffuf_scan":
+		found = ffufReportedFinding(result.Stdout)
+	case "nikto_scan":
+		found = niktoReportedFinding(combinedOutput)
+	}
+	if !found {
+		return
+	}
+	result.FindingStatus = dto.FindingsDetected
+	result.PartialResults = true
+	result.ClassificationReason = strings.TrimSuffix(toolName, "_scan") + "_partial_finding_reported"
 }
 
 func gobusterReportedFinding(output string) bool {

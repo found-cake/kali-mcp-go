@@ -92,9 +92,23 @@ func TestClassifyNiktoResultMarksInternalMaxTimeAsPartialTimeout(t *testing.T) {
 	// When: the MCP boundary classifies the tool result.
 	result := classifyToolResult("nikto_scan", input)
 
-	// Then: the incomplete scan cannot be mistaken for a successful vulnerability finding.
-	if result.ExecutionStatus != dto.ExecutionTimedOut || !result.TimedOut || !result.PartialResults || result.FindingStatus != dto.FindingsInconclusive || result.ClassificationReason != "nikto_internal_max_time" {
+	// Then: execution remains incomplete while the reported finding is preserved independently.
+	if result.ExecutionStatus != dto.ExecutionTimedOut || !result.TimedOut || !result.PartialResults || result.FindingStatus != dto.FindingsDetected || result.ClassificationReason != "nikto_partial_finding_reported" {
 		t.Fatalf("unexpected Nikto internal timeout classification: %+v", result)
+	}
+}
+
+func TestClassifyNiktoTimeoutWithoutReportedItemsIsInconclusive(t *testing.T) {
+	t.Parallel()
+
+	result := classifyToolResult("nikto_scan", dto.ToolResult{
+		ReturnCode: -1,
+		TimedOut:   true,
+		Stdout:     "+ 0 item(s) reported on the remote host\n",
+	})
+
+	if result.ExecutionStatus != dto.ExecutionTimedOut || result.FindingStatus != dto.FindingsInconclusive {
+		t.Fatalf("unexpected Nikto timeout classification: %+v", result)
 	}
 }
 

@@ -69,11 +69,7 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 			Retryable: true,
 		}
 	}
-	if toolName == "nuclei_scan" && result.ExecutionStatus != dto.ExecutionSucceeded && nucleiReportedFinding(result.Stdout) {
-		result.FindingStatus = dto.FindingsDetected
-		result.PartialResults = true
-		result.ClassificationReason = "nuclei_partial_finding_reported"
-	}
+	applyIncompleteReportedFinding(toolName, &result, output)
 	if wpscanNonWordPress {
 		result.FindingStatus = dto.FindingsNotDetected
 		result.PartialResults = false
