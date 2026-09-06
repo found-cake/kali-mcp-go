@@ -10,7 +10,8 @@ const nucleiInlineOutputBytes = 2 * 1024
 
 func compactToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	if toolName != "nuclei_scan" {
-		return result.Compact(defaultInlineOutputBytes)
+		result = result.Compact(defaultInlineOutputBytes)
+		return annotateOutputCompleteness(result)
 	}
 	result.StdoutBytes = len(result.Stdout)
 	result.StderrBytes = len(result.Stderr)
@@ -18,7 +19,20 @@ func compactToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	stderr, stderrTruncated := completeLinePreview(result.Stderr, nucleiInlineOutputBytes)
 	result.Stdout = stdout
 	result.Stderr = stderr
-	result.OutputTruncated = result.OutputTruncated || stdoutTruncated || stderrTruncated
+	result.StdoutTruncated = result.StdoutTruncated || stdoutTruncated
+	result.StderrTruncated = result.StderrTruncated || stderrTruncated
+	result.OutputTruncated = result.OutputTruncated || result.StdoutTruncated || result.StderrTruncated
+	return annotateOutputCompleteness(result)
+}
+
+func annotateOutputCompleteness(result dto.ToolResult) dto.ToolResult {
+	result.FindingOutputTruncated = result.StdoutTruncated
+	for _, artifact := range result.Artifacts {
+		if artifact.Relation == dto.ArtifactRelationToolResult {
+			result.ArtifactComplete = true
+			break
+		}
+	}
 	return result
 }
 

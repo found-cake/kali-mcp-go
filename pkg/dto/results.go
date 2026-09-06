@@ -151,41 +151,45 @@ type HTTPRequestMetadata struct {
 }
 
 type ToolResult struct {
-	CallID               string                 `json:"call_id"`
-	Stdout               string                 `json:"stdout"`
-	Stderr               string                 `json:"stderr"`
-	StdoutBytes          int                    `json:"stdout_bytes"`
-	StderrBytes          int                    `json:"stderr_bytes"`
-	OutputTruncated      bool                   `json:"output_truncated"`
-	ReturnCode           int                    `json:"return_code"`
-	Success              bool                   `json:"success" jsonschema:"true when tool execution succeeded; does not mean a security finding was detected"`
-	TimedOut             bool                   `json:"timed_out"`
-	Cancelled            bool                   `json:"cancelled"`
-	PartialResults       bool                   `json:"partial_results"`
-	Status               RunStatus              `json:"status" jsonschema:"completed|failed|timeout|cancelled overall run status"`
-	ExecutionStatus      ExecutionStatus        `json:"execution_status" jsonschema:"succeeded|failed|timed_out|cancelled tool execution outcome"`
-	FindingStatus        FindingStatus          `json:"finding_status" jsonschema:"detected|not_detected|inconclusive|unknown security finding outcome independent of execution_status"`
-	FindingTypes         []FindingType          `json:"finding_types,omitempty" jsonschema:"categories of observations produced or evaluated by the tool"`
-	ClassificationReason string                 `json:"classification_reason,omitempty" jsonschema:"machine-readable reason for the execution and finding classification"`
-	HTTPRequests         *int                   `json:"http_requests"`
-	RequestCountSource   RequestCountSource     `json:"request_count_source"`
-	DurationMS           int64                  `json:"duration_ms"`
-	Failure              *FailureInfo           `json:"failure"`
-	Execution            ExecutionMetadata      `json:"execution"`
-	Target               *TargetProvenance      `json:"target"`
-	SPABaseline          *SPABaseline           `json:"spa_baseline"`
-	FalsePositiveRisk    string                 `json:"false_positive_risk"`
-	Warnings             []string               `json:"warnings,omitempty"`
-	Artifacts            []ArtifactRef          `json:"artifacts"`
-	HTTPRequest          *HTTPRequestMetadata   `json:"http_request,omitempty"`
-	HTTPResponse         *HTTPResponseMetadata  `json:"http_response,omitempty"`
-	JWTAnalysis          *JWTAnalysisMetadata   `json:"jwt_analysis,omitempty"`
-	SQLMapAnalysis       *SQLMapAnalysis        `json:"sqlmap_analysis,omitempty"`
-	NucleiPreview        *NucleiPreviewMetadata `json:"nuclei_preview,omitempty"`
-	NucleiRuntime        *NucleiRuntimeMetadata `json:"nuclei_runtime,omitempty"`
-	DiscoveredPaths      []DiscoveredPath       `json:"discovered_paths,omitempty"`
-	Evidence             *EvidenceManifest      `json:"evidence,omitempty"`
-	Progress             *ProgressMetadata      `json:"progress,omitempty"`
+	CallID                 string                 `json:"call_id"`
+	Stdout                 string                 `json:"stdout"`
+	Stderr                 string                 `json:"stderr"`
+	StdoutBytes            int                    `json:"stdout_bytes"`
+	StderrBytes            int                    `json:"stderr_bytes"`
+	OutputTruncated        bool                   `json:"output_truncated"`
+	StdoutTruncated        bool                   `json:"stdout_truncated"`
+	StderrTruncated        bool                   `json:"stderr_truncated"`
+	FindingOutputTruncated bool                   `json:"finding_output_truncated"`
+	ArtifactComplete       bool                   `json:"artifact_complete"`
+	ReturnCode             int                    `json:"return_code"`
+	Success                bool                   `json:"success" jsonschema:"true when tool execution succeeded; does not mean a security finding was detected"`
+	TimedOut               bool                   `json:"timed_out"`
+	Cancelled              bool                   `json:"cancelled"`
+	PartialResults         bool                   `json:"partial_results"`
+	Status                 RunStatus              `json:"status" jsonschema:"completed|failed|timeout|cancelled overall run status"`
+	ExecutionStatus        ExecutionStatus        `json:"execution_status" jsonschema:"succeeded|failed|timed_out|cancelled tool execution outcome"`
+	FindingStatus          FindingStatus          `json:"finding_status" jsonschema:"detected|not_detected|inconclusive|unknown security finding outcome independent of execution_status"`
+	FindingTypes           []FindingType          `json:"finding_types,omitempty" jsonschema:"categories of observations produced or evaluated by the tool"`
+	ClassificationReason   string                 `json:"classification_reason,omitempty" jsonschema:"machine-readable reason for the execution and finding classification"`
+	HTTPRequests           *int                   `json:"http_requests"`
+	RequestCountSource     RequestCountSource     `json:"request_count_source"`
+	DurationMS             int64                  `json:"duration_ms"`
+	Failure                *FailureInfo           `json:"failure"`
+	Execution              ExecutionMetadata      `json:"execution"`
+	Target                 *TargetProvenance      `json:"target"`
+	SPABaseline            *SPABaseline           `json:"spa_baseline"`
+	FalsePositiveRisk      string                 `json:"false_positive_risk"`
+	Warnings               []string               `json:"warnings,omitempty"`
+	Artifacts              []ArtifactRef          `json:"artifacts"`
+	HTTPRequest            *HTTPRequestMetadata   `json:"http_request,omitempty"`
+	HTTPResponse           *HTTPResponseMetadata  `json:"http_response,omitempty"`
+	JWTAnalysis            *JWTAnalysisMetadata   `json:"jwt_analysis,omitempty"`
+	SQLMapAnalysis         *SQLMapAnalysis        `json:"sqlmap_analysis,omitempty"`
+	NucleiPreview          *NucleiPreviewMetadata `json:"nuclei_preview,omitempty"`
+	NucleiRuntime          *NucleiRuntimeMetadata `json:"nuclei_runtime,omitempty"`
+	DiscoveredPaths        []DiscoveredPath       `json:"discovered_paths,omitempty"`
+	Evidence               *EvidenceManifest      `json:"evidence,omitempty"`
+	Progress               *ProgressMetadata      `json:"progress,omitempty"`
 }
 
 func (r ToolResult) Compact(maximumBytes int) ToolResult {
@@ -195,7 +199,9 @@ func (r ToolResult) Compact(maximumBytes int) ToolResult {
 	stderr, stderrTruncated := compactUTF8(r.Stderr, maximumBytes)
 	r.Stdout = stdout
 	r.Stderr = stderr
-	r.OutputTruncated = stdoutTruncated || stderrTruncated
+	r.StdoutTruncated = r.StdoutTruncated || stdoutTruncated
+	r.StderrTruncated = r.StderrTruncated || stderrTruncated
+	r.OutputTruncated = r.OutputTruncated || r.StdoutTruncated || r.StderrTruncated
 	return r
 }
 

@@ -34,3 +34,26 @@ func TestCompactToolResultOmitsOversizedFirstNucleiLine(t *testing.T) {
 		t.Fatalf("oversized Nuclei line was partially exposed: %+v", compacted)
 	}
 }
+
+func TestCompactToolResultSeparatesFindingAndArtifactCompleteness(t *testing.T) {
+	// Given: oversized Nuclei finding and diagnostic channels with a retained full result artifact.
+	fullLine := strings.Repeat("x", 3000) + "\n"
+	result := dto.ToolResult{
+		Stdout: fullLine,
+		Stderr: fullLine,
+		Artifacts: []dto.ArtifactRef{{
+			ID: "artifact_full", Relation: dto.ArtifactRelationToolResult,
+		}},
+	}
+
+	// When: the result is bounded for inline MCP delivery.
+	compacted := compactToolResult("nuclei_scan", result)
+
+	// Then: channel truncation, finding truncation, and artifact completeness remain distinct.
+	if !compacted.OutputTruncated || !compacted.StdoutTruncated || !compacted.StderrTruncated {
+		t.Fatalf("missing channel truncation metadata: %+v", compacted)
+	}
+	if !compacted.FindingOutputTruncated || !compacted.ArtifactComplete {
+		t.Fatalf("missing finding or artifact completeness metadata: %+v", compacted)
+	}
+}

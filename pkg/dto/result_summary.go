@@ -3,12 +3,16 @@ package dto
 import "encoding/json"
 
 type inlineResultAssessment struct {
-	Status               RunStatus       `json:"status"`
-	ExecutionStatus      ExecutionStatus `json:"execution_status"`
-	FindingStatus        FindingStatus   `json:"finding_status"`
-	FindingTypes         []FindingType   `json:"finding_types,omitempty"`
-	ClassificationReason string          `json:"classification_reason,omitempty"`
-	OutputTruncated      bool            `json:"output_truncated"`
+	Status                 RunStatus       `json:"status"`
+	ExecutionStatus        ExecutionStatus `json:"execution_status"`
+	FindingStatus          FindingStatus   `json:"finding_status"`
+	FindingTypes           []FindingType   `json:"finding_types,omitempty"`
+	ClassificationReason   string          `json:"classification_reason,omitempty"`
+	OutputTruncated        bool            `json:"output_truncated"`
+	StdoutTruncated        bool            `json:"stdout_truncated"`
+	StderrTruncated        bool            `json:"stderr_truncated"`
+	FindingOutputTruncated bool            `json:"finding_output_truncated"`
+	ArtifactComplete       bool            `json:"artifact_complete"`
 }
 
 type inlineHTTPResponseSummary struct {
@@ -38,7 +42,10 @@ func (r ToolResult) inlineStructuredSummary() (string, error) {
 	summary := inlineResultSummary{
 		Assessment: inlineResultAssessment{
 			Status: r.Status, ExecutionStatus: r.ExecutionStatus, FindingStatus: r.FindingStatus,
-			FindingTypes: r.FindingTypes, ClassificationReason: r.ClassificationReason, OutputTruncated: r.OutputTruncated,
+			FindingTypes: r.FindingTypes, ClassificationReason: r.ClassificationReason,
+			OutputTruncated: r.OutputTruncated, StdoutTruncated: r.StdoutTruncated,
+			StderrTruncated: r.StderrTruncated, FindingOutputTruncated: r.FindingOutputTruncated,
+			ArtifactComplete: r.ArtifactComplete,
 		},
 		SQLMapAnalysis: r.SQLMapAnalysis,
 		JWTStructure:   r.JWTAnalysis,
