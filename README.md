@@ -327,7 +327,7 @@ TCP connect scans such as `-sT -Pn` work with Docker's default capabilities. Add
 
 ### 5. Configuration reference
 
-For long scans, the MCP host timeout must be at least as large as `mcp-client --timeout`. A value of 3600 seconds at both layers is a practical starting point; individual tool requests can still set tighter limits.
+For long scans, configure the MCP host timeout above `mcp-client --timeout`. When the host propagates its deadline, the client reserves five seconds to cancel the remote process and return accumulated output. A host that forcibly terminates the STDIO process cannot receive a final partial-result envelope. Individual tool requests can still set tighter limits.
 
 #### mcp-client flags
 
@@ -506,7 +506,7 @@ The server instructions and tool descriptions recognize authorized black-box pen
 
 ### SQLmap JSON and raw requests
 
-`sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, and expected error codes. Absolute raw-request targets must match their `Host` header, and selected resolution additionally rejects Host, proxy, redirect, scheme, port, and DNS-OOB overrides while binding the raw destination to the signed service. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
+`sqlmap_scan` accepts exactly one of `url`, `request_file`, or `raw_request`. It supports JSON bodies with SQLmap's `*` injection marker, named test parameters, headers, cookies, content type, expected error codes, and explicit `abort_codes` passed to SQLmap's native `--abort-code` option. A status code cannot be both ignored and configured to abort. Absolute raw-request targets must match their `Host` header, and selected resolution additionally rejects Host, proxy, redirect, scheme, port, and DNS-OOB overrides while binding the raw destination to the signed service. Raw requests, traffic logs, and SQLmap output are kept in a mode-restricted temporary workspace and deleted after completion. `--ignore-stdin` is applied automatically so MCP's non-TTY process input cannot override a supplied raw request.
 
 ### Bounded manual HTTP requests
 
