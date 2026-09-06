@@ -103,6 +103,9 @@ func applyContextTarget(request any, claims targetContextClaims) error {
 		}
 		return setWebTarget(&value.TargetURL, claims.BrowserTarget, claims.Original)
 	case *dto.DalfoxRequest:
+		if err := rejectExplicitHostHeader(value.Headers); err != nil {
+			return err
+		}
 		return setWebTarget(&value.Target, claims.BrowserTarget, claims.Original)
 	case *dto.BrowserRequest:
 		return setWebTarget(&value.URL, claims.BrowserTarget, claims.Original)

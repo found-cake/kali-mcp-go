@@ -51,3 +51,17 @@ func TestValidateNativeScannerControlRanges(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDalfoxAuthentication(t *testing.T) {
+	t.Parallel()
+
+	tests := []dto.DalfoxRequest{
+		{Target: "https://example.test/?q=FUZZ", Headers: map[string]string{"Host": "foreign.test"}},
+		{Target: "https://example.test/?q=FUZZ", Cookies: "session=value\r\nX-Injected: value"},
+	}
+	for _, request := range tests {
+		if err := validateDalfoxRequest(request); err == nil {
+			t.Fatalf("invalid Dalfox authentication was accepted: %+v", request)
+		}
+	}
+}

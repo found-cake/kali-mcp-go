@@ -182,12 +182,14 @@ func (r JWTRequest) GetRequestTimeout() int { return r.Timeout }
 
 type DalfoxRequest struct {
 	ScanOptions
-	Target         string `json:"target,omitempty" jsonschema:"target URL or raw HTTP file; omit only for a URL supplied through target_context"`
-	RequestTimeout int    `json:"request_timeout,omitempty" jsonschema:"per-request timeout in seconds (tool default when omitted, maximum 300)"`
-	ScanTimeout    int    `json:"scan_timeout,omitempty" jsonschema:"per-parameter scan timeout in seconds (tool default when omitted, maximum 3600)"`
-	Retries        int    `json:"retries,omitempty" jsonschema:"number of failed-request retries (tool default when omitted, maximum 10)"`
-	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments excluding positional and alternate request sources; option values must be attached, concurrency replaces worker flags, browser-xss-confirm forbids method, body, redirect, remote payload, proxy, stored-XSS, and blind-OOB overrides"`
-	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
+	Target         string            `json:"target,omitempty" jsonschema:"target URL or raw HTTP file; omit only for a URL supplied through target_context"`
+	Headers        map[string]string `json:"headers,omitempty" jsonschema:"per-call HTTP headers forwarded to Dalfox; no reusable credential session is created and the normal raw evidence policy applies"`
+	Cookies        string            `json:"cookies,omitempty" jsonschema:"per-call Cookie header value forwarded to Dalfox; no reusable credential session is created and the normal raw evidence policy applies"`
+	RequestTimeout int               `json:"request_timeout,omitempty" jsonschema:"per-request timeout in seconds (tool default when omitted, maximum 300)"`
+	ScanTimeout    int               `json:"scan_timeout,omitempty" jsonschema:"per-parameter scan timeout in seconds (tool default when omitted, maximum 3600)"`
+	Retries        int               `json:"retries,omitempty" jsonschema:"number of failed-request retries (tool default when omitted, maximum 10)"`
+	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments excluding positional targets, headers, cookies, alternate request sources, and typed controls; option values must be attached, concurrency replaces worker flags, browser-xss-confirm forbids method, body, redirect, remote payload, proxy, stored-XSS, and blind-OOB overrides"`
+	Timeout        int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
 func (r DalfoxRequest) GetRequestTimeout() int { return r.Timeout }

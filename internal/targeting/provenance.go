@@ -114,6 +114,8 @@ func rejectResolvedVirtualHost(request any) error {
 		return rejectExplicitHostHeader(value.Headers)
 	case dto.SQLMapRequest:
 		return rejectExplicitHostHeader(value.Headers)
+	case dto.DalfoxRequest:
+		return rejectExplicitHostHeader(value.Headers)
 	case dto.JWTRequest:
 		return rejectHostHeaderText(value.RequestHeader)
 	default:

@@ -45,6 +45,12 @@ func TestTargetContextRejectsVirtualHostOverrides(t *testing.T) {
 			}, now)
 			return err
 		}},
+		{name: "Dalfox Host", apply: func() error {
+			_, err := targeting.ApplyContext("secret", dto.DalfoxRequest{
+				ScanOptions: dto.ScanOptions{TargetContext: context}, Headers: map[string]string{"HOST": "foreign.test"},
+			}, now)
+			return err
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

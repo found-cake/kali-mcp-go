@@ -203,6 +203,12 @@ func validateDalfoxRequest(req dto.DalfoxRequest) error {
 	if req.Target == "" {
 		return fmt.Errorf("target is required")
 	}
+	if err := validateAuthenticatedHeaders(req.Headers); err != nil {
+		return err
+	}
+	if containsLineBreak(req.Cookies) {
+		return fmt.Errorf("cookies must not contain line breaks")
+	}
 	if err := validateOptionalBoundedInt("request_timeout", req.RequestTimeout, 300); err != nil {
 		return err
 	}

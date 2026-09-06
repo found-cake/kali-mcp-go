@@ -175,52 +175,6 @@ func WhatWebArgs(request dto.WhatWebRequest) ([]string, error) {
 	return append(args, request.Target), nil
 }
 
-func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
-	if err := rejectContextHostHeaders(request.ScanOptions, request.AdditionalArgs, "additional_args", "-H", "--header"); err != nil {
-		return nil, err
-	}
-	args := []string{"dalfox", "scan", request.Target, "--format", "json", "--no-color"}
-	extra, err := splitArgs(request.AdditionalArgs)
-	if err != nil {
-		return nil, fmt.Errorf("invalid additional_args: %w", err)
-	}
-	if err := rejectArguments(extra, "additional_args", "use the typed Dalfox request controls",
-		"--rate-limit", "--timeout", "--scan-timeout", "--retries"); err != nil {
-		return nil, err
-	}
-	if err := rejectArguments(extra, "additional_args", "use concurrency", "--worker", "--workers"); err != nil {
-		return nil, err
-	}
-	if request.Profile == dto.ProfileBrowserXSSConfirm {
-		if err := rejectArguments(extra, "additional_args", "browser-xss-confirm uses Dalfox's default GET request",
-			"-X", "--method", "-d", "--data", "-F", "--follow-redirects", "-b", "--blind", "--blind-oob", "--blind-oob-secret",
-			"--custom-blind-xss-payload", "--remote-payloads", "--remote-wordlists", "--proxy", "--sxss-url"); err != nil {
-			return nil, err
-		}
-	}
-	if hasResolvedTarget(request.ScanOptions) {
-		if err := rejectArguments(extra, "additional_args", "resolved targets forbid alternate outbound destinations",
-			"-F", "--follow-redirects", "-b", "--blind", "--blind-oob", "--blind-oob-secret",
-			"--custom-blind-xss-payload", "--remote-payloads", "--remote-wordlists", "--proxy", "--sxss-url"); err != nil {
-			return nil, err
-		}
-	}
-	if err := rejectTargetSourceArgs(extra, "additional_args", true,
-		"--file", "--rawdata", "--har-file", "--config", "--session-check-url"); err != nil {
-		return nil, err
-	}
-	if request.RequestTimeout > 0 {
-		args = append(args, "--timeout", strconv.Itoa(request.RequestTimeout))
-	}
-	if request.ScanTimeout > 0 {
-		args = append(args, "--scan-timeout", strconv.Itoa(request.ScanTimeout))
-	}
-	if request.Retries > 0 {
-		args = append(args, "--retries", strconv.Itoa(request.Retries))
-	}
-	return append(args, extra...), nil
-}
-
 func BrowserArgs(request dto.BrowserRequest) ([]string, error) {
 	args := []string{"browser-check", "--url", request.URL}
 	if request.WaitMilliseconds > 0 {
