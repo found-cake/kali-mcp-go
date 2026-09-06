@@ -12,11 +12,21 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func TestInvokeStreamDecodesAcceptedAsyncJob(t *testing.T) {
-	// Given: a stream endpoint that accepted work into the server job store.
+func TestStartAsyncAddsInternalHeaderAndPreservesArguments(t *testing.T) {
+	// Given: an executable endpoint that accepts internally marked asynchronous work.
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/api/tools/nuclei/stream" {
 			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+		if request.Header.Get(dto.AsyncRequestHeader) != "true" {
+			t.Fatalf("missing asynchronous request header")
+		}
+		var arguments map[string]json.RawMessage
+		if err := json.NewDecoder(request.Body).Decode(&arguments); err != nil {
+			t.Fatalf("decode arguments: %v", err)
+		}
+		if _, found := arguments["async"]; found || string(arguments["target"]) != `"https://example.test"` {
+			t.Fatalf("unexpected forwarded arguments: %s", arguments)
 		}
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusAccepted)
@@ -24,17 +34,17 @@ func TestInvokeStreamDecodesAcceptedAsyncJob(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// When: the MCP-side client invokes the stream endpoint in async mode.
-	invocation, err := New(server.URL, time.Second, "token").InvokeStream(
-		context.Background(), "/api/tools/nuclei/stream", dto.NucleiRequest{ScanOptions: dto.ScanOptions{Async: true}},
+	// When: the MCP-side client starts the selected endpoint through the generic async path.
+	response, err := New(server.URL, time.Second, "token").StartAsync(
+		context.Background(), "/api/tools/nuclei/stream", json.RawMessage(`{"target":"https://example.test"}`),
 	)
 
-	// Then: the accepted envelope is returned without attempting SSE parsing.
+	// Then: the pending job envelope is decoded without changing the dedicated tool arguments.
 	if err != nil {
-		t.Fatalf("invoke async stream: %v", err)
+		t.Fatalf("start async tool: %v", err)
 	}
-	if invocation.Job == nil || invocation.Result != nil || invocation.Job.Status != dto.JobPending || invocation.Job.JobID != "job_test" {
-		t.Fatalf("unexpected async invocation: %+v", invocation)
+	if response.Status != dto.JobPending || response.JobID != "job_test" {
+		t.Fatalf("unexpected async response: %+v", response)
 	}
 }
 

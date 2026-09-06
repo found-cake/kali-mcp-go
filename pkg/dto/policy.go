@@ -20,16 +20,10 @@ type ScanOptions struct {
 	HealthURL            string        `json:"health_url,omitempty" jsonschema:"optional same-service target health URL checked before and after the scan; cross-origin redirects are rejected"`
 	Max5xxResponses      int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when supported; 0 means unset, not unlimited"`
 	RedactValues         []string      `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output and artifacts; all other content is preserved verbatim"`
-	Async                bool          `json:"async,omitempty" jsonschema:"return a pending job immediately and retain the terminal result for 30 seconds after process exit"`
 }
 
 func (o ScanOptions) GetScanOptions() ScanOptions { return o }
-func (o ScanOptions) GetAsync() bool              { return o.Async }
 
 type ScanRequest interface {
 	GetScanOptions() ScanOptions
-}
-
-type AsyncRequest interface {
-	GetAsync() bool
 }

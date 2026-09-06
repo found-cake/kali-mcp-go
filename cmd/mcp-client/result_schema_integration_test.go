@@ -10,6 +10,7 @@ func TestExecutableToolOutputSchemasStayCompactAndUniform(t *testing.T) {
 		"get_scan_capabilities": true, "resolve_target": true,
 		"result_artifact_read": true, "server_health": true,
 		"scan_job_status": true, "scan_job_result": true, "scan_job_cancel": true,
+		"run_tool_async": true,
 	}
 	var canonical []byte
 	for _, tool := range listedTestTools(t) {

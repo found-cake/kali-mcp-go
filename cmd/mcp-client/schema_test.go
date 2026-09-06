@@ -44,6 +44,7 @@ func TestCapabilityRegistryMatchesExecutableMCPTools(t *testing.T) {
 		"get_scan_capabilities": true, "resolve_target": true,
 		"result_artifact_read": true, "server_health": true,
 		"scan_job_status": true, "scan_job_result": true, "scan_job_cancel": true,
+		"run_tool_async": true,
 	}
 	registered := make([]string, 0)
 	for _, tool := range listedTestTools(t) {
@@ -234,7 +235,7 @@ func TestRegisteredMCPToolNamesRemainStable(t *testing.T) {
 		"feroxbuster_scan", "ffuf_scan", "get_scan_capabilities", "gobuster_scan", "http_request",
 		"hydra_attack", "hydra_attack_stream", "john_crack", "jwt_analyze", "metasploit_run",
 		"nikto_scan", "nmap_scan", "nuclei_scan", "osv_scan", "resolve_target",
-		"result_artifact_read", "retirejs_scan", "scan_job_cancel", "scan_job_result", "scan_job_status",
+		"result_artifact_read", "retirejs_scan", "run_tool_async", "scan_job_cancel", "scan_job_result", "scan_job_status",
 		"server_health", "sqlmap_scan", "tshark_capture",
 		"whatweb_scan", "wpscan_analyze",
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,11 +17,21 @@ import (
 )
 
 func TestMCPAsyncScanStartsAndReturnsTerminalJobData(t *testing.T) {
-	// Given: an HTTP execution server that accepts a Nuclei job and later returns its raw result.
+	// Given: an HTTP execution server that accepts a generic asynchronous Nuclei retry and later returns its raw result.
 	httpServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/api/tools/nuclei/stream":
+			if request.Header.Get("X-Kali-MCP-Async") != "true" {
+				t.Fatal("generic async request omitted its transport header")
+			}
+			var arguments map[string]json.RawMessage
+			if err := json.NewDecoder(request.Body).Decode(&arguments); err != nil {
+				t.Fatalf("decode forwarded arguments: %v", err)
+			}
+			if _, found := arguments["async"]; found {
+				t.Fatal("per-tool async flag leaked into forwarded arguments")
+			}
 			writer.WriteHeader(http.StatusAccepted)
 			fmt.Fprint(writer, `{"job_id":"job_mcp","status":"pending","data":{"call_id":"call_mcp","tool":"nuclei","started_at":"2026-09-06T00:00:00Z","timeout_ms":60000,"cancellation_requested":false}}`)
 		case "/api/jobs/job_mcp/result":
@@ -47,10 +58,11 @@ func TestMCPAsyncScanStartsAndReturnsTerminalJobData(t *testing.T) {
 	}
 	defer clientSession.Close()
 
-	// When: the scanner starts asynchronously and its terminal result is fetched.
+	// When: the scanner is explicitly retried through the generic async tool and its terminal result is fetched.
 	started, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "nuclei_scan", Arguments: dto.NucleiRequest{
-			ScanOptions: dto.ScanOptions{Async: true}, Target: "http://example.test", Tags: "http", Timeout: 60,
+		Name: "run_tool_async", Arguments: map[string]any{
+			"tool_name": "nuclei_scan",
+			"arguments": map[string]any{"target": "http://example.test", "tags": "http", "timeout": 60},
 		},
 	})
 	if err != nil {
@@ -93,5 +105,47 @@ func TestMCPAsyncScanStartsAndReturnsTerminalJobData(t *testing.T) {
 	}
 	if result.ExecutionStatus != dto.ExecutionSucceeded || result.FindingStatus != dto.FindingsNotDetected || result.CallID != "call_mcp" {
 		t.Fatalf("unexpected terminal tool result: %+v", result)
+	}
+}
+
+func TestAsyncToolRejectsArgumentsOutsideDedicatedSchema(t *testing.T) {
+	// Given: a generic async dispatcher backed by the registered Nmap schema.
+	var forwarded atomic.Bool
+	httpServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		forwarded.Store(true)
+		writer.WriteHeader(http.StatusAccepted)
+	}))
+	defer httpServer.Close()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	if err := registerTools(server, kaliclient.New(httpServer.URL, time.Second, "token")); err != nil {
+		t.Fatalf("register tools: %v", err)
+	}
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("connect MCP server: %v", err)
+	}
+	defer serverSession.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1"}, nil)
+	clientSession, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("connect MCP client: %v", err)
+	}
+	defer clientSession.Close()
+
+	// When: nested arguments contain a field rejected by the dedicated tool schema.
+	result, err := clientSession.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "run_tool_async", Arguments: map[string]any{
+			"tool_name": "nmap_scan",
+			"arguments": map[string]any{"target": "example.test", "service_detection": true},
+		},
+	})
+
+	// Then: validation fails locally before the HTTP execution endpoint is invoked.
+	if err != nil {
+		t.Fatalf("call async tool: %v", err)
+	}
+	if !result.IsError || forwarded.Load() {
+		t.Fatalf("unexpected validation result: is_error=%t forwarded=%t", result.IsError, forwarded.Load())
 	}
 }

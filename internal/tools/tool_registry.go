@@ -40,7 +40,6 @@ func toolCapability(name, runtime, endpoint, description string, target dto.Targ
 		TargetInputFormat: target, ImpactLevel: impact, ExecutionMode: mode,
 		InputSchemaSource: mcpSchemaSource, Essential: essential, BuiltIn: runtime == "http-request",
 		RequiresTargetContext: requiresTargetContext,
-		AsyncSupported:        mode == dto.ToolExecutionStream && runtime != "bash",
 		Profiles:              profiles,
 		Controls: append([]dto.ScanControlCapability{{
 			Control: dto.ScanControlTimeout, Enforcement: dto.ControlRequestTimeout,
@@ -48,22 +47,21 @@ func toolCapability(name, runtime, endpoint, description string, target dto.Targ
 	}
 }
 
-func RuntimeSupportsAsync(runtimeTool string) bool {
+func MCPToolForRuntime(runtimeTool string) (string, bool) {
 	for _, capability := range scanToolCapabilities {
-		if capability.RuntimeTool == runtimeTool && capability.AsyncSupported {
-			return true
-		}
-	}
-	return false
-}
-
-func AsyncMCPToolForRuntime(runtimeTool string) (string, bool) {
-	for _, capability := range scanToolCapabilities {
-		if capability.RuntimeTool == runtimeTool && capability.AsyncSupported {
+		if capability.RuntimeTool == runtimeTool {
 			return capability.Tool, true
 		}
 	}
 	return "", false
+}
+
+func ExecutableToolNames() []string {
+	names := make([]string, 0, len(scanToolCapabilities))
+	for _, capability := range scanToolCapabilities {
+		names = append(names, capability.Tool)
+	}
+	return names
 }
 
 func RuntimeRequiresTargetContext(runtimeTool string) bool {

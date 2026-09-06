@@ -8,32 +8,9 @@ import (
 	"github.com/found-cake/kali-mcp-go/internal/kaliclient"
 	toolmeta "github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-type streamToolOutput struct {
-	encoded json.RawMessage
-}
-
-func (output streamToolOutput) MarshalJSON() ([]byte, error) {
-	return output.encoded, nil
-}
-
-func newStreamToolOutput(result dto.ToolResult) (streamToolOutput, error) {
-	return encodeStreamToolOutput(result)
-}
-
-func newAsyncStreamToolOutput(result dto.JobResponse) (streamToolOutput, error) {
-	return encodeStreamToolOutput(result)
-}
-
-func encodeStreamToolOutput[T dto.ToolResult | dto.JobResponse](value T) (streamToolOutput, error) {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return streamToolOutput{}, fmt.Errorf("encode stream tool output: %w", err)
-	}
-	return streamToolOutput{encoded: encoded}, nil
-}
 
 type jobOperation func(context.Context, dto.JobRequest) (*dto.JobResponse, error)
 
@@ -43,11 +20,14 @@ type jobToolRegistration struct {
 	operation   jobOperation
 }
 
-func registerScanJobs(server *mcp.Server, kali *kaliclient.Client) {
+func registerAsyncJobs(server *mcp.Server, kali *kaliclient.Client, schemas toolInputSchemaCatalog) error {
+	if err := registerAsyncTool(server, kali, schemas); err != nil {
+		return err
+	}
 	registrations := []jobToolRegistration{
-		{name: "scan_job_status", description: "Inspect pending progress or terminal status for an asynchronous scan job.", operation: kali.JobStatus},
-		{name: "scan_job_result", description: "Read the existing ToolResult from an asynchronous scan job; terminal results remain available for 30 seconds after process exit.", operation: kali.JobResult},
-		{name: "scan_job_cancel", description: "Request cancellation of a running asynchronous scan job.", operation: kali.JobCancel},
+		{name: "scan_job_status", description: "Inspect pending progress or terminal status for an asynchronous tool job.", operation: kali.JobStatus},
+		{name: "scan_job_result", description: "Read the existing ToolResult from an asynchronous tool job; terminal results remain available for 30 seconds after process exit.", operation: kali.JobResult},
+		{name: "scan_job_cancel", description: "Request cancellation of a running asynchronous tool job.", operation: kali.JobCancel},
 	}
 	for _, registration := range registrations {
 		tool := &mcp.Tool{
@@ -59,6 +39,81 @@ func registerScanJobs(server *mcp.Server, kali *kaliclient.Client) {
 			return jobMCPResult(response, err)
 		})
 	}
+	return nil
+}
+
+func registerAsyncTool(server *mcp.Server, kali *kaliclient.Client, schemas toolInputSchemaCatalog) error {
+	validators, err := resolveAsyncToolSchemas(schemas)
+	if err != nil {
+		return err
+	}
+	tool := &mcp.Tool{
+		Name:        "run_tool_async",
+		Description: "Start any registered executable tool as a new asynchronous run. Pass the exact arguments accepted by that dedicated tool. Use this before a likely timeout or to retry from the beginning after a synchronous timeout.",
+		InputSchema: asyncToolInputSchema(), OutputSchema: jobResponseOutputSchema(),
+	}
+	mcp.AddTool(server, tool, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.AsyncToolRequest) (*mcp.CallToolResult, dto.JobResponse, error) {
+		definition, found := toolmeta.ToolCapability(request.ToolName)
+		if !found {
+			return nil, dto.JobResponse{}, fmt.Errorf("unknown executable tool %q", request.ToolName)
+		}
+		if err := validateAsyncArguments(validators[request.ToolName], request.Arguments); err != nil {
+			return nil, dto.JobResponse{}, fmt.Errorf("invalid %s arguments: %w", request.ToolName, err)
+		}
+		response, err := kali.StartAsync(ctx, definition.Endpoint, request.Arguments)
+		return jobMCPResult(response, err)
+	})
+	return nil
+}
+
+func resolveAsyncToolSchemas(schemas toolInputSchemaCatalog) (map[string]*jsonschema.Resolved, error) {
+	resolved := make(map[string]*jsonschema.Resolved, len(schemas))
+	for _, name := range toolmeta.ExecutableToolNames() {
+		raw, found := schemas[name]
+		if !found {
+			return nil, fmt.Errorf("missing registered input schema for %s", name)
+		}
+		var schema jsonschema.Schema
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			return nil, fmt.Errorf("decode %s input schema: %w", name, err)
+		}
+		validator, err := schema.Resolve(nil)
+		if err != nil {
+			return nil, fmt.Errorf("resolve %s input schema: %w", name, err)
+		}
+		resolved[name] = validator
+	}
+	return resolved, nil
+}
+
+func validateAsyncArguments(validator *jsonschema.Resolved, raw json.RawMessage) error {
+	var arguments map[string]any
+	if err := json.Unmarshal(raw, &arguments); err != nil || arguments == nil {
+		return fmt.Errorf("arguments must be a JSON object")
+	}
+	if err := validator.Validate(arguments); err != nil {
+		return err
+	}
+	return nil
+}
+
+func asyncToolInputSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"tool_name": {Type: "string", Enum: stringEnums(toolmeta.ExecutableToolNames())},
+			"arguments": objectSchema(),
+		},
+		Required: []string{"tool_name", "arguments"},
+	}
+}
+
+func stringEnums(values []string) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		result = append(result, value)
+	}
+	return result
 }
 
 func jobMCPResult(response *dto.JobResponse, operationErr error) (*mcp.CallToolResult, dto.JobResponse, error) {
@@ -104,7 +159,7 @@ func normalizeJobResponse(response dto.JobResponse) (dto.JobResponse, *dto.ToolR
 	if err := json.Unmarshal(response.Data, &result); err != nil {
 		return dto.JobResponse{}, nil, fmt.Errorf("decode job tool result: %w", err)
 	}
-	toolName, found := toolmeta.AsyncMCPToolForRuntime(identity.Execution.Tool)
+	toolName, found := toolmeta.MCPToolForRuntime(identity.Execution.Tool)
 	if found {
 		result = classifyToolResult(toolName, result)
 		result = compactToolResult(toolName, result)

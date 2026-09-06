@@ -32,6 +32,7 @@ type jsonRequestSpec struct {
 	transportError      string
 	statusBodyReadError string
 	responseDecodeError string
+	headers             http.Header
 }
 
 func New(baseURL string, timeout time.Duration, token string) *Client {
@@ -100,6 +101,11 @@ func (c *Client) newJSONRequest(ctx context.Context, spec jsonRequestSpec) (*htt
 	}
 	if spec.authorize {
 		c.authorize(request)
+	}
+	for name, values := range spec.headers {
+		for _, value := range values {
+			request.Header.Add(name, value)
+		}
 	}
 	return request, nil
 }

@@ -6,27 +6,33 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestAsyncInputIsExposedOnlyForServerManagedStreamJobs(t *testing.T) {
-	// Given: a streaming scanner, its synchronous counterpart, and a bounded HTTP request tool.
+func TestAsyncExecutionUsesOneGenericToolInsteadOfPerToolFlags(t *testing.T) {
+	// Given: the complete MCP registry with synchronous executable tools.
 	tools := map[string]*mcp.Tool{}
 	for _, tool := range listedTestTools(t) {
 		tools[tool.Name] = tool
 	}
 
-	// When: their machine-readable input schemas are inspected.
-	nucleiProperties, _ := schemaProperties(tools["nuclei_scan"].InputSchema)
-	osvProperties, _ := schemaProperties(tools["osv_scan"].InputSchema)
-	hydraStreamProperties, _ := schemaProperties(tools["hydra_attack_stream"].InputSchema)
-	hydraPostProperties, _ := schemaProperties(tools["hydra_attack"].InputSchema)
-	httpProperties, _ := schemaProperties(tools["http_request"].InputSchema)
-	_, nucleiAsync := nucleiProperties["async"]
-	_, osvAsync := osvProperties["async"]
-	_, hydraStreamAsync := hydraStreamProperties["async"]
-	_, hydraPostAsync := hydraPostProperties["async"]
-	_, httpAsync := httpProperties["async"]
+	// When: the generic and dedicated input schemas are inspected.
+	asyncTool, present := tools["run_tool_async"]
+	if !present {
+		t.Fatal("run_tool_async is not registered")
+	}
+	asyncProperties, asyncSchema := schemaProperties(asyncTool.InputSchema)
+	_, toolName := asyncProperties["tool_name"]
+	arguments, argumentsPresent := asyncProperties["arguments"].(map[string]any)
 
-	// Then: only execution routes that can hand work to the job store expose async.
-	if !nucleiAsync || !osvAsync || !hydraStreamAsync || hydraPostAsync || httpAsync {
-		t.Fatalf("unexpected async schema exposure: nuclei=%t osv=%t hydra_stream=%t hydra_post=%t http=%t", nucleiAsync, osvAsync, hydraStreamAsync, hydraPostAsync, httpAsync)
+	// Then: only the generic dispatcher exposes asynchronous execution and accepts an argument object.
+	if !asyncSchema || !toolName || !argumentsPresent || arguments["type"] != "object" {
+		t.Fatalf("run_tool_async schema is incomplete: %+v", asyncProperties)
+	}
+	for name, tool := range tools {
+		if name == "run_tool_async" {
+			continue
+		}
+		properties, _ := schemaProperties(tool.InputSchema)
+		if _, found := properties["async"]; found {
+			t.Fatalf("tool %s still exposes an async flag", name)
+		}
 	}
 }

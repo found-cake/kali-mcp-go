@@ -52,7 +52,7 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 		if tool.AvailabilityChecked {
 			available = fmt.Sprintf("%t", tool.Available)
 		}
-		fmt.Fprintf(&output, "- %s: available=%s target=%s profiles=%s impact=%s mode=%s target_context=%t async=%t resume=%t input_schema=embedded", tool.Tool, available, tool.TargetInputFormat, strings.Join(profiles, ","), tool.ImpactLevel, tool.ExecutionMode, tool.RequiresTargetContext, tool.AsyncSupported, tool.ResumeSupported)
+		fmt.Fprintf(&output, "- %s: available=%s target=%s profiles=%s impact=%s mode=%s target_context=%t resume=%t input_schema=embedded", tool.Tool, available, tool.TargetInputFormat, strings.Join(profiles, ","), tool.ImpactLevel, tool.ExecutionMode, tool.RequiresTargetContext, tool.ResumeSupported)
 		if len(controls) > 0 {
 			fmt.Fprintf(&output, " controls=%s", strings.Join(controls, ","))
 		}

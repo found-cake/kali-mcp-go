@@ -70,10 +70,6 @@ func jobResponseOutputSchema() *jsonschema.Schema {
 	}
 }
 
-func streamToolOutputSchema() *jsonschema.Schema {
-	return &jsonschema.Schema{OneOf: []*jsonschema.Schema{toolResultOutputSchema(), jobResponseOutputSchema()}}
-}
-
 func stringSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{Type: "string"}
 }

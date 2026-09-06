@@ -92,7 +92,6 @@ type ScanToolCapability struct {
 	Essential             bool                    `json:"essential"`
 	RequiresTargetContext bool                    `json:"requires_target_context"`
 	ResumeSupported       bool                    `json:"resume_supported"`
-	AsyncSupported        bool                    `json:"async_supported"`
 }
 
 type WordlistCapability struct {

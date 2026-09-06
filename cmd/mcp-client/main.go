@@ -67,7 +67,6 @@ func main() {
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) error {
 	registration := toolRegistration{server: srv, kali: kali, schemas: make(toolInputSchemaCatalog)}
 	registerTargetResolver(srv, kali)
-	registerScanJobs(srv, kali)
 	registrations := []error{
 		registerResultArtifacts(srv, kali),
 		registerHTTPRequest(registration),
@@ -98,6 +97,9 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := registerAsyncJobs(srv, kali, registration.schemas); err != nil {
+		return err
 	}
 	registerScanCapabilities(registration)
 
@@ -159,22 +161,9 @@ func addStreamTool[T any](registration toolRegistration, name string) error {
 	if err := recordToolInputSchema(registration.schemas, tool); err != nil {
 		return err
 	}
-	mcp.AddTool(registration.server, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, streamToolOutput, error) {
-		invocation, invokeErr := registration.kali.InvokeStream(ctx, definition.Endpoint, in)
-		if invocation.Job != nil && invokeErr == nil {
-			mcpResult, job, err := jobMCPResult(invocation.Job, nil)
-			output, encodeErr := newAsyncStreamToolOutput(job)
-			if encodeErr != nil {
-				return nil, streamToolOutput{}, encodeErr
-			}
-			return mcpResult, output, err
-		}
-		mcpResult, result, err := textResult(definition.Tool, invocation.Result, invokeErr)
-		output, encodeErr := newStreamToolOutput(result)
-		if encodeErr != nil {
-			return nil, streamToolOutput{}, encodeErr
-		}
-		return mcpResult, output, err
+	mcp.AddTool(registration.server, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
+		result, invokeErr := registration.kali.Stream(ctx, definition.Endpoint, in)
+		return textResult(definition.Tool, result, invokeErr)
 	})
 	return nil
 }
@@ -226,7 +215,7 @@ const safetyInstructions = `ROUTING:
 5. Use safe-recon or another purpose-specific safety profile and bounded scan controls. Safety profiles intentionally omit higher-impact behavior and never prove exhaustive coverage. Do not run multiple heavy scanners against one target in parallel.
 6. Treat a supplied root URL as a starting point, not the complete application scope. Enumerate routes from discovery, browser, and JavaScript evidence, then test selected authenticated routes and input points with request-scoped headers, cookies, or local_storage.
 7. This MCP does not create or manage credential sessions. Tool output and one-hour artifacts preserve raw values by default, so manage credentials and downstream disclosure directly using safeguards appropriate to the current environment. Use redact_values only when exact opt-in replacement is required.
-8. For a scan expected to exceed the MCP host deadline, set async=true, retain the returned job_id, and poll scan_job_status or scan_job_result. Terminal job lookup expires 30 seconds after process exit; scan_job_cancel stops pending work. Async jobs are process controls, not durable workflow state or scanner-native resume checkpoints.
+8. For a tool expected to exceed the MCP host deadline, call run_tool_async with the dedicated tool name and its unchanged arguments, retain the returned job_id, and poll scan_job_status or scan_job_result. A retry after a synchronous timeout starts a new run. Terminal job lookup expires 30 seconds after process exit; scan_job_cancel stops pending work. Async jobs are process controls, not durable workflow state or scanner-native resume checkpoints.
 
 SECURITY:
 1. Only engage targets the user explicitly authorized.
