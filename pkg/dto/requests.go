@@ -48,14 +48,15 @@ func (r DirbRequest) GetRequestTimeout() int { return r.Timeout }
 
 type NiktoRequest struct {
 	ScanOptions
-	Target         string  `json:"target,omitempty" jsonschema:"target URL or IP; omit when target_context is supplied"`
-	PauseSeconds   float64 `json:"pause_seconds,omitempty" jsonschema:"delay between requests in seconds"`
-	MaxTime        string  `json:"max_time,omitempty" jsonschema:"maximum Nikto scan duration e.g. 120s or 10m"`
-	RequestTimeout int     `json:"request_timeout,omitempty" jsonschema:"per-request network timeout in seconds (tool default when omitted, maximum 300)"`
-	FailureLimit   int     `json:"failure_limit,omitempty" jsonschema:"stop after this many consecutive request failures (tool default when omitted, maximum 1000)"`
-	Tuning         string  `json:"tuning,omitempty" jsonschema:"Nikto tuning selectors e.g. 123; web-discovery-low-rate rejects DoS category 6 and command-execution category 8 unless excluded with x"`
-	AdditionalArgs string  `json:"additional_args,omitempty" jsonschema:"extra Nikto arguments excluding host and config overrides"`
-	Timeout        int     `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
+	Target         string   `json:"target,omitempty" jsonschema:"target URL or IP; omit when target_context is supplied"`
+	PauseSeconds   float64  `json:"pause_seconds,omitempty" jsonschema:"delay between requests in seconds"`
+	MaxTime        string   `json:"max_time,omitempty" jsonschema:"maximum Nikto scan duration e.g. 120s or 10m"`
+	RequestTimeout int      `json:"request_timeout,omitempty" jsonschema:"per-request network timeout in seconds (tool default when omitted, maximum 300)"`
+	FailureLimit   int      `json:"failure_limit,omitempty" jsonschema:"stop after this many consecutive request failures (tool default when omitted, maximum 1000)"`
+	Tuning         string   `json:"tuning,omitempty" jsonschema:"Nikto tuning selectors e.g. 123; web-discovery-low-rate rejects DoS category 6 and command-execution category 8 unless excluded with x"`
+	Plugins        []string `json:"plugins,omitempty" jsonschema:"Nikto plugin names; web-discovery-low-rate accepts only its bounded read-only allow-list"`
+	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Nikto arguments excluding host and config overrides"`
+	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
 func (r NiktoRequest) GetRequestTimeout() int { return r.Timeout }

@@ -2,11 +2,21 @@ package tools
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+const (
+	safeNiktoPlugins = "headers;httpoptions;ssl;cookies;robots;favicon;msgs;outdated;springboot;optionsbleed"
+	safeNiktoPause   = 0.2
+	niktoFinishGrace = 5
+)
+
+var niktoPluginName = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
 	mode := r.Mode
@@ -70,7 +80,7 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
-	if err := rejectArguments(extra, "additional_args", "use the typed Nikto request controls", "-timeout", "-Option", "-option"); err != nil {
+	if err := rejectArguments(extra, "additional_args", "use the typed Nikto request controls", "-timeout", "-Option", "-option", "-Plugins", "-plugins"); err != nil {
 		return nil, err
 	}
 	if hasResolvedTarget(r.ScanOptions) {
@@ -86,13 +96,28 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 		if err := rejectArguments(extra, "additional_args", "Nikto tuning must use the validated tuning field; redirects and proxies are disabled", "-Tuning", "-tuning", "-followredirects", "-useproxy"); err != nil {
 			return nil, err
 		}
+		if r.PauseSeconds > 0 && r.PauseSeconds < safeNiktoPause {
+			return nil, fmt.Errorf("pause_seconds below %.1f is not permitted by web-discovery-low-rate", safeNiktoPause)
+		}
+	}
+	plugins, err := niktoPlugins(r)
+	if err != nil {
+		return nil, err
 	}
 	args := []string{"nikto", "-h", r.Target, "-nocheck", "-nointeractive"}
-	if r.PauseSeconds > 0 {
-		args = append(args, "-Pause", strconv.FormatFloat(r.PauseSeconds, 'f', -1, 64))
+	pause := r.PauseSeconds
+	if r.Profile == dto.ProfileWebDiscoveryLowRate && pause == 0 {
+		pause = safeNiktoPause
 	}
-	if r.MaxTime != "" {
-		args = append(args, "-maxtime", r.MaxTime)
+	if pause > 0 {
+		args = append(args, "-Pause", strconv.FormatFloat(pause, 'f', -1, 64))
+	}
+	maxTime, err := niktoMaxTime(r)
+	if err != nil {
+		return nil, err
+	}
+	if maxTime != "" {
+		args = append(args, "-maxtime", maxTime)
 	}
 	if r.RequestTimeout > 0 {
 		args = append(args, "-timeout", strconv.Itoa(r.RequestTimeout))
@@ -103,7 +128,54 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 	if r.Tuning != "" {
 		args = append(args, "-Tuning", r.Tuning)
 	}
+	if plugins != "" {
+		args = append(args, "-Plugins", plugins)
+	}
 	return appendTargetSafeArgs(args, r.AdditionalArgs, "additional_args", false, "-h", "-host", "-url", "-config")
+}
+
+func niktoMaxTime(request dto.NiktoRequest) (string, error) {
+	if request.Profile != dto.ProfileWebDiscoveryLowRate {
+		return request.MaxTime, nil
+	}
+	outerSeconds := request.Timeout
+	if outerSeconds <= 0 {
+		outerSeconds = dto.DefaultTimeoutSeconds
+	}
+	maximumSeconds := max(1, outerSeconds-niktoFinishGrace)
+	if request.MaxTime == "" {
+		return strconv.Itoa(maximumSeconds) + "s", nil
+	}
+	duration, err := time.ParseDuration(request.MaxTime)
+	if err != nil || duration <= 0 {
+		return "", fmt.Errorf("invalid Nikto max_time %q; use a positive duration such as 120s or 10m", request.MaxTime)
+	}
+	if duration > time.Duration(maximumSeconds)*time.Second {
+		return "", fmt.Errorf("max_time must be at most %ds with timeout=%ds under web-discovery-low-rate", maximumSeconds, outerSeconds)
+	}
+	return request.MaxTime, nil
+}
+
+func niktoPlugins(request dto.NiktoRequest) (string, error) {
+	plugins := request.Plugins
+	if request.Profile == dto.ProfileWebDiscoveryLowRate && len(plugins) == 0 {
+		return safeNiktoPlugins, nil
+	}
+	allowed := make(map[string]bool)
+	if request.Profile == dto.ProfileWebDiscoveryLowRate {
+		for name := range strings.SplitSeq(safeNiktoPlugins, ";") {
+			allowed[name] = true
+		}
+	}
+	for _, name := range plugins {
+		if !niktoPluginName.MatchString(name) {
+			return "", fmt.Errorf("invalid Nikto plugin name %q", name)
+		}
+		if request.Profile == dto.ProfileWebDiscoveryLowRate && !allowed[name] {
+			return "", fmt.Errorf("Nikto plugin %q is not permitted by web-discovery-low-rate", name)
+		}
+	}
+	return strings.Join(plugins, ";"), nil
 }
 
 func WPScanArgs(r dto.WPScanRequest) ([]string, error) {
