@@ -132,6 +132,8 @@ func ApplyScanControls(args []string, options dto.ScanOptions) ([]string, error)
 			result = append(result, "--max-rate", rate)
 		case "sqlmap":
 			result = append(result, "--delay", strconv.FormatFloat(1/float64(options.RateLimit), 'f', 3, 64))
+		case "dalfox":
+			result = append(result, "--rate-limit", rate)
 		}
 	}
 	if options.Concurrency > 0 {

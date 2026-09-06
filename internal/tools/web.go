@@ -66,11 +66,14 @@ func DirbArgs(r dto.DirbRequest) ([]string, error) {
 }
 
 func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
+	extra, err := splitArgs(r.AdditionalArgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid additional_args: %w", err)
+	}
+	if err := rejectArguments(extra, "additional_args", "use the typed Nikto request controls", "-timeout", "-Option", "-option"); err != nil {
+		return nil, err
+	}
 	if hasResolvedTarget(r.ScanOptions) {
-		extra, err := splitArgs(r.AdditionalArgs)
-		if err != nil {
-			return nil, fmt.Errorf("invalid additional_args: %w", err)
-		}
 		if err := rejectTargetSourceArgs(extra, "additional_args", false, "-vhost", "-followredirects", "-useproxy"); err != nil {
 			return nil, err
 		}
@@ -79,10 +82,6 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 		tuning := strings.TrimSpace(strings.ToLower(r.Tuning))
 		if !strings.HasPrefix(tuning, "x") && strings.ContainsAny(tuning, "68") {
 			return nil, fmt.Errorf("Nikto tuning 6 and 8 require explicit-custom")
-		}
-		extra, err := splitArgs(r.AdditionalArgs)
-		if err != nil {
-			return nil, fmt.Errorf("invalid additional_args: %w", err)
 		}
 		if err := rejectArguments(extra, "additional_args", "Nikto tuning must use the validated tuning field; redirects and proxies are disabled", "-Tuning", "-tuning", "-followredirects", "-useproxy"); err != nil {
 			return nil, err
@@ -94,6 +93,12 @@ func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
 	}
 	if r.MaxTime != "" {
 		args = append(args, "-maxtime", r.MaxTime)
+	}
+	if r.RequestTimeout > 0 {
+		args = append(args, "-timeout", strconv.Itoa(r.RequestTimeout))
+	}
+	if r.FailureLimit > 0 {
+		args = append(args, "-Option", "FAILURES="+strconv.Itoa(r.FailureLimit))
 	}
 	if r.Tuning != "" {
 		args = append(args, "-Tuning", r.Tuning)

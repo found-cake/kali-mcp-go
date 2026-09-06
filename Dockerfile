@@ -143,6 +143,9 @@ RUN set -eux; \
     chmod 0755 /usr/local/bin/browser-check /usr/local/bin/jwt_tool; \
     dalfox --version; \
     dalfox scan --help 2>&1 | grep -q -- '--workers'; \
+    dalfox scan --help 2>&1 | grep -q -- '--rate-limit'; \
+    dalfox scan --help 2>&1 | grep -q -- '--scan-timeout'; \
+    dalfox scan --help 2>&1 | grep -q -- '--retries'; \
     dig -v; \
     ffuf -V; \
     feroxbuster --version; \

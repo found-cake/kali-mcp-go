@@ -95,14 +95,24 @@ func validateNiktoRequest(req dto.NiktoRequest) error {
 	if req.MaxTime != "" && !niktoMaxTime.MatchString(req.MaxTime) {
 		return fmt.Errorf("max_time must be a positive duration such as 120s or 10m")
 	}
+	if err := validateOptionalBoundedInt("request_timeout", req.RequestTimeout, 300); err != nil {
+		return err
+	}
+	if err := validateOptionalBoundedInt("failure_limit", req.FailureLimit, 1000); err != nil {
+		return err
+	}
 	return nil
 }
 
 var niktoMaxTime = regexp.MustCompile(`^[1-9][0-9]*[smh]?$`)
 
 func validateNmapRequest(req dto.NmapRequest) error {
-	if req.Target == "" {
+	target := strings.TrimSpace(req.Target)
+	if target == "" {
 		return fmt.Errorf("target is required")
+	}
+	if strings.Contains(target, "://") || strings.ContainsAny(target, "/ 	\r\n") {
+		return fmt.Errorf("target must be a single IP address or hostname, not a URL or target list")
 	}
 	return nil
 }
@@ -167,6 +177,15 @@ func validateNucleiRequest(req dto.NucleiRequest) error {
 			return fmt.Errorf("templates must not contain empty values")
 		}
 	}
+	if err := validateOptionalBoundedInt("max_host_errors", req.MaxHostErrors, 1000); err != nil {
+		return err
+	}
+	if err := validateOptionalBoundedInt("request_timeout", req.RequestTimeout, 300); err != nil {
+		return err
+	}
+	if err := validateOptionalBoundedInt("retries", req.Retries, 10); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -183,6 +202,22 @@ func validateWhatWebRequest(req dto.WhatWebRequest) error {
 func validateDalfoxRequest(req dto.DalfoxRequest) error {
 	if req.Target == "" {
 		return fmt.Errorf("target is required")
+	}
+	if err := validateOptionalBoundedInt("request_timeout", req.RequestTimeout, 300); err != nil {
+		return err
+	}
+	if err := validateOptionalBoundedInt("scan_timeout", req.ScanTimeout, 3600); err != nil {
+		return err
+	}
+	if err := validateOptionalBoundedInt("retries", req.Retries, 10); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateOptionalBoundedInt(name string, value, maximum int) error {
+	if value < 0 || value > maximum {
+		return fmt.Errorf("%s must be between 1 and %d, or 0 when unset", name, maximum)
 	}
 	return nil
 }

@@ -3,7 +3,6 @@ package tools
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
@@ -33,6 +32,9 @@ func FFUFArgs(request dto.FFUFRequest) ([]string, error) {
 		return nil, err
 	}
 	args := []string{"ffuf", "-u", request.URL, "-w", wordlist, "-noninteractive", "-ac", "-s", "-json"}
+	if isDiscoveryProfile(request.Profile) {
+		args = append(args, "-se")
+	}
 	if request.FilterSize != "" {
 		args = append(args, "-fs", request.FilterSize)
 	}
@@ -59,7 +61,7 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 	if isDiscoveryProfile(request.Profile) {
 		if err := rejectArguments(extra, "additional_args", "discovery profiles use Feroxbuster's default GET request",
 			"-m", "--methods", "--data", "--data-json", "--data-urlencoded", "-r", "--redirects", "--scope", "--filter-similar-to",
-			"-p", "--proxy", "-P", "--replay-proxy", "--burp", "--burp-replay"); err != nil {
+			"-p", "--proxy", "-P", "--replay-proxy", "--burp", "--burp-replay", "--scan-limit", "--auto-bail"); err != nil {
 			return nil, err
 		}
 	}
@@ -74,6 +76,9 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 		return nil, err
 	}
 	args := []string{"feroxbuster", "--url", request.URL, "--wordlist", wordlist, "--auto-tune", "--json", "--output", "/dev/stdout"}
+	if isDiscoveryProfile(request.Profile) {
+		args = append(args, "--auto-bail", "--scan-limit", "1")
+	}
 	if request.FilterSize != "" {
 		args = append(args, "--filter-size", request.FilterSize)
 	}
@@ -95,6 +100,10 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 		"-u", "-target", "-l", "-list", "-targets-inline", "-resume", "-config"); err != nil {
 		return nil, err
 	}
+	if err := rejectArguments(additional, "additional_args", "use the typed Nuclei request controls",
+		"-mhe", "-max-host-error", "-timeout", "-retries"); err != nil {
+		return nil, err
+	}
 	if hasResolvedTarget(request.ScanOptions) {
 		if err := rejectArguments(additional, "additional_args", "resolved targets forbid cross-host redirects, TLS-name overrides, and proxy routing",
 			"-fr", "--fr", "-follow-redirects", "--follow-redirects", "-sni", "--sni", "-p", "--proxy", "-pi", "--proxy-internal"); err != nil {
@@ -114,6 +123,13 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 	for _, template := range request.Templates {
 		args = append(args, "-t", template)
 	}
+	if request.MaxHostErrors > 0 {
+		args = append(args, "-mhe", strconv.Itoa(request.MaxHostErrors))
+	}
+	if request.RequestTimeout > 0 {
+		args = append(args, "-timeout", strconv.Itoa(request.RequestTimeout))
+	}
+	args = append(args, "-retries", strconv.Itoa(request.Retries))
 	args = append(args, additional...)
 	if !request.AllowUnsafe {
 		args = append(args, "-etags", safeNucleiExcludedTags, "-no-interactsh")
@@ -168,10 +184,12 @@ func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
-	for _, argument := range extra {
-		if argument == "--worker" || argument == "--workers" || strings.HasPrefix(argument, "--worker=") || strings.HasPrefix(argument, "--workers=") {
-			return nil, fmt.Errorf("additional_args must not set Dalfox worker flags; use concurrency")
-		}
+	if err := rejectArguments(extra, "additional_args", "use the typed Dalfox request controls",
+		"--rate-limit", "--timeout", "--scan-timeout", "--retries"); err != nil {
+		return nil, err
+	}
+	if err := rejectArguments(extra, "additional_args", "use concurrency", "--worker", "--workers"); err != nil {
+		return nil, err
 	}
 	if request.Profile == dto.ProfileBrowserXSSConfirm {
 		if err := rejectArguments(extra, "additional_args", "browser-xss-confirm uses Dalfox's default GET request",
@@ -190,6 +208,15 @@ func DalfoxArgs(request dto.DalfoxRequest) ([]string, error) {
 	if err := rejectTargetSourceArgs(extra, "additional_args", true,
 		"--file", "--rawdata", "--har-file", "--config", "--session-check-url"); err != nil {
 		return nil, err
+	}
+	if request.RequestTimeout > 0 {
+		args = append(args, "--timeout", strconv.Itoa(request.RequestTimeout))
+	}
+	if request.ScanTimeout > 0 {
+		args = append(args, "--scan-timeout", strconv.Itoa(request.ScanTimeout))
+	}
+	if request.Retries > 0 {
+		args = append(args, "--retries", strconv.Itoa(request.Retries))
 	}
 	return append(args, extra...), nil
 }

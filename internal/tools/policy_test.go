@@ -134,7 +134,7 @@ func TestEffectiveScanOptionsAppliesOnlyEnforceableProfileDefaults(t *testing.T)
 
 func TestScanControlApplicationReportsEnforcementMethod(t *testing.T) {
 	requested := dto.ScanOptions{TimeoutRequestBudget: 50}
-	effective := dto.ScanOptions{RateLimit: 10, Concurrency: 2, TimeoutRequestBudget: 50, Max5xxResponses: 20}
+	effective := dto.ScanOptions{RateLimit: 10, Concurrency: 2, TimeoutRequestBudget: 50}
 	application := ScanControlApplication("ffuf", requested, effective)
 
 	methods := make(map[dto.ScanControl]dto.AppliedScanControl)
@@ -144,8 +144,8 @@ func TestScanControlApplicationReportsEnforcementMethod(t *testing.T) {
 	if methods[dto.ScanControlTimeoutRequestBudget].Enforcement != dto.ControlDerivedTimeout || !methods[dto.ScanControlTimeoutRequestBudget].Applied {
 		t.Fatalf("max request enforcement is not explicit: %+v", application)
 	}
-	if methods[dto.ScanControlMax5xx].Enforcement != dto.ControlOutputObserver || !methods[dto.ScanControlMax5xx].Applied {
-		t.Fatalf("5xx enforcement is not explicit: %+v", application)
+	if _, advertised := methods[dto.ScanControlMax5xx]; advertised {
+		t.Fatalf("FFUF must not advertise output-observed 5xx enforcement: %+v", application)
 	}
 }
 

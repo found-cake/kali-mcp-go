@@ -51,6 +51,8 @@ type NiktoRequest struct {
 	Target         string  `json:"target,omitempty" jsonschema:"target URL or IP; omit when target_context is supplied"`
 	PauseSeconds   float64 `json:"pause_seconds,omitempty" jsonschema:"delay between requests in seconds"`
 	MaxTime        string  `json:"max_time,omitempty" jsonschema:"maximum Nikto scan duration e.g. 120s or 10m"`
+	RequestTimeout int     `json:"request_timeout,omitempty" jsonschema:"per-request network timeout in seconds (tool default when omitted, maximum 300)"`
+	FailureLimit   int     `json:"failure_limit,omitempty" jsonschema:"stop after this many consecutive request failures (tool default when omitted, maximum 1000)"`
 	Tuning         string  `json:"tuning,omitempty" jsonschema:"Nikto tuning selectors e.g. 123; web-discovery-low-rate rejects DoS category 6 and command-execution category 8 unless excluded with x"`
 	AdditionalArgs string  `json:"additional_args,omitempty" jsonschema:"extra Nikto arguments excluding host and config overrides"`
 	Timeout        int     `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
@@ -142,6 +144,9 @@ type NucleiRequest struct {
 	Templates      []string `json:"templates,omitempty" jsonschema:"specific template paths or IDs; safe-recon execution requires this, severity, or tags"`
 	AllowUnsafe    bool     `json:"allow_unsafe,omitempty" jsonschema:"allow DoS, fuzz, DAST, OAST, and interactsh behavior only with explicit-custom or an omitted profile; false excludes these behaviors"`
 	DryRun         bool     `json:"dry_run,omitempty" jsonschema:"enumerate matching local templates and preview the command without contacting the target; may preview all safe templates without a selector"`
+	MaxHostErrors  int      `json:"max_host_errors,omitempty" jsonschema:"stop scheduling a host after this many request errors (tool default when omitted, maximum 1000)"`
+	RequestTimeout int      `json:"request_timeout,omitempty" jsonschema:"per-request network timeout in seconds (tool default when omitted, maximum 300)"`
+	Retries        int      `json:"retries,omitempty" jsonschema:"number of failed-request retries; omitted means zero retries for MCP scans (maximum 10)"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Nuclei arguments excluding single, list, inline, resume, and config target sources; resolved targets also forbid cross-host redirects, TLS-name overrides, and proxy routing"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds; 0 derives it from request and rate budgets, while shorter explicit values are preserved with a warning"`
 }
@@ -178,6 +183,9 @@ func (r JWTRequest) GetRequestTimeout() int { return r.Timeout }
 type DalfoxRequest struct {
 	ScanOptions
 	Target         string `json:"target,omitempty" jsonschema:"target URL or raw HTTP file; omit only for a URL supplied through target_context"`
+	RequestTimeout int    `json:"request_timeout,omitempty" jsonschema:"per-request timeout in seconds (tool default when omitted, maximum 300)"`
+	ScanTimeout    int    `json:"scan_timeout,omitempty" jsonschema:"per-parameter scan timeout in seconds (tool default when omitted, maximum 3600)"`
+	Retries        int    `json:"retries,omitempty" jsonschema:"number of failed-request retries (tool default when omitted, maximum 10)"`
 	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra Dalfox arguments excluding positional and alternate request sources; option values must be attached, concurrency replaces worker flags, browser-xss-confirm forbids method, body, redirect, remote payload, proxy, stored-XSS, and blind-OOB overrides"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
