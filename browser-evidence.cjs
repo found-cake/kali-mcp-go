@@ -64,6 +64,13 @@ function browserRequestInScope(requestURL, targetURL) {
   return new URL(requestURL).origin === new URL(targetURL).origin;
 }
 
+function initializeLocalStorage(payload, locationValue = window.location, storage = window.localStorage) {
+  if (locationValue.origin !== payload.origin) return;
+  for (const [key, value] of payload.entries) {
+    storage.setItem(key, value);
+  }
+}
+
 function navigationEvidence(response) {
   if (!response) {
     return {
@@ -84,6 +91,7 @@ module.exports = {
   browserLaunchOptions,
   browserRequestInScope,
   createBoundedCollector,
+  initializeLocalStorage,
   navigationEvidence,
   networkEvidenceURL,
   truncateEvidenceText,

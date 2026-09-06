@@ -7,7 +7,7 @@ import (
 )
 
 var toolInputExamples = map[string]json.RawMessage{
-	"browser_check":        json.RawMessage(`{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"profile":"browser-xss-confirm"}`),
+	"browser_check":        json.RawMessage(`{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"local_storage":{"access_token":"..."},"profile":"browser-xss-confirm"}`),
 	"nmap_scan":            json.RawMessage(`{"target":"host","scan_type":"-sCV"}`),
 	"nikto_scan":           json.RawMessage(`{"target":"https://host","request_timeout":10,"failure_limit":20,"profile":"web-discovery-low-rate"}`),
 	"nuclei_scan":          json.RawMessage(`{"target":"https://host","severity":"medium,high,critical","max_host_errors":20,"request_timeout":10}`),

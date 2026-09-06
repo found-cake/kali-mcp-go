@@ -36,6 +36,16 @@ func handleBrowserStream(c fiber.Ctx) error {
 		plan.ephemeralPaths = append(plan.ephemeralPaths, path)
 		addBrowserFileCleanup(plan, path)
 	}
+	if len(request.LocalStorage) > 0 {
+		path, pathErr := newBrowserLocalStoragePath(request.LocalStorage)
+		if pathErr != nil {
+			plan.release()
+			return httpapi.InternalServerError(c, pathErr.Error())
+		}
+		plan.args = append(plan.args, "--local-storage-file", path)
+		plan.ephemeralPaths = append(plan.ephemeralPaths, path)
+		addBrowserFileCleanup(plan, path)
+	}
 	if request.CaptureScreenshot {
 		path, pathErr := newBrowserScreenshotPath()
 		if pathErr != nil {
@@ -54,11 +64,19 @@ func newBrowserScreenshotPath() (string, error) {
 }
 
 func newBrowserHeadersPath(headers map[string]string) (string, error) {
-	content, err := json.Marshal(headers)
+	return newBrowserStringMapPath("headers", "kali-mcp-browser-headers-*.json", headers)
+}
+
+func newBrowserLocalStoragePath(values map[string]string) (string, error) {
+	return newBrowserStringMapPath("local storage", "kali-mcp-browser-storage-*.json", values)
+}
+
+func newBrowserStringMapPath(label, pattern string, values map[string]string) (string, error) {
+	content, err := json.Marshal(values)
 	if err != nil {
-		return "", fmt.Errorf("encode browser headers: %w", err)
+		return "", fmt.Errorf("encode browser %s: %w", label, err)
 	}
-	return newBrowserHandoffFile("kali-mcp-browser-headers-*.json", content, 0o640)
+	return newBrowserHandoffFile(pattern, content, 0o640)
 }
 
 func newBrowserHandoffFile(pattern string, content []byte, containerMode os.FileMode) (string, error) {

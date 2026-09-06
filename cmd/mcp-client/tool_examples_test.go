@@ -11,7 +11,7 @@ func TestToolInputExamplesAreExposedInSchemaAndDescription(t *testing.T) {
 	t.Parallel()
 
 	want := map[string]string{
-		"browser_check":        `{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"profile":"browser-xss-confirm"}`,
+		"browser_check":        `{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"local_storage":{"access_token":"..."},"profile":"browser-xss-confirm"}`,
 		"nmap_scan":            `{"target":"host","scan_type":"-sCV"}`,
 		"nikto_scan":           `{"target":"https://host","request_timeout":10,"failure_limit":20,"profile":"web-discovery-low-rate"}`,
 		"nuclei_scan":          `{"target":"https://host","severity":"medium,high,critical","max_host_errors":20,"request_timeout":10}`,

@@ -198,6 +198,7 @@ type BrowserRequest struct {
 	ScanOptions
 	URL               string            `json:"url,omitempty" jsonschema:"full page URL including SPA path, hash route, fragment payload, or query payload; may extend the browser origin from target_context"`
 	Headers           map[string]string `json:"headers,omitempty" jsonschema:"per-call HTTP headers; Cookie is installed in the isolated browser cookie jar and no values persist after the call"`
+	LocalStorage      map[string]string `json:"local_storage,omitempty" jsonschema:"per-call localStorage entries installed only for the selected page origin before application scripts run; no values persist after the call"`
 	WaitMilliseconds  int               `json:"wait_milliseconds,omitempty" jsonschema:"time to observe dialogs and DOM changes after load"`
 	IncludeDOM        bool              `json:"include_dom,omitempty" jsonschema:"include up to 200KB of rendered DOM in the result"`
 	CaptureNetwork    bool              `json:"capture_network,omitempty" jsonschema:"capture a bounded raw network artifact whose script URLs can be passed to retirejs_scan"`

@@ -6,10 +6,23 @@ const {
   browserLaunchOptions,
   browserRequestInScope,
   createBoundedCollector,
+  initializeLocalStorage,
   navigationEvidence,
   networkEvidenceURL,
   truncateEvidenceText,
 } = require("./browser-evidence.cjs");
+
+test("local storage initialization is restricted to the selected origin", () => {
+  const values = new Map();
+  const storage = { setItem: (key, value) => values.set(key, value) };
+  const payload = { origin: "https://example.test", entries: [["access_token", "test-token"]] };
+
+  initializeLocalStorage(payload, { origin: "https://foreign.test" }, storage);
+  assert.equal(values.size, 0);
+
+  initializeLocalStorage(payload, { origin: "https://example.test" }, storage);
+  assert.deepEqual([...values], [["access_token", "test-token"]]);
+});
 
 test("browser authentication separates Cookie into the isolated jar", () => {
   const authentication = browserAuthentication(

@@ -57,3 +57,34 @@ func TestNewBrowserHeadersPathCreatesPrivateReadableHandoff(t *testing.T) {
 		t.Fatalf("browser header handoff changed values: %#v", got)
 	}
 }
+
+func TestNewBrowserLocalStoragePathCreatesPrivateReadableHandoff(t *testing.T) {
+	// Given: per-call browser storage values in an isolated handoff directory.
+	directory := t.TempDir()
+	t.Setenv(browserOutputDirectoryEnv, directory)
+	want := map[string]string{"access_token": "test-token", "theme": "dark"}
+
+	// When: the server creates the browser handoff.
+	path, err := newBrowserLocalStoragePath(want)
+	if err != nil {
+		t.Fatalf("allocate browser local-storage path: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read browser local-storage handoff: %v", err)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatalf("decode browser local-storage handoff: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat browser local-storage handoff: %v", err)
+	}
+
+	// Then: exact caller values are available only through the private browser handoff.
+	if filepath.Dir(path) != directory || info.Mode().Perm() != 0o640 || got["access_token"] != want["access_token"] || got["theme"] != want["theme"] {
+		t.Fatalf("unexpected browser local-storage handoff: path=%s mode=%o values=%#v", path, info.Mode().Perm(), got)
+	}
+}

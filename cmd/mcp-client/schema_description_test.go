@@ -38,6 +38,22 @@ func TestJWTInputSchemaExposesOfflineAndLiveVerificationInputs(t *testing.T) {
 	}
 }
 
+func TestBrowserInputSchemaExposesPerCallLocalStorage(t *testing.T) {
+	// Given: the browser tool schema exposed to an MCP orchestrator.
+	properties, ok := schemaProperties(listedToolByName(t, "browser_check").InputSchema)
+	if !ok {
+		t.Fatal("browser_check has an invalid input schema")
+	}
+
+	// When: authenticated SPA inputs are inspected.
+	storage, found := properties["local_storage"].(map[string]any)
+
+	// Then: local storage is an explicit string map rather than persistent session state.
+	if !found || storage["type"] != "object" {
+		t.Fatalf("browser_check local_storage schema is missing or invalid: %+v", properties["local_storage"])
+	}
+}
+
 func TestToolOutputSchemaSeparatesExecutionFromFindingStatus(t *testing.T) {
 	// Given: a representative executable tool's common result schema.
 	tool := listedToolByName(t, "nmap_scan")

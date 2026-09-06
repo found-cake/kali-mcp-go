@@ -7,6 +7,7 @@ const {
   browserLaunchOptions,
   browserRequestInScope,
   createBoundedCollector,
+  initializeLocalStorage,
   navigationEvidence,
   networkEvidenceURL,
   truncateEvidenceText,
@@ -39,6 +40,9 @@ function parseArgs(argv) {
       case "--headers-file":
         options.headersFile = argv[++index];
         break;
+      case "--local-storage-file":
+        options.localStorageFile = argv[++index];
+        break;
       default:
         throw new Error(`unknown argument: ${argv[index]}`);
     }
@@ -62,6 +66,15 @@ async function main() {
       : {};
     const authentication = browserAuthentication(headers, options.url);
     const context = await browser.newContext();
+    const localStorageValues = options.localStorageFile
+      ? JSON.parse(await readFile(options.localStorageFile, "utf8"))
+      : {};
+    if (Object.keys(localStorageValues).length > 0) {
+      await context.addInitScript(initializeLocalStorage, {
+        origin: new URL(options.url).origin,
+        entries: Object.entries(localStorageValues),
+      });
+    }
     if (authentication.cookies.length > 0) {
       await context.addCookies(authentication.cookies);
     }

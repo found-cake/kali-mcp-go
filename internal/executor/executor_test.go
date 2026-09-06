@@ -215,13 +215,18 @@ func TestRedactArgsHidesBrowserEvidencePath(t *testing.T) {
 	}
 }
 
-func TestRedactArgsHidesBrowserHeadersPath(t *testing.T) {
-	args := []string{"--url", "https://example.com", "--headers-file", "/tmp/private-headers.json"}
+func TestRedactArgsHidesBrowserInputPaths(t *testing.T) {
+	args := []string{
+		"--url", "https://example.com",
+		"--headers-file", "/tmp/private-headers.json",
+		"--local-storage-file", "/tmp/private-storage.json",
+	}
 
 	redacted := redactArgs("browser-check", args)
 
-	if strings.Contains(strings.Join(redacted, " "), "/tmp/private-headers.json") {
-		t.Fatalf("ephemeral headers path remains in argv metadata: %v", redacted)
+	joined := strings.Join(redacted, " ")
+	if strings.Contains(joined, "/tmp/private-headers.json") || strings.Contains(joined, "/tmp/private-storage.json") {
+		t.Fatalf("ephemeral browser input path remains in argv metadata: %v", redacted)
 	}
 }
 
