@@ -63,7 +63,7 @@ func structuredErrorResult(name string, partial *dto.ToolResult, err error) (*mc
 	}
 	result.Finalize()
 	normalizeProgressPhase(&result)
-	result = result.Compact(defaultInlineOutputBytes)
+	result = compactToolResult(name, result)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: result.Format()}}, IsError: true,
 	}, result, nil
