@@ -14,6 +14,8 @@ type SQLMapParameterResult struct {
 }
 
 type SQLMapAnalysis struct {
+	AbortCodes                    []int                   `json:"abort_codes,omitempty"`
+	AbortedOnHTTPCode             int                     `json:"aborted_on_http_code,omitempty"`
 	TrafficAvailable              bool                    `json:"traffic_available"`
 	HTTPRequests                  int                     `json:"http_requests"`
 	HTTPResponses                 int                     `json:"http_responses"`

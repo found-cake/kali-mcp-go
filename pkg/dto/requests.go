@@ -81,6 +81,7 @@ type SQLMapRequest struct {
 	Headers        map[string]string `json:"headers,omitempty" jsonschema:"HTTP headers such as Authorization; Host overrides are rejected with target_context"`
 	Cookie         string            `json:"cookie,omitempty" jsonschema:"Cookie header value"`
 	ContentType    string            `json:"content_type,omitempty" jsonschema:"Content-Type header value e.g. application/json"`
+	AbortCodes     string            `json:"abort_codes,omitempty" jsonschema:"comma-separated HTTP status codes that trigger SQLmap's native immediate abort e.g. 500,503"`
 	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
 	TestParameters string            `json:"test_parameters,omitempty" jsonschema:"comma-separated parameters or JSON fields to test"`
 	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding alternate sources; resolved targets forbid proxy and DNS-OOB destinations; sqli-verify-low-risk pins risk 1, level 1, techniques BEU and forbids takeover, write, broad extraction, tamper, and hook options"`

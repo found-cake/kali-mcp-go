@@ -11,7 +11,10 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-var sqlmapResponsePattern = regexp.MustCompile(`(?m)^HTTP response \[#\d+\] \(([0-9]{3})[^)]*\):\r?\n`)
+var (
+	sqlmapResponsePattern = regexp.MustCompile(`(?m)^HTTP response \[#\d+\] \(([0-9]{3})[^)]*\):\r?\n`)
+	sqlmapAbortPattern    = regexp.MustCompile(`(?i)aborting due to detected HTTP code ['"]?([0-9]{3})`)
+)
 
 func (p *SQLMapPlan) Analysis(stdout, testParameters string) dto.SQLMapAnalysis {
 	content, err := os.ReadFile(p.trafficFile)
@@ -19,6 +22,10 @@ func (p *SQLMapPlan) Analysis(stdout, testParameters string) dto.SQLMapAnalysis 
 		content = nil
 	}
 	analysis := analyzeSQLMapTraffic(content)
+	analysis.AbortCodes = append([]int(nil), p.abortCodes...)
+	if match := sqlmapAbortPattern.FindStringSubmatch(stdout); len(match) == 2 {
+		analysis.AbortedOnHTTPCode, _ = strconv.Atoi(match[1])
+	}
 	analysis.Parameters = sqlmapParameterResults(stdout, testParameters)
 	if sqlmapReportedNoInjection(stdout) {
 		if analysis.ServerErrorResponses > 0 {

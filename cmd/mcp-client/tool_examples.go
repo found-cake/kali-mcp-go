@@ -13,7 +13,7 @@ var toolInputExamples = map[string]json.RawMessage{
 	"dalfox_scan":          json.RawMessage(`{"target":"https://host/?q=FUZZ"}`),
 	"result_artifact_read": json.RawMessage(`{"artifact_id":"...","limit":65536}`),
 	"retirejs_scan":        json.RawMessage(`{"url":"https://host/app","headers":{"Authorization":"Bearer ..."},"profile":"safe-recon"}`),
-	"sqlmap_scan":          json.RawMessage(`{"url":"https://host/search?q=1","test_parameters":"q","profile":"sqli-verify-low-risk"}`),
+	"sqlmap_scan":          json.RawMessage(`{"url":"https://host/search?q=1","test_parameters":"q","abort_codes":"500,503","profile":"sqli-verify-low-risk"}`),
 }
 
 func applyToolInputExample(name, description string, schema *jsonschema.Schema) string {

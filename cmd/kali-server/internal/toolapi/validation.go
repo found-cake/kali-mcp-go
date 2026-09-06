@@ -128,27 +128,6 @@ func validateEnum4linuxRequest(req dto.Enum4linuxRequest) error {
 	return nil
 }
 
-func validateSQLMapRequest(req dto.SQLMapRequest) error {
-	sources := 0
-	for _, source := range []string{req.URL, req.RequestFile, req.RawRequest} {
-		if strings.TrimSpace(source) != "" {
-			sources++
-		}
-	}
-	if sources != 1 {
-		return fmt.Errorf("provide exactly one of url, request_file, or raw_request")
-	}
-	for name, value := range req.Headers {
-		if strings.TrimSpace(name) == "" || containsLineBreak(name) || containsLineBreak(value) {
-			return fmt.Errorf("headers must have non-empty names and no line breaks")
-		}
-	}
-	if containsLineBreak(req.Cookie) || containsLineBreak(req.ContentType) {
-		return fmt.Errorf("cookie and content_type must not contain line breaks")
-	}
-	return nil
-}
-
 func validateGobusterRequest(req dto.GobusterRequest) error {
 	if req.URL == "" {
 		return fmt.Errorf("url is required")

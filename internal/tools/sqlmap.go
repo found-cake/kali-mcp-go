@@ -13,6 +13,7 @@ import (
 
 type SQLMapPlan struct {
 	args        []string
+	abortCodes  []int
 	requestFile string
 	trafficFile string
 	tempDir     string
@@ -37,6 +38,13 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
+	if err := rejectArguments(additional, "additional_args", "use the typed abort_codes and ignore_codes fields", "--abort-code", "--ignore-code"); err != nil {
+		return nil, err
+	}
+	abortCodes, err := ParseSQLMapStatusCodes("abort_codes", request.AbortCodes)
+	if err != nil {
+		return nil, err
+	}
 	if request.Profile == dto.ProfileSQLILowRisk {
 		if err := validateLowRiskSQLMapArguments(additional); err != nil {
 			return nil, err
@@ -54,6 +62,7 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 	}
 	plan := &SQLMapPlan{
 		args:        []string{"sqlmap", "--batch", "--flush-session", "--ignore-stdin"},
+		abortCodes:  abortCodes,
 		trafficFile: filepath.Join(tempDir, "traffic.txt"),
 		tempDir:     tempDir,
 	}
@@ -77,6 +86,9 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 	}
 	if request.ContentType != "" {
 		plan.args = append(plan.args, "--header", "Content-Type: "+request.ContentType)
+	}
+	if request.AbortCodes != "" {
+		plan.args = append(plan.args, "--abort-code", request.AbortCodes)
 	}
 	if request.IgnoreCodes != "" {
 		plan.args = append(plan.args, "--ignore-code", request.IgnoreCodes)
