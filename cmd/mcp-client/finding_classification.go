@@ -29,6 +29,14 @@ func classifySuccessfulFinding(toolName string, result *dto.ToolResult, output s
 			result.FindingStatus = dto.FindingsNotDetected
 			result.ClassificationReason = "gobuster_completed_without_result"
 		}
+	case "dirb_scan":
+		if len(result.DiscoveredPaths) > 0 {
+			result.FindingStatus = dto.FindingsDetected
+			result.ClassificationReason = "dirb_paths_reported"
+		} else {
+			result.FindingStatus = dto.FindingsNotDetected
+			result.ClassificationReason = "dirb_completed_without_result"
+		}
 	case "nuclei_scan":
 		classifyNucleiFinding(result)
 	case "ffuf_scan":

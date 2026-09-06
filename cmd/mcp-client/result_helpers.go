@@ -101,6 +101,8 @@ func applyIncompleteReportedFinding(toolName string, result *dto.ToolResult, com
 		found = niktoReportedFinding(combinedOutput)
 	case "feroxbuster_scan":
 		found = feroxbusterReportedFinding(result.Stdout)
+	case "dirb_scan":
+		found = len(result.DiscoveredPaths) > 0
 	}
 	if !found {
 		return
@@ -141,8 +143,24 @@ func finalizeClassifiedResult(result *dto.ToolResult) {
 		result.Failure = &dto.FailureInfo{Code: code, Message: message, Retryable: retryable}
 	}
 	result.Finalize()
+	normalizeProgressPhase(result)
 	if result.FindingStatus != dto.FindingsDetected && (result.ExecutionStatus == dto.ExecutionTimedOut || result.ExecutionStatus == dto.ExecutionCancelled || result.ExecutionStatus == dto.ExecutionFailed && result.PartialResults) {
 		result.FindingStatus = dto.FindingsInconclusive
+	}
+}
+
+func normalizeProgressPhase(result *dto.ToolResult) {
+	if result.Progress != nil {
+		switch result.ExecutionStatus {
+		case dto.ExecutionSucceeded:
+			result.Progress.Phase = dto.ProgressCompleted
+		case dto.ExecutionTimedOut:
+			result.Progress.Phase = dto.ProgressTimedOut
+		case dto.ExecutionCancelled:
+			result.Progress.Phase = dto.ProgressCancelled
+		case dto.ExecutionFailed:
+			result.Progress.Phase = dto.ProgressFailed
+		}
 	}
 }
 

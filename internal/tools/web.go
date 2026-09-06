@@ -62,7 +62,7 @@ func DirbArgs(r dto.DirbRequest) ([]string, error) {
 			return nil, err
 		}
 	}
-	return appendTargetSafeArgs([]string{"dirb", r.URL, wordlist}, r.AdditionalArgs, "additional_args", false, "-resume")
+	return appendTargetSafeArgs([]string{"dirb", r.URL, wordlist, "-S"}, r.AdditionalArgs, "additional_args", false, "-resume")
 }
 
 func NiktoArgs(r dto.NiktoRequest) ([]string, error) {

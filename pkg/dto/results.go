@@ -183,6 +183,7 @@ type ToolResult struct {
 	SQLMapAnalysis       *SQLMapAnalysis        `json:"sqlmap_analysis,omitempty"`
 	NucleiPreview        *NucleiPreviewMetadata `json:"nuclei_preview,omitempty"`
 	NucleiRuntime        *NucleiRuntimeMetadata `json:"nuclei_runtime,omitempty"`
+	DiscoveredPaths      []DiscoveredPath       `json:"discovered_paths,omitempty"`
 	Evidence             *EvidenceManifest      `json:"evidence,omitempty"`
 	Progress             *ProgressMetadata      `json:"progress,omitempty"`
 }

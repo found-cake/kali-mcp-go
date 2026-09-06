@@ -9,6 +9,9 @@ import (
 func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	result.FindingTypes = findingTypesForTool(toolName)
 	attachReportedRequestCount(toolName, &result)
+	if toolName == "dirb_scan" {
+		result.DiscoveredPaths = parseDirbDiscoveries(result.Stdout)
+	}
 	output := strings.ToLower(result.Stdout + "\n" + result.Stderr)
 	niktoInternalTimeout := toolName == "nikto_scan" && result.ReturnCode == 0 && !result.TimedOut && !result.Cancelled &&
 		strings.Contains(output, "host maximum execution time of") && strings.Contains(output, " seconds reached")

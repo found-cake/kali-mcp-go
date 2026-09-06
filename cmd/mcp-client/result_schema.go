@@ -35,6 +35,8 @@ func toolResultOutputSchema() *jsonschema.Schema {
 		"jwt_analysis":          nullableSchema("object"),
 		"sqlmap_analysis":       nullableSchema("object"),
 		"nuclei_preview":        nullableSchema("object"),
+		"nuclei_runtime":        nullableSchema("object"),
+		"discovered_paths":      nullableArraySchema(),
 		"evidence":              nullableSchema("object"),
 		"progress":              nullableSchema("object"),
 	}
