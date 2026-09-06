@@ -45,6 +45,12 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		result.ExecutionStatus = dto.ExecutionSucceeded
 		result.Success = true
 		result.ClassificationReason = "wpscan_target_not_wordpress"
+	case result.Failure != nil:
+		result.ExecutionStatus = dto.ExecutionFailed
+		result.ClassificationReason = result.Failure.Code
+		if result.ClassificationReason == "" {
+			result.ClassificationReason = "tool_reported_failure"
+		}
 	case result.ReturnCode != 0:
 		result.ExecutionStatus = dto.ExecutionFailed
 		result.ClassificationReason = "tool_nonzero_exit"
