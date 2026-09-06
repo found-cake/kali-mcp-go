@@ -35,6 +35,19 @@ func Validate(request dto.HTTPRequest) error {
 			return fmt.Errorf("headers contain an invalid name or value")
 		}
 	}
+	if request.VirtualHost != "" {
+		if request.TargetContext == "" {
+			return fmt.Errorf("virtual_host requires target_context so the connection target remains fixed")
+		}
+		if !httpguts.ValidHostHeader(request.VirtualHost) {
+			return fmt.Errorf("virtual_host must be a valid HTTP Host value")
+		}
+		for name := range request.Headers {
+			if strings.EqualFold(name, "Host") {
+				return fmt.Errorf("virtual_host and a Host header cannot be used together")
+			}
+		}
+	}
 	if request.Body != "" && len(request.JSONBody) > 0 {
 		return fmt.Errorf("body and json_body cannot be used together")
 	}
@@ -90,6 +103,9 @@ func newHTTPRequest(ctx context.Context, request dto.HTTPRequest, method string)
 			continue
 		}
 		httpRequest.Header.Set(name, value)
+	}
+	if request.VirtualHost != "" {
+		httpRequest.Host = request.VirtualHost
 	}
 	if len(request.JSONBody) > 0 && httpRequest.Header.Get("Content-Type") == "" {
 		httpRequest.Header.Set("Content-Type", "application/json")

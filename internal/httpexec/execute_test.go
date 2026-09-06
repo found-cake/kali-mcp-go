@@ -68,6 +68,32 @@ func TestExecuteTruncatesResponseAtRequestedLimit(t *testing.T) {
 	}
 }
 
+func TestExecuteUsesVirtualHostWithoutChangingConnectionTarget(t *testing.T) {
+	// Given: an HTTP endpoint selected by target context and a separate virtual host value.
+	observedHost := make(chan string, 1)
+	target := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		observedHost <- request.Host
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer target.Close()
+	request := dto.HTTPRequest{
+		ScanOptions: dto.ScanOptions{TargetContext: "signed-context"},
+		URL:         target.URL,
+		VirtualHost: "tenant.example.test",
+	}
+
+	// When: the bounded HTTP request is sent.
+	result := Execute(context.Background(), Input{Request: request})
+
+	// Then: the selected URL receives the request with only its HTTP Host overridden.
+	if result.ReturnCode != 0 || <-observedHost != "tenant.example.test" {
+		t.Fatalf("virtual-host request failed: %+v", result)
+	}
+	if result.HTTPRequest == nil || result.HTTPRequest.Host != "tenant.example.test" || result.HTTPRequest.URL != target.URL {
+		t.Fatalf("virtual-host evidence is inconsistent: %+v", result.HTTPRequest)
+	}
+}
+
 func TestValidateRejectsInvalidMethodAndConflictingBodies(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -77,6 +103,8 @@ func TestValidateRejectsInvalidMethodAndConflictingBodies(t *testing.T) {
 		{name: "method", request: dto.HTTPRequest{URL: "http://example.test", Method: "TRACE"}, message: "method must be"},
 		{name: "safe profile method", request: dto.HTTPRequest{ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon}, URL: "http://example.test", Method: "DELETE"}, message: "safe-recon"},
 		{name: "bodies", request: dto.HTTPRequest{URL: "http://example.test", Body: "text", JSONBody: []byte(`{}`)}, message: "body and json_body"},
+		{name: "virtual host without context", request: dto.HTTPRequest{URL: "http://example.test", VirtualHost: "tenant.example.test"}, message: "target_context"},
+		{name: "invalid virtual host", request: dto.HTTPRequest{ScanOptions: dto.ScanOptions{TargetContext: "signed"}, URL: "http://example.test", VirtualHost: "bad host"}, message: "virtual_host"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

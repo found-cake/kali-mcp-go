@@ -156,6 +156,9 @@ func newHTTPClient(request dto.HTTPRequest) *http.Client {
 			if !ok || nextOrigin != initialOrigin {
 				return fmt.Errorf("cross-origin redirect rejected")
 			}
+			if request.VirtualHost != "" {
+				next.Host = request.VirtualHost
+			}
 			return nil
 		},
 	}

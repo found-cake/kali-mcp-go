@@ -232,6 +232,7 @@ type HTTPRequest struct {
 	URL              string            `json:"url,omitempty" jsonschema:"HTTP or HTTPS URL; omit when target_context is supplied"`
 	Method           string            `json:"method,omitempty" jsonschema:"GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS (default GET); safe-recon permits only GET, HEAD, and OPTIONS"`
 	Headers          map[string]string `json:"headers,omitempty" jsonschema:"request headers; Host overrides are rejected with target_context and returned evidence preserves other values unless redact_values explicitly selects them"`
+	VirtualHost      string            `json:"virtual_host,omitempty" jsonschema:"optional HTTP Host value for virtual-host testing; requires target_context so the signed connection address remains fixed"`
 	Body             string            `json:"body,omitempty" jsonschema:"raw request body; mutually exclusive with json_body"`
 	JSONBody         json.RawMessage   `json:"json_body,omitempty" jsonschema:"JSON request body; mutually exclusive with body"`
 	FollowRedirects  bool              `json:"follow_redirects,omitempty" jsonschema:"follow at most five same-origin redirects"`

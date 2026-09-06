@@ -38,6 +38,7 @@ func httpRequestInputSchema() map[string]any {
 			"body":               map[string]any{"type": "string", "description": "raw request body; mutually exclusive with json_body"},
 			"json_body":          map[string]any{"description": "any JSON value; mutually exclusive with body"},
 			"follow_redirects":   map[string]any{"type": "boolean", "description": "follow at most five same-origin redirects"},
+			"virtual_host":       map[string]any{"type": "string", "description": "HTTP Host value for virtual-host testing; requires target_context so the signed connection address remains fixed"},
 			"max_response_bytes": map[string]any{"type": "integer", "minimum": 1, "maximum": maximumMCPHTTPResponseBytes},
 			"timeout":            map[string]any{"type": "integer", "minimum": 1, "maximum": 300},
 			"target_context":     map[string]any{"type": "string", "description": "signed candidate context returned by resolve_target"},

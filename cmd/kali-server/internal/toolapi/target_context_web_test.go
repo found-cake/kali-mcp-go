@@ -88,6 +88,33 @@ func TestTargetContextRewritesOriginalOriginSubpathToSelectedCandidate(t *testin
 	}
 }
 
+func TestTargetContextAllowsDedicatedVirtualHostWithoutChangingSelectedURL(t *testing.T) {
+	// Given: a signed Docker-host context and a virtual host intended only for the HTTP layer.
+	now := time.Date(2026, time.September, 3, 10, 0, 0, 0, time.UTC)
+	result := dto.TargetResolutionResult{
+		OriginalTarget: "http://127.0.0.1:3000/",
+		Candidates: []dto.TargetCandidate{{
+			BrowserTarget: "http://192.168.65.254:3000/", NetworkTarget: "192.168.65.254",
+			Port: 3000, Scope: dto.TargetScopeDockerHost, Selectable: true,
+		}},
+	}
+	if err := targeting.AttachResolution("secret", &result, now.Add(time.Minute)); err != nil {
+		t.Fatalf("attach target context: %v", err)
+	}
+	request := dto.HTTPRequest{
+		ScanOptions: dto.ScanOptions{TargetContext: result.Candidates[0].TargetContext},
+		VirtualHost: "tenant.example.test",
+	}
+
+	// When: the target context is applied before HTTP validation.
+	normalized, err := targeting.ApplyContext("secret", request, now)
+
+	// Then: only the selected connection URL is supplied and the virtual host remains explicit.
+	if err != nil || normalized.URL != "http://192.168.65.254:3000/" || normalized.VirtualHost != "tenant.example.test" {
+		t.Fatalf("virtual host changed the selected target: request=%+v err=%v", normalized, err)
+	}
+}
+
 func TestTargetContextRejectsForeignWebOrigin(t *testing.T) {
 	now := time.Date(2026, time.September, 3, 10, 0, 0, 0, time.UTC)
 	result := dto.TargetResolutionResult{
