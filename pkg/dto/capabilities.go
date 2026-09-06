@@ -29,11 +29,12 @@ const (
 type ControlEnforcement string
 
 const (
-	ControlNativeCLI      ControlEnforcement = "native_cli"
-	ControlDerivedTimeout ControlEnforcement = "derived_timeout"
-	ControlOutputObserver ControlEnforcement = "output_observer"
-	ControlRequestTimeout ControlEnforcement = "request_timeout"
-	ControlServerPreview  ControlEnforcement = "server_preview"
+	ControlNativeCLI        ControlEnforcement = "native_cli"
+	ControlNativeCLIAverage ControlEnforcement = "native_cli_average_bursty"
+	ControlDerivedTimeout   ControlEnforcement = "derived_timeout"
+	ControlOutputObserver   ControlEnforcement = "output_observer"
+	ControlRequestTimeout   ControlEnforcement = "request_timeout"
+	ControlServerPreview    ControlEnforcement = "server_preview"
 )
 
 type ScanControlCapability struct {

@@ -20,7 +20,7 @@ var scanToolCapabilities = []dto.ScanToolCapability{
 	toolCapability("enum4linux_scan", "enum4linux", "/api/tools/enum4linux/stream", "Enumerate Windows and Samba services with Enum4linux.", dto.TargetInputNetworkHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{}, nil),
 	toolCapability("ffuf_scan", "ffuf", "/api/tools/ffuf/stream", "Discover web content with FFUF, including SPA fallback calibration, per-request timeouts, explicit status filtering, and recursion. Safety profiles enable FFUF's native spurious-error stop.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, rateAndConcurrencyControls(false)),
 	toolCapability("feroxbuster_scan", "feroxbuster", "/api/tools/feroxbuster/stream", "Recursively discover web content with Feroxbuster and automatic SPA fallback calibration.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, rateAndConcurrencyControls(false)),
-	toolCapability("nuclei_scan", "nuclei", "/api/tools/nuclei/stream", "Run template-based vulnerability checks with Nuclei. Every run previews the local template selection and lower-bound duration before target traffic; dry_run stops after that preview. Safe-recon requires severity, tags, or templates and excludes DoS, fuzz, DAST, OAST, and interactsh templates.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon}, append(rateAndConcurrencyControls(false), dto.ScanControlCapability{Control: dto.ScanControlDryRun, Enforcement: dto.ControlServerPreview})),
+	toolCapability("nuclei_scan", "nuclei", "/api/tools/nuclei/stream", "Run template-based vulnerability checks with Nuclei. Every run previews local template count and lower-bound duration. Inline output contains only complete bounded lines; page the raw stdout artifact by line for full JSONL. Nuclei's native rate limiter is an average throttle that may burst above the requested value in a rolling one-second window. Safe-recon requires a selector and excludes DoS, fuzz, DAST, OAST, and interactsh templates.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon}, append(nucleiControls(), dto.ScanControlCapability{Control: dto.ScanControlDryRun, Enforcement: dto.ControlServerPreview})),
 	toolCapability("whatweb_scan", "whatweb", "/api/tools/whatweb/stream", "Fingerprint web technologies and frameworks with WhatWeb, typically during initial reconnaissance.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, nil),
 	toolCapability("jwt_analyze", "jwt_tool", "/api/tools/jwt/stream", "Parse JWT structure and metadata offline, with optional live endpoint verification. Live mode defaults to low-risk forced-error checks; playbook and all-tests modes require allow_unsafe because they include command-injection timing probes.", dto.TargetInputToken, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{}, nil),
 	toolCapability("dalfox_scan", "dalfox", "/api/tools/dalfox/stream", "Collect and verify reflected or server-routed XSS candidates with Dalfox. Supply per-call authentication through headers or cookies; the MCP server does not retain a credential session. Use browser_check for fragment-based DOM XSS.", dto.TargetInputURLOrFile, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm}, rateAndConcurrencyControls(false)),
@@ -70,6 +70,13 @@ func rateControls(observe5xx bool) []dto.ScanControlCapability {
 
 func rateAndConcurrencyControls(observe5xx bool) []dto.ScanControlCapability {
 	return appendBudgetControls(nativeControls(dto.ScanControlRateLimit, dto.ScanControlConcurrency), observe5xx)
+}
+
+func nucleiControls() []dto.ScanControlCapability {
+	return appendBudgetControls([]dto.ScanControlCapability{
+		{Control: dto.ScanControlRateLimit, Enforcement: dto.ControlNativeCLIAverage},
+		{Control: dto.ScanControlConcurrency, Enforcement: dto.ControlNativeCLI},
+	}, false)
 }
 
 func appendBudgetControls(controls []dto.ScanControlCapability, observe5xx bool) []dto.ScanControlCapability {

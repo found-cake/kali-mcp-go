@@ -12,11 +12,14 @@ func TestClassifyNucleiResultParsesExactStatisticsCount(t *testing.T) {
 
 	result := classifyToolResult("nuclei_scan", dto.ToolResult{
 		ReturnCode: 0,
-		Stderr:     "{\"duration\":\"0:00:01\",\"requests\":\"4\",\"startedAt\":\"2026-09-05T12:00:00Z\"}\n{\"duration\":\"0:00:02\",\"requests\":\"7\",\"startedAt\":\"2026-09-05T12:00:00Z\"}\n",
+		Stderr:     "{\"duration\":\"0:00:01\",\"requests\":\"4\",\"rps\":\"4\",\"startedAt\":\"2026-09-05T12:00:00Z\"}\n{\"duration\":\"0:00:02\",\"requests\":\"7\",\"rps\":\"3.5\",\"startedAt\":\"2026-09-05T12:00:00Z\"}\n",
 	})
 
 	if result.HTTPRequests == nil || *result.HTTPRequests != 7 || result.RequestCountSource != dto.RequestCountParsed {
 		t.Fatalf("Nuclei request count was not parsed: %+v", result)
+	}
+	if result.NucleiRuntime == nil || result.NucleiRuntime.ReportedRPS != 3.5 || result.NucleiRuntime.ReportedRPSSemantics != dto.NucleiRPSRuntimeStatistic {
+		t.Fatalf("Nuclei reported RPS was not distinguished from the applied limiter: %+v", result.NucleiRuntime)
 	}
 }
 

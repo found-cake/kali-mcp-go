@@ -27,6 +27,27 @@ func TestApplyScanControlsAddsNucleiRateAndConcurrencyLimits(t *testing.T) {
 	}
 }
 
+func TestNucleiCapabilityDescribesNativeAverageRateEnforcement(t *testing.T) {
+	// Given: the Nuclei capability exposed to callers.
+	capability, found := ToolCapability("nuclei_scan")
+	if !found {
+		t.Fatal("Nuclei capability is missing")
+	}
+
+	// When: its rate-limit control is inspected.
+	var enforcement dto.ControlEnforcement
+	for _, control := range capability.Controls {
+		if control.Control == dto.ScanControlRateLimit {
+			enforcement = control.Enforcement
+		}
+	}
+
+	// Then: the native average throttle is not represented as a rolling-window hard limit.
+	if enforcement != dto.ControlNativeCLIAverage {
+		t.Fatalf("unexpected Nuclei rate-limit enforcement: %q", enforcement)
+	}
+}
+
 func TestApplyScanControlsUsesInstalledDalfoxWorkersFlag(t *testing.T) {
 	// Given: a Dalfox command and an explicit concurrency limit.
 	args := []string{"dalfox", "scan", "https://example.com/?q=FUZZ"}

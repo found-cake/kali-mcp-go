@@ -78,6 +78,7 @@ type scannerStatistics struct {
 	Percent          json.RawMessage `json:"percent"`
 	Templates        json.RawMessage `json:"templates"`
 	Total            json.RawMessage `json:"total"`
+	RPS              json.RawMessage `json:"rps"`
 	InitialTargets   json.RawMessage `json:"initial_targets"`
 	ConnectionErrors json.RawMessage `json:"connection_errors"`
 }
@@ -99,13 +100,18 @@ func parseNucleiRuntimeMetadata(output string) (dto.NucleiRuntimeMetadata, bool)
 	if maximumRequests < 0 {
 		return dto.NucleiRuntimeMetadata{}, false
 	}
-	return dto.NucleiRuntimeMetadata{
+	runtime := dto.NucleiRuntimeMetadata{
 		Requests: maximumRequests, RequestsSemantics: dto.NucleiRequestsScheduled,
 		Errors: parseJSONIntegerOrZero(latest.Errors), Hosts: parseJSONIntegerOrZero(latest.Hosts),
 		Matched: parseJSONIntegerOrZero(latest.Matched), Templates: parseJSONIntegerOrZero(latest.Templates),
 		Total: parseJSONIntegerOrZero(latest.Total), Percent: parseJSONFloatOrZero(latest.Percent),
 		Duration: latest.Duration, StartedAt: latest.StartedAt,
-	}, true
+	}
+	if reportedRPS, ok := parseJSONFloat(latest.RPS); ok {
+		runtime.ReportedRPS = reportedRPS
+		runtime.ReportedRPSSemantics = dto.NucleiRPSRuntimeStatistic
+	}
+	return runtime, true
 }
 
 func parseJSONIntegerOrZero(raw json.RawMessage) int {
@@ -114,16 +120,21 @@ func parseJSONIntegerOrZero(raw json.RawMessage) int {
 }
 
 func parseJSONFloatOrZero(raw json.RawMessage) float64 {
+	value, _ := parseJSONFloat(raw)
+	return value
+}
+
+func parseJSONFloat(raw json.RawMessage) (float64, bool) {
 	var value float64
 	if err := json.Unmarshal(raw, &value); err == nil && value >= 0 {
-		return value
+		return value, true
 	}
 	var encoded string
 	if err := json.Unmarshal(raw, &encoded); err != nil {
-		return 0
+		return 0, false
 	}
-	value, _ = strconv.ParseFloat(encoded, 64)
-	return value
+	value, err := strconv.ParseFloat(encoded, 64)
+	return value, err == nil && value >= 0
 }
 
 func parseStructuredRequestCount(output string, matches func(scannerStatistics) bool) (int, bool) {
