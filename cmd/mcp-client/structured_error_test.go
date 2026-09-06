@@ -42,3 +42,35 @@ func TestTextResultReturnsStructuredValidationFailure(t *testing.T) {
 		t.Fatalf("failure message = %q", structured.Failure.Message)
 	}
 }
+
+func TestTextResultReturnsStructuredServerFailure(t *testing.T) {
+	requestError := &kaliclient.ServerError{
+		StatusCode: http.StatusServiceUnavailable,
+		CallID:     "call_server_failure",
+		Body:       `{"error":"scan capacity exceeded"}`,
+	}
+
+	mcpResult, structured, err := textResult("nuclei_scan", nil, requestError)
+	if err != nil {
+		t.Fatalf("textResult() error = %v, want a structured MCP failure", err)
+	}
+	if mcpResult == nil || !mcpResult.IsError || structured.CallID != "call_server_failure" {
+		t.Fatalf("server failure was not structured: result=%#v structured=%+v", mcpResult, structured)
+	}
+	if structured.Failure == nil || structured.Failure.Code != "server_error" || structured.ExecutionStatus != dto.ExecutionFailed {
+		t.Fatalf("unexpected server failure envelope: %+v", structured)
+	}
+}
+
+func TestTextResultReturnsStructuredDeadlineFailure(t *testing.T) {
+	mcpResult, structured, err := textResult("nuclei_scan", nil, context.DeadlineExceeded)
+	if err != nil {
+		t.Fatalf("textResult() error = %v, want a structured MCP timeout", err)
+	}
+	if mcpResult == nil || !mcpResult.IsError || structured.ExecutionStatus != dto.ExecutionTimedOut || !structured.TimedOut {
+		t.Fatalf("deadline failure was not structured: result=%#v structured=%+v", mcpResult, structured)
+	}
+	if structured.Failure == nil || structured.Failure.Code != "client_timeout" || !structured.Failure.Retryable {
+		t.Fatalf("unexpected timeout failure envelope: %+v", structured)
+	}
+}
