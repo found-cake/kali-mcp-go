@@ -181,7 +181,7 @@ func executableToolDefinition(name string) (dto.ScanToolCapability, error) {
 
 func textResult(name string, r *dto.ToolResult, err error) (*mcp.CallToolResult, dto.ToolResult, error) {
 	if err != nil {
-		return structuredErrorResult(err)
+		return structuredErrorResult(name, r, err)
 	}
 	structured := classifyToolResult(name, *r)
 	structured = structured.Compact(defaultInlineOutputBytes)

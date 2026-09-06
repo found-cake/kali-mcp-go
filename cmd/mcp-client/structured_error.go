@@ -10,11 +10,19 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func structuredErrorResult(err error) (*mcp.CallToolResult, dto.ToolResult, error) {
-	result := dto.ToolResult{
-		Stderr: err.Error(), ReturnCode: -1, ExecutionStatus: dto.ExecutionFailed,
-		FindingStatus: dto.FindingsUnknown, ClassificationReason: "transport_failed",
-		Failure: &dto.FailureInfo{Code: "transport_error", Message: err.Error()},
+func structuredErrorResult(name string, partial *dto.ToolResult, err error) (*mcp.CallToolResult, dto.ToolResult, error) {
+	result := dto.ToolResult{}
+	if partial != nil {
+		result = *partial
+	}
+	partialEvidence := result.PartialResults || result.Stdout != "" || result.Stderr != "" || result.HTTPRequests != nil || result.Progress != nil && result.Progress.ObservedOutputItems > 0
+	result.ReturnCode = -1
+	result.ExecutionStatus = dto.ExecutionFailed
+	result.FindingStatus = dto.FindingsUnknown
+	result.ClassificationReason = "transport_failed"
+	result.Failure = &dto.FailureInfo{Code: "transport_error", Message: err.Error()}
+	if result.Stderr == "" {
+		result.Stderr = err.Error()
 	}
 	var serverError *kaliclient.ServerError
 	switch {
@@ -41,6 +49,11 @@ func structuredErrorResult(err error) (*mcp.CallToolResult, dto.ToolResult, erro
 			result.Failure.Code = "invalid_input"
 			result.Failure.Retryable = false
 		}
+	}
+	result.PartialResults = partialEvidence
+	if partialEvidence {
+		classified := classifyToolResult(name, result)
+		result.FindingStatus = classified.FindingStatus
 	}
 	result.Finalize()
 	result = result.Compact(defaultInlineOutputBytes)

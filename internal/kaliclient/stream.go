@@ -51,14 +51,17 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		method: http.MethodPost, endpoint: endpoint, body: body, authorize: true,
 	})
 	if err != nil {
-		return nil, err
+		return &dto.ToolResult{CallID: callID}, err
 	}
 	request.Header.Set("Accept", "text/event-stream")
 	request.Header.Set(dto.CallIDHeader, callID)
 	response, err := c.http.Do(request)
 	if err != nil {
 		c.cancelRemoteCall(callID)
-		return nil, fmt.Errorf("stream: %w", err)
+		if contextError := requestContext.Err(); contextError != nil {
+			err = contextError
+		}
+		return &dto.ToolResult{CallID: callID}, fmt.Errorf("stream: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
@@ -72,6 +75,9 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 	result, err := parseToolStream(response.Body, responseCallID)
 	if err != nil {
 		c.cancelRemoteCall(callID)
+		if contextError := requestContext.Err(); contextError != nil {
+			err = fmt.Errorf("stream: %w", contextError)
+		}
 	}
 	return result, err
 }
@@ -102,19 +108,23 @@ func parseToolStream(reader io.Reader, initialCallID string) (*dto.ToolResult, e
 		}
 		var event dto.StreamEvent
 		if err := json.Unmarshal([]byte(strings.TrimPrefix(raw, "data: ")), &event); err != nil {
-			return nil, fmt.Errorf("stream decode event: %w", err)
+			return accumulator.partialResult(), fmt.Errorf("stream decode event: %w", err)
 		}
 		if err := accumulator.consume(event); err != nil {
-			return nil, err
+			return accumulator.partialResult(), err
 		}
 		if accumulator.done {
 			break
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("stream read: %w", err)
+		return accumulator.partialResult(), fmt.Errorf("stream read: %w", err)
 	}
-	return accumulator.result()
+	result, err := accumulator.result()
+	if err != nil {
+		return accumulator.partialResult(), err
+	}
+	return result, nil
 }
 
 func (a *streamAccumulator) consume(event dto.StreamEvent) error {
@@ -163,36 +173,4 @@ func (a *streamAccumulator) consume(event dto.StreamEvent) error {
 		a.stderr = append(a.stderr, event.Line)
 	}
 	return nil
-}
-
-func (a *streamAccumulator) result() (*dto.ToolResult, error) {
-	if !a.done {
-		return nil, fmt.Errorf("stream ended without done event")
-	}
-	if a.finalError != "" {
-		a.stderr = append(a.stderr, a.finalError)
-	}
-	result := &dto.ToolResult{
-		CallID: a.callID, Stdout: joinStreamLines(a.stdout), Stderr: joinStreamLines(a.stderr),
-		ReturnCode: a.returnCode, TimedOut: a.timedOut, Cancelled: a.cancelled,
-		PartialResults: (a.timedOut || a.cancelled) && (len(a.stdout) > 0 || len(a.stderr) > 0),
-		HTTPRequests:   a.httpRequests, RequestCountSource: a.requestCountSource,
-		DurationMS: a.durationMS, Failure: a.failure, Execution: a.execution,
-		Target: a.target, SPABaseline: a.spaBaseline, FalsePositiveRisk: a.falsePositiveRisk,
-		Warnings: a.warnings, Artifacts: a.artifacts, Progress: a.progress, FindingStatus: dto.FindingsUnknown,
-		JWTAnalysis:     a.jwtAnalysis,
-		SQLMapAnalysis:  a.sqlmapAnalysis,
-		NucleiPreview:   a.nucleiPreview,
-		Evidence:        a.evidence,
-		ExecutionStatus: dto.ExecutionStatusFromResult(a.returnCode, a.timedOut, a.cancelled),
-	}
-	result.Finalize()
-	return result, nil
-}
-
-func joinStreamLines(lines []string) string {
-	if len(lines) == 0 {
-		return ""
-	}
-	return strings.Join(lines, "\n") + "\n"
 }

@@ -63,7 +63,18 @@ func (c *Client) timeoutForBody(body any) time.Duration {
 }
 
 func (c *Client) requestContext(ctx context.Context, body any) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(ctx, c.timeoutForBody(body))
+	timeout := c.timeoutForBody(body)
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = boundedRequestTimeout(timeout, time.Until(deadline))
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func boundedRequestTimeout(configured, parentRemaining time.Duration) time.Duration {
+	if parentRemaining > requestTimeoutGrace && configured > parentRemaining-requestTimeoutGrace {
+		return parentRemaining - requestTimeoutGrace
+	}
+	return configured
 }
 
 func (c *Client) newJSONRequest(ctx context.Context, spec jsonRequestSpec) (*http.Request, error) {

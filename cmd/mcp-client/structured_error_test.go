@@ -74,3 +74,18 @@ func TestTextResultReturnsStructuredDeadlineFailure(t *testing.T) {
 		t.Fatalf("unexpected timeout failure envelope: %+v", structured)
 	}
 }
+
+func TestTextResultPreservesPartialOutputOnDeadline(t *testing.T) {
+	partial := &dto.ToolResult{CallID: "call_partial", Stdout: "partial finding\n", PartialResults: true}
+
+	_, structured, err := textResult("nuclei_scan", partial, context.DeadlineExceeded)
+	if err != nil {
+		t.Fatalf("textResult() error = %v, want a structured partial timeout", err)
+	}
+	if structured.CallID != "call_partial" || structured.Stdout != "partial finding\n" || !structured.PartialResults {
+		t.Fatalf("partial timeout evidence was discarded: %+v", structured)
+	}
+	if structured.ExecutionStatus != dto.ExecutionTimedOut || structured.FindingStatus != dto.FindingsInconclusive {
+		t.Fatalf("partial timeout status is inconsistent: %+v", structured)
+	}
+}
