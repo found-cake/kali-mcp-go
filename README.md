@@ -21,7 +21,7 @@ Concurrent, policy-aware MCP runtime for authorized security testing with Kali t
 | Authentication | Bearer-token authentication with constant-time comparison between `mcp-client` and `kali-server` |
 | Agent safety | Tool output is treated as untrusted data, and MCP instructions prohibit replacing the provisioned runtime during an assessment |
 | Deployment | One-shot or persistent Docker operation, standalone binaries, VMs, and directly installed Linux hosts |
-| Orchestration boundary | No server-side credential sessions or scan jobs; the MCP host remains responsible for workflow and secret management |
+| Orchestration boundary | Short-lived scan jobs prevent abandoned processes; the MCP host still owns workflow state and credential management |
 
 ---
 
@@ -327,7 +327,7 @@ TCP connect scans such as `-sT -Pn` work with Docker's default capabilities. Add
 
 ### 5. Configuration reference
 
-For long scans, configure the MCP host timeout above `mcp-client --timeout`. When the host propagates its deadline, the client reserves five seconds to cancel the remote process and return accumulated output. A host that forcibly terminates the STDIO process cannot receive a final partial-result envelope. Individual tool requests can still set tighter limits.
+For synchronous long scans, configure the MCP host timeout above `mcp-client --timeout`. When the host propagates its deadline, the client reserves five seconds to cancel the remote process and return accumulated output. A host that forcibly terminates the STDIO process cannot receive a final partial-result envelope. Individual tool requests can still set tighter limits. Streaming scan tools also accept `async: true`; this returns a job immediately so the process is no longer coupled to the MCP call deadline.
 
 #### mcp-client flags
 
@@ -368,6 +368,9 @@ For long scans, configure the MCP host timeout above `mcp-client --timeout`. Whe
 | `get_scan_capabilities` | Inspect profile compatibility, target formats, supported controls, exact registered input schemas, and effective default wordlists |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
 | `result_artifact_read` | Read a retained artifact completely through bounded byte pages or UTF-8 line ranges, including extracted tool stdout/stderr sections |
+| `scan_job_status` | Read pending progress or terminal state for an asynchronous scan |
+| `scan_job_result` | Read an asynchronous scan's existing terminal result |
+| `scan_job_cancel` | Request cancellation of a pending asynchronous scan |
 | `http_request` | Send one bounded HTTP request with structured status, headers, optional target-bound virtual host, body preview, provenance, and artifact output |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
@@ -418,6 +421,8 @@ These MCP tools now stream incremental output over SSE instead of waiting for a 
 
 Streaming requests support an optional `timeout` field (seconds) to override the default 300-second request limit for that specific run. For `tshark_capture`, this request `timeout` is distinct from the capture `duration` field.
 
+Except for `execute_command`, streaming tools also expose `async`. An asynchronous call returns `{job_id,status,data}` with `status: pending`; use `scan_job_status`, `scan_job_result`, or `scan_job_cancel` with that ID. Terminal jobs use `completed` when execution succeeded and `error` for failed, timed-out, or cancelled execution, while `data` contains the same tool result contract used synchronously. Terminal lookup expires 30 seconds after the process exits, so retrieve the result promptly. Result artifacts retain their independent one-hour lifetime. Jobs are in-memory process-control state, not durable workflow or credential sessions, and server shutdown cancels pending processes.
+
 When using OpenCode, the per-tool request `timeout` is not enough by itself for long scans. You should also raise OpenCode's MCP execution timeout and the local `mcp-client --timeout` value as shown above.
 
 For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout` value for long-running tools, but OpenCode's `mcp.<name>.timeout` setting does not apply there.
@@ -447,6 +452,9 @@ Every tool exposes an MCP output schema and returns both readable text and struc
 - `finding_status`: `detected`, `not_detected`, `inconclusive`, or `unknown`
 - `finding_types`: the kind of observation evaluated, such as `service`, `technology`, `content`, `vulnerability`, or `misconfiguration`
 - `partial_results`, `http_requests`, `duration_ms`, original stdout/stderr byte counts, and `output_truncated`
+- `stdout_truncated` and `stderr_truncated`: which inline channel was shortened
+- `finding_output_truncated`: whether the primary finding-bearing stdout was shortened
+- `artifact_complete`: whether the complete retained tool-result artifact is available despite inline truncation
 - `progress`: phase, observed output item count, last retained output item, exact HTTP request count when known, request budget, and a stateless checkpoint
 - `target`: original target, explicitly selected target, resolution ID, and selection basis
 - `execution`: redacted argv, tool version, start/end time, timeout, profile, rate, concurrency, request budget, health URL, and 5xx threshold
@@ -473,7 +481,7 @@ The authenticated raw HTTP endpoint `GET /api/artifacts/:id` also remains availa
 
 Executable tools share one compact top-level MCP output contract. Detailed nested evidence remains in structured content and artifacts, while the common schema keeps status, classification, request-count provenance, target provenance, and artifact fields discoverable without repeating the full nested schema for every tool.
 
-Progress checkpoints describe already observed output but are not server-side jobs. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without shared MCP session memory.
+Progress checkpoints describe already observed output. Asynchronous jobs preserve process state only while running and expose their terminal result for 30 seconds; they do not add scanner-native checkpoints or continuation. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without durable shared MCP session memory.
 ### Explicit target resolution
 
 Scan tools never silently rewrite a target. `127.0.0.1`, `localhost`, and `[::1]` refer to the machine or container running `kali-server`, whether that runtime is Docker, a VM, or a directly installed Linux host.
@@ -494,6 +502,8 @@ Call `get_scan_capabilities` before composing a scan when profile compatibility,
 | `browser-xss-confirm` | Browser-backed confirmation of a specific XSS candidate |
 | `explicit-custom` | Explicit caller-supplied controls within hard server limits |
 
+Safety profiles bound impact and request behavior; they are not completeness claims. Excluded higher-impact techniques, timed-out or partial tools, and untested authenticated or input-specific routes must remain explicit report limitations.
+
 The server limits total work and weighted work per target service, canonicalized across web URLs, network hosts, paths, and explicitly selected resolver candidates. Heavy tools cannot run concurrently against that service. Supported tools receive native rate and concurrency flags. Nuclei's capability reports `native_cli_average_bursty` for `rate_limit`: the value is passed to its global native limiter, but it is an average throttle rather than a hard rolling-one-second ceiling. The applied value remains in `execution.controls`, while the scanner-observed statistic is returned separately as `nuclei_runtime.reported_rps`. When `timeout` is omitted and both request and rate budgets are known, the outer timeout is derived from that budget plus tool startup grace; an explicit shorter Nuclei timeout is preserved with a partial-result warning. `execution.timeout_planning.request_budget_hard_limit` remains `false` because external scanners do not expose a universally enforceable request-count stop. When `health_url` is present, it must identify the selected target service; the server rejects cross-origin redirects and probes it before and after the run, except for local-only `dry_run` previews. JSON-producing scanners are cancelled when `max_5xx_responses` is reached. Safety profiles also constrain impact: discovery tools retain read-only methods and cannot enable cross-host redirects or auxiliary proxy/replay destinations, Nmap rejects spoofing and accepts only passive built-in script selectors without script arguments, Nikto rejects explicit DoS and command-execution tuning, Dalfox rejects blind/OOB and remote payload sources, SQLmap pins conservative verification settings and ignores redirects, and manual `http_request` calls permit only GET, HEAD, and OPTIONS. In Nuclei safe mode, selection and safety-override flags supplied through `additional_args` are rejected while the typed severity, tag, and template selectors remain available; the final DoS, fuzz, DAST, OAST, and interactsh exclusions cannot be overridden. `allow_unsafe` requires `explicit-custom` or an omitted profile to leave that boundary.
 
 ### Credential management
@@ -503,6 +513,8 @@ The server limits total work and weighted work per target service, canonicalized
 ### Natural-language tool routing
 
 The server instructions and tool descriptions recognize authorized black-box penetration testing, security assessment, reconnaissance, enumeration, and requests to use Kali tools as intended use cases. No product-specific keyword is required. Include an explicit authorized target and scope, for example: `Run an authorized black-box assessment of http://127.0.0.1:3000 with Kali tools; resolve the target first, then enumerate ports, services, and web technologies.`
+
+A root URL is a starting point, not the full application scope. The orchestrator should use path discovery, browser and network evidence, and JavaScript analysis to build its own endpoint inventory, then invoke relevant tools for selected authenticated routes and input points with caller-managed request-scoped credentials. The MCP server does not infer completion from a root-only scan or maintain that inventory itself.
 
 ### SQLmap JSON and raw requests
 
@@ -545,6 +557,7 @@ kali-mcp-go/
 │   ├── artifacts/              # bounded evidence storage and paging
 │   ├── executor/               # command execution and process streaming
 │   ├── httpexec/               # bounded manual HTTP requests
+│   ├── jobs/                   # short-lived asynchronous process lifecycle
 │   ├── kaliclient/             # authenticated HTTP/SSE client
 │   ├── results/                # result normalization and evidence protection
 │   ├── streaming/              # progress, heartbeat, and terminal events
