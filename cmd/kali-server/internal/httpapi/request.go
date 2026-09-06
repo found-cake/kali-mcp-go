@@ -2,12 +2,18 @@ package httpapi
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/internal/targeting"
 	"github.com/found-cake/kali-mcp-go/internal/tools"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/gofiber/fiber/v3"
 )
+
+func AsyncRequested(c fiber.Ctx) bool {
+	return strings.EqualFold(strings.TrimSpace(c.Get(dto.AsyncRequestHeader)), "true")
+}
 
 func BadRequest(c fiber.Ctx, message string) error {
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": message})

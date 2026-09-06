@@ -3,6 +3,7 @@ package toolapi
 import (
 	"context"
 	"sync/atomic"
+	"time"
 
 	httpapi "github.com/found-cake/kali-mcp-go/cmd/kali-server/internal/httpapi"
 	"github.com/found-cake/kali-mcp-go/internal/executor"
@@ -15,8 +16,18 @@ import (
 
 type streamExecution struct {
 	plan           *scanExecutionPlan
+	tool           string
 	beforeAnnotate func(*executor.Result)
+	launch         func(context.Context) (<-chan executor.Line, <-chan *executor.Result)
 	cleanups       []func()
+}
+
+type asyncTaskSpec struct {
+	callID  string
+	tool    string
+	timeout time.Duration
+	cleanup []func()
+	run     jobs.Task
 }
 
 func executeStreamPlan(c fiber.Ctx, plan *scanExecutionPlan) error {
@@ -46,17 +57,11 @@ func executeSynchronousTool(c fiber.Ctx, execution streamExecution) error {
 }
 
 func executeAsyncTool(c fiber.Ctx, execution streamExecution) error {
-	store := httpapi.JobStore(c)
-	if store == nil {
-		execution.cleanup()
-		return httpapi.InternalServerError(c, "job store unavailable")
-	}
-	cleanups := execution.cleanupFunctions(c)
-	callID := httpapi.CallID(c)
-	created, err := store.Start(jobs.StartSpec{
-		CallID: callID, Tool: execution.plan.args[0], Timeout: execution.plan.timeout,
-		Run: func(ctx context.Context, report jobs.ProgressReporter) dto.ToolResult {
-			defer runCleanups(cleanups)
+	return executeAsyncTask(c, asyncTaskSpec{
+		callID: execution.plan.callID,
+		tool:   execution.toolName(), timeout: execution.plan.timeout,
+		cleanup: execution.taskCleanups(),
+		run: func(ctx context.Context, report jobs.ProgressReporter) dto.ToolResult {
 			execution.plan.context = ctx
 			lines, done, cancel := execution.start(ctx)
 			defer cancel()
@@ -71,10 +76,33 @@ func executeAsyncTool(c fiber.Ctx, execution streamExecution) error {
 			result, ok := <-done
 			if !ok || result == nil {
 				return results.ToToolResult(&executor.Result{
-					CallID: callID, ReturnCode: -1, FailureCode: "stream_ended_without_result",
+					CallID: execution.plan.callID, ReturnCode: -1, FailureCode: "stream_ended_without_result",
 				})
 			}
 			return results.ToToolResult(result)
+		},
+	})
+}
+
+func (execution streamExecution) toolName() string {
+	if execution.tool != "" {
+		return execution.tool
+	}
+	return execution.plan.args[0]
+}
+
+func executeAsyncTask(c fiber.Ctx, task asyncTaskSpec) error {
+	store := httpapi.JobStore(c)
+	if store == nil {
+		runCleanups(task.cleanup)
+		return httpapi.InternalServerError(c, "job store unavailable")
+	}
+	cleanups := append([]func(){httpapi.RetainExecutionLease(c)}, task.cleanup...)
+	created, err := store.Start(jobs.StartSpec{
+		CallID: task.callID, Tool: task.tool, Timeout: task.timeout,
+		Run: func(ctx context.Context, report jobs.ProgressReporter) dto.ToolResult {
+			defer runCleanups(cleanups)
+			return task.run(ctx, report)
 		},
 	})
 	if err != nil {
@@ -91,7 +119,13 @@ func executeAsyncTool(c fiber.Ctx, execution streamExecution) error {
 
 func (execution streamExecution) start(ctx context.Context) (<-chan executor.Line, <-chan *executor.Result, context.CancelFunc) {
 	execCtx, cancel := context.WithCancel(ctx)
-	lines, done := executor.StreamExec(execCtx, execution.plan.timeout, execution.plan.args[0], execution.plan.args[1:]...)
+	var lines <-chan executor.Line
+	var done <-chan *executor.Result
+	if execution.launch != nil {
+		lines, done = execution.launch(execCtx)
+	} else {
+		lines, done = executor.StreamExec(execCtx, execution.plan.timeout, execution.plan.args[0], execution.plan.args[1:]...)
+	}
 	lines = results.ProtectStream(execCtx, lines, execution.plan.request)
 	var breakerTripped *atomic.Bool
 	if execution.plan.options.Max5xxResponses > 0 {
@@ -116,12 +150,15 @@ func (execution streamExecution) finish(result *executor.Result) {
 }
 
 func (execution streamExecution) cleanupFunctions(c fiber.Ctx) []func() {
-	cleanups := []func(){httpapi.RetainExecutionLease(c), execution.plan.release}
-	return append(cleanups, execution.cleanups...)
+	return append([]func(){httpapi.RetainExecutionLease(c)}, execution.taskCleanups()...)
 }
 
 func (execution streamExecution) cleanup() {
-	runCleanups(append([]func(){execution.plan.release}, execution.cleanups...))
+	runCleanups(execution.taskCleanups())
+}
+
+func (execution streamExecution) taskCleanups() []func() {
+	return append([]func(){execution.plan.release}, execution.cleanups...)
 }
 
 func runCleanups(cleanups []func()) {

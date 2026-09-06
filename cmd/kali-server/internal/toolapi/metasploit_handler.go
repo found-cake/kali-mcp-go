@@ -29,15 +29,18 @@ func handleMetasploit(c fiber.Ctx) error {
 	if err != nil {
 		return httpapi.InternalServerError(c, err.Error())
 	}
-	defer os.Remove(rcFile)
 	plan, err := prepareScanExecution(c, request, tools.MetasploitArgs(rcFile))
 	if err != nil {
+		_ = os.Remove(rcFile)
 		return scanPreparationError(c, err)
 	}
-	defer plan.release()
 	if plan.async {
-		return httpapi.BadRequest(c, "asynchronous execution requires a streaming tool route")
+		return executeAsyncTool(c, streamExecution{
+			plan: plan, cleanups: []func(){func() { _ = os.Remove(rcFile) }},
+		})
 	}
+	defer plan.release()
+	defer os.Remove(rcFile)
 	result := executeOrPreview(c.Context(), plan)
 	plan.annotate(result)
 	return c.JSON(results.ToToolResult(result))

@@ -46,7 +46,7 @@ type Input struct {
 func Execute(ctx context.Context, input Input) *executor.Result {
 	request := input.Request
 	options := request.ScanOptions
-	timeout := httpRequestTimeout(request.Timeout)
+	timeout := RequestTimeout(request.Timeout)
 	method := normalizedHTTPMethod(request.Method)
 	startedAt := time.Now().UTC()
 	requestCount := 1
@@ -182,7 +182,7 @@ func responseByteLimit(requested int) int {
 	return requested
 }
 
-func httpRequestTimeout(seconds int) time.Duration {
+func RequestTimeout(seconds int) time.Duration {
 	if seconds == 0 {
 		return defaultHTTPRequestTime
 	}

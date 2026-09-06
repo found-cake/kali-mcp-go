@@ -98,13 +98,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	if request, ok := any(request).(dto.DryRunRequest); ok {
 		dryRun = request.GetDryRun()
 	}
-	async := false
-	if request, ok := any(request).(dto.AsyncRequest); ok {
-		async = request.GetAsync()
-	}
-	if async && !tools.RuntimeSupportsAsync(args[0]) {
-		return nil, fmt.Errorf("asynchronous execution is not supported by %s", args[0])
-	}
+	async := httpapi.AsyncRequested(c)
 	if async && dryRun {
 		return nil, fmt.Errorf("async and dry_run cannot be combined")
 	}

@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const AsyncRequestHeader = "X-Kali-MCP-Async"
+
 type JobStatus string
 
 const (
@@ -14,7 +16,12 @@ const (
 )
 
 type JobRequest struct {
-	JobID string `json:"job_id" jsonschema:"required,opaque job identifier returned by an asynchronous scan"`
+	JobID string `json:"job_id" jsonschema:"required,opaque job identifier returned by an asynchronous tool run"`
+}
+
+type AsyncToolRequest struct {
+	ToolName  string          `json:"tool_name" jsonschema:"required,registered executable MCP tool name"`
+	Arguments json.RawMessage `json:"arguments" jsonschema:"required,exact input object accepted by the selected dedicated tool"`
 }
 
 type JobPendingData struct {

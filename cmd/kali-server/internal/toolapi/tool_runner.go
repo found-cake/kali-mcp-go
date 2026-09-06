@@ -12,10 +12,10 @@ import (
 
 func runTool[T any](c fiber.Ctx, validate func(T) error, argsFor func(T) ([]string, error)) error {
 	return withPreparedTool(c, toolExecutionSpec[T]{validate: validate, argsFor: argsFor}, func(plan *scanExecutionPlan) error {
-		defer plan.release()
 		if plan.async {
-			return httpapi.BadRequest(c, "asynchronous execution requires a streaming tool route")
+			return executeAsyncTool(c, streamExecution{plan: plan})
 		}
+		defer plan.release()
 		result := executeOrPreview(c.Context(), plan)
 		plan.annotate(result)
 		return c.JSON(results.ToToolResult(result))

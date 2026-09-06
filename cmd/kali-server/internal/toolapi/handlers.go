@@ -39,17 +39,17 @@ func handleCommandStream(c fiber.Ctx) error {
 		return httpapi.BadRequest(c, err.Error())
 	}
 	timeout := commandTimeout(req.Timeout)
-	execCtx, cancel := context.WithCancel(c.Context())
-	lines, done := executor.StreamShell(execCtx, timeout, req.Command)
-	lines = results.ProtectStream(execCtx, lines, req)
-	callID := httpapi.CallID(c)
-	artifacts := httpapi.ArtifactStore(c)
-	done = annotateResult(done, func(result *executor.Result) {
-		result.CallID = callID
-		results.Protect(artifacts, result, req)
+	plan := &scanExecutionPlan{
+		callID: httpapi.CallID(c), args: []string{"bash", "-c", req.Command},
+		timeout: timeout, release: func() {}, request: req, context: c.Context(),
+		artifactStore: httpapi.ArtifactStore(c), async: httpapi.AsyncRequested(c),
+	}
+	return executeToolStream(c, streamExecution{
+		plan: plan,
+		launch: func(ctx context.Context) (<-chan executor.Line, <-chan *executor.Result) {
+			return executor.StreamShell(ctx, timeout, req.Command)
+		},
 	})
-	release := httpapi.RetainExecutionLease(c)
-	return httpapi.SendToolStream(c, lines, done, cancel, release)
 }
 
 func handleNmapStream(c fiber.Ctx) error {
@@ -111,9 +111,26 @@ func handleJohn(c fiber.Ctx) error {
 	if err != nil {
 		return httpapi.BadRequest(c, err.Error())
 	}
-	defer plan.Cleanup()
 	args := plan.Args()
-	result := executor.RunExec(c.Context(), commandTimeout(req.Timeout), args[0], args[1:]...)
+	timeout := commandTimeout(req.Timeout)
+	if httpapi.AsyncRequested(c) {
+		executionPlan := &scanExecutionPlan{
+			callID: httpapi.CallID(c), args: args, timeout: timeout,
+			release: plan.Cleanup, request: req, context: c.Context(),
+			artifactStore: httpapi.ArtifactStore(c), ephemeralPaths: []string{plan.EphemeralPath()}, async: true,
+		}
+		return executeAsyncTool(c, streamExecution{
+			plan: executionPlan, tool: "john",
+			beforeAnnotate: func(result *executor.Result) {
+				if req.MaskPlaintext {
+					result.Stdout = tools.RedactJohnOutput(result.Stdout)
+					result.Stderr = tools.RedactJohnOutput(result.Stderr)
+				}
+			},
+		})
+	}
+	defer plan.Cleanup()
+	result := executor.RunExec(c.Context(), timeout, args[0], args[1:]...)
 	result.CallID = httpapi.CallID(c)
 	if req.MaskPlaintext {
 		result.Stdout = tools.RedactJohnOutput(result.Stdout)
