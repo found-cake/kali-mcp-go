@@ -44,6 +44,46 @@ func TestHTTPRequestRejectsMalformedBody(t *testing.T) {
 	}
 }
 
+func TestAsyncJobRoutesAreAuthenticatedAndMounted(t *testing.T) {
+	// Given: the complete server application and a missing job identifier.
+	app := newApp("secret-token", false, httpapi.DefaultMaxConcurrentExecutions, t.Logf)
+	t.Cleanup(func() { _ = app.Shutdown() })
+	unauthorized, err := http.NewRequest(http.MethodGet, "/api/jobs/job_missing/status", nil)
+	if err != nil {
+		t.Fatalf("create unauthorized request: %v", err)
+	}
+	authorized, err := http.NewRequest(http.MethodGet, "/api/jobs/job_missing/status", nil)
+	if err != nil {
+		t.Fatalf("create authorized request: %v", err)
+	}
+	authorized.Header.Set("Authorization", "Bearer secret-token")
+
+	// When: the same route is requested without and with server authentication.
+	unauthorizedResponse, err := app.Test(unauthorized)
+	if err != nil {
+		t.Fatalf("request unauthorized job route: %v", err)
+	}
+	defer unauthorizedResponse.Body.Close()
+	authorizedResponse, err := app.Test(authorized)
+	if err != nil {
+		t.Fatalf("request authorized job route: %v", err)
+	}
+	defer authorizedResponse.Body.Close()
+	var result dto.JobResponse
+	if err := json.NewDecoder(authorizedResponse.Body).Decode(&result); err != nil {
+		t.Fatalf("decode authorized job response: %v", err)
+	}
+
+	// Then: authentication is enforced and the mounted handler returns its structured not-found status.
+	if unauthorizedResponse.StatusCode != http.StatusUnauthorized || authorizedResponse.StatusCode != http.StatusNotFound || result.Status != dto.JobError {
+		t.Fatalf("unexpected job route statuses: unauthorized=%d authorized=%d", unauthorizedResponse.StatusCode, authorizedResponse.StatusCode)
+	}
+	var failure dto.JobLookupFailure
+	if err := json.Unmarshal(result.Data, &failure); err != nil || failure.Code != "job_not_found_or_expired" {
+		t.Fatalf("unexpected job route data: decode=%v data=%+v", err, failure)
+	}
+}
+
 func TestHTTPRequestForeignOriginReturnsCandidateGuidance(t *testing.T) {
 	// Given: an authenticated HTTP tool request that changes to a foreign origin.
 	now := time.Now().UTC()

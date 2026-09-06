@@ -12,15 +12,15 @@ var scanToolCapabilities = []dto.ScanToolCapability{
 	toolCapability("execute_command", "bash", "/api/command/stream", "Run a command in the Kali runtime when no dedicated MCP tool covers the authorized check.", dto.TargetInputCommand, dto.ImpactArbitraryExecution, dto.ToolExecutionStream, false, nil, nil),
 	toolCapability("nmap_scan", "nmap", "/api/tools/nmap/stream", "Discover ports, services, and network exposure with Nmap. safe-recon permits only passive built-in script selectors and no script arguments.", dto.TargetInputNetworkHost, dto.ImpactActive, dto.ToolExecutionStream, true, []dto.SafetyProfile{dto.ProfileSafeRecon}, rateControls(false)),
 	toolCapability("dirb_scan", "dirb", "/api/tools/dirb/stream", "Discover web paths and content with Dirb and a wordlist. Tested-word progress is suppressed and discovered paths are returned as structured results.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, true, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, nil),
-	toolCapability("nikto_scan", "nikto", "/api/tools/nikto/stream", "Check a web server for common misconfigurations and known vulnerability patterns with Nikto.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, true, []dto.SafetyProfile{dto.ProfileWebDiscoveryLowRate}, nil),
+	toolCapability("nikto_scan", "nikto", "/api/tools/nikto/stream", "Check a web server for common misconfigurations and known vulnerability patterns with Nikto. web-discovery-low-rate enforces a native request pause, a bounded read-only plugin allow-list, and an internal completion deadline before the outer timeout.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, true, []dto.SafetyProfile{dto.ProfileWebDiscoveryLowRate}, nil),
 	toolCapability("sqlmap_scan", "sqlmap", "/api/tools/sqlmap/stream", "Verify a SQL-injection hypothesis from a URL, POST body, or raw HTTP request with SQLmap. Use raw_request for HTTP methods other than the URL/Data flow. sqli-verify-low-risk pins risk 1, level 1, and techniques BEU while rejecting method overrides, takeover, writes, and broad extraction.", dto.TargetInputURLOrFile, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSQLILowRisk}, rateAndConcurrencyControls(false)),
 	toolCapability("tshark_capture", "tshark", "/api/tools/tshark/stream", "Capture packets or analyze a PCAP with Tshark using explicit filters and limits.", dto.TargetInputCapture, dto.ImpactPassive, dto.ToolExecutionStream, true, nil, nil),
 	toolCapability("hydra_attack_stream", "hydra", "/api/tools/hydra/stream", "Stream a long-running or file-based credential audit with Hydra.", dto.TargetInputNetworkHost, dto.ImpactCredential, dto.ToolExecutionStream, false, []dto.SafetyProfile{}, nativeControls(dto.ScanControlConcurrency)),
 	toolCapability("wpscan_analyze", "wpscan", "/api/tools/wpscan/stream", "Fingerprint and assess a WordPress target with WPScan.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{}, nil),
 	toolCapability("enum4linux_scan", "enum4linux", "/api/tools/enum4linux/stream", "Enumerate Windows and Samba services with Enum4linux.", dto.TargetInputNetworkHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{}, nil),
-	toolCapability("ffuf_scan", "ffuf", "/api/tools/ffuf/stream", "Discover web content with FFUF, including SPA fallback calibration, per-request timeouts, explicit status filtering, and recursion. Safety profiles enable FFUF's native spurious-error stop.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, rateAndConcurrencyControls(false)),
-	toolCapability("feroxbuster_scan", "feroxbuster", "/api/tools/feroxbuster/stream", "Recursively discover web content with Feroxbuster and automatic SPA fallback calibration.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, rateAndConcurrencyControls(false)),
-	toolCapability("nuclei_scan", "nuclei", "/api/tools/nuclei/stream", "Run template-based vulnerability checks with Nuclei. Every run previews local template count and lower-bound duration. Inline output contains only complete bounded lines; page the raw stdout artifact by line for full JSONL. Nuclei's native rate limiter is an average throttle that may burst above the requested value in a rolling one-second window. Safe-recon requires a selector and excludes DoS, fuzz, DAST, OAST, and interactsh templates.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon}, append(nucleiControls(), dto.ScanControlCapability{Control: dto.ScanControlDryRun, Enforcement: dto.ControlServerPreview})),
+	toolCapability("ffuf_scan", "ffuf", "/api/tools/ffuf/stream", "Discover web content with FFUF, including SPA fallback calibration, per-request timeouts, explicit status filtering, and recursion. Safety profiles enable FFUF's native spurious-error stop. Authenticated coverage requires caller-supplied request context.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, rateAndConcurrencyControls(false)),
+	toolCapability("feroxbuster_scan", "feroxbuster", "/api/tools/feroxbuster/stream", "Recursively discover web content with Feroxbuster and automatic SPA fallback calibration. Authenticated coverage requires caller-supplied request context.", dto.TargetInputWebURL, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, rateAndConcurrencyControls(false)),
+	toolCapability("nuclei_scan", "nuclei", "/api/tools/nuclei/stream", "Run template-based vulnerability checks with Nuclei. Every run previews local template count and lower-bound duration. Inline output contains only complete bounded lines; page the raw stdout artifact by line for full JSONL. Nuclei's native rate limiter is an average throttle that may burst above the requested value in a rolling one-second window. Safe-recon requires a selector and excludes DoS, fuzz, DAST, OAST, and interactsh templates; a completed safe scan is not exhaustive coverage.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon}, append(nucleiControls(), dto.ScanControlCapability{Control: dto.ScanControlDryRun, Enforcement: dto.ControlServerPreview})),
 	toolCapability("whatweb_scan", "whatweb", "/api/tools/whatweb/stream", "Fingerprint web technologies and frameworks with WhatWeb, typically during initial reconnaissance.", dto.TargetInputURLOrHost, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileWebDiscoveryLowRate}, nil),
 	toolCapability("jwt_analyze", "jwt_tool", "/api/tools/jwt/stream", "Parse JWT structure and metadata offline, with optional live endpoint verification. Live mode defaults to low-risk forced-error checks; playbook and all-tests modes require allow_unsafe because they include command-injection timing probes.", dto.TargetInputToken, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{}, nil),
 	toolCapability("dalfox_scan", "dalfox", "/api/tools/dalfox/stream", "Collect and verify reflected or server-routed XSS candidates with Dalfox. Supply per-call authentication through headers or cookies; the MCP server does not retain a credential session. Use browser_check for fragment-based DOM XSS.", dto.TargetInputURLOrFile, dto.ImpactActive, dto.ToolExecutionStream, false, []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm}, rateAndConcurrencyControls(false)),
@@ -40,11 +40,30 @@ func toolCapability(name, runtime, endpoint, description string, target dto.Targ
 		TargetInputFormat: target, ImpactLevel: impact, ExecutionMode: mode,
 		InputSchemaSource: mcpSchemaSource, Essential: essential, BuiltIn: runtime == "http-request",
 		RequiresTargetContext: requiresTargetContext,
+		AsyncSupported:        mode == dto.ToolExecutionStream && runtime != "bash",
 		Profiles:              profiles,
 		Controls: append([]dto.ScanControlCapability{{
 			Control: dto.ScanControlTimeout, Enforcement: dto.ControlRequestTimeout,
 		}}, controls...),
 	}
+}
+
+func RuntimeSupportsAsync(runtimeTool string) bool {
+	for _, capability := range scanToolCapabilities {
+		if capability.RuntimeTool == runtimeTool && capability.AsyncSupported {
+			return true
+		}
+	}
+	return false
+}
+
+func AsyncMCPToolForRuntime(runtimeTool string) (string, bool) {
+	for _, capability := range scanToolCapabilities {
+		if capability.RuntimeTool == runtimeTool && capability.AsyncSupported {
+			return capability.Tool, true
+		}
+	}
+	return "", false
 }
 
 func RuntimeRequiresTargetContext(runtimeTool string) bool {

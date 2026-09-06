@@ -12,7 +12,7 @@ import (
 func registerScanCapabilities(registration toolRegistration) {
 	mcp.AddTool(registration.server, &mcp.Tool{
 		Name:        "get_scan_capabilities",
-		Description: "Inspect safety-profile compatibility, target input formats, supported controls, and effective default wordlists before invoking tools.",
+		Description: "Inspect safety-profile compatibility, bounded coverage, target input formats, supported controls, and effective default wordlists before invoking tools. Safe profiles and a root-only target do not imply exhaustive application coverage.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, dto.ScanCapabilitiesResult, error) {
 		result, err := registration.kali.ScanCapabilities(ctx)
 		if err != nil {
@@ -52,7 +52,7 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 		if tool.AvailabilityChecked {
 			available = fmt.Sprintf("%t", tool.Available)
 		}
-		fmt.Fprintf(&output, "- %s: available=%s target=%s profiles=%s impact=%s mode=%s target_context=%t resume=%t input_schema=embedded", tool.Tool, available, tool.TargetInputFormat, strings.Join(profiles, ","), tool.ImpactLevel, tool.ExecutionMode, tool.RequiresTargetContext, tool.ResumeSupported)
+		fmt.Fprintf(&output, "- %s: available=%s target=%s profiles=%s impact=%s mode=%s target_context=%t async=%t resume=%t input_schema=embedded", tool.Tool, available, tool.TargetInputFormat, strings.Join(profiles, ","), tool.ImpactLevel, tool.ExecutionMode, tool.RequiresTargetContext, tool.AsyncSupported, tool.ResumeSupported)
 		if len(controls) > 0 {
 			fmt.Fprintf(&output, " controls=%s", strings.Join(controls, ","))
 		}

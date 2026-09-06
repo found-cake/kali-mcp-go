@@ -30,6 +30,9 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 			delete(schema.Properties, string(control))
 		}
 	}
+	if !definition.AsyncSupported {
+		delete(schema.Properties, "async")
+	}
 	if profileSchema, ok := schema.Properties["profile"]; ok {
 		profiles := make([]any, 0, len(definition.Profiles)+1)
 		for _, profile := range definition.Profiles {
@@ -77,8 +80,12 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 		})
 	}
 	description := applyToolInputExample(definition.Tool, definition.Description, schema)
+	outputSchema := toolResultOutputSchema()
+	if definition.AsyncSupported {
+		outputSchema = streamToolOutputSchema()
+	}
 	return &mcp.Tool{
 		Name: definition.Tool, Description: description,
-		InputSchema: schema, OutputSchema: toolResultOutputSchema(),
+		InputSchema: schema, OutputSchema: outputSchema,
 	}, nil
 }

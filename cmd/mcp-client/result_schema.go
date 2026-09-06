@@ -57,6 +57,23 @@ func toolResultOutputSchema() *jsonschema.Schema {
 	}
 }
 
+func jobResponseOutputSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"job_id":     stringSchema(),
+			"status":     enumSchema("pending", "completed", "error"),
+			"data":       objectSchema(),
+			"expires_at": nullableSchema("string"),
+		},
+		Required: []string{"job_id", "status", "data"},
+	}
+}
+
+func streamToolOutputSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{OneOf: []*jsonschema.Schema{toolResultOutputSchema(), jobResponseOutputSchema()}}
+}
+
 func stringSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{Type: "string"}
 }

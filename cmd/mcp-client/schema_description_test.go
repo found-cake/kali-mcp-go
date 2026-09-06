@@ -57,7 +57,7 @@ func TestBrowserInputSchemaExposesPerCallLocalStorage(t *testing.T) {
 func TestToolOutputSchemaSeparatesExecutionFromFindingStatus(t *testing.T) {
 	// Given: a representative executable tool's common result schema.
 	tool := listedToolByName(t, "nmap_scan")
-	properties, ok := schemaProperties(tool.OutputSchema)
+	_, properties, ok := toolResultSchema(tool.OutputSchema)
 	if !ok {
 		t.Fatal("nmap_scan has an invalid output schema")
 	}

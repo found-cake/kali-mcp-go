@@ -71,9 +71,11 @@ type TsharkRequest struct {
 	ReadFile       string `json:"read_file,omitempty" jsonschema:"pcap file path to read from; mutually exclusive with interface; provide exactly one of interface or read_file"`
 	OutputFields   string `json:"output_fields,omitempty" jsonschema:"comma-separated fields to extract"`
 	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra tshark arguments"`
+	Async          bool   `json:"async,omitempty" jsonschema:"return a pending job immediately and retain the terminal result for 30 seconds after process exit"`
 }
 
 func (r TsharkRequest) GetRequestTimeout() int { return r.Timeout }
+func (r TsharkRequest) GetAsync() bool         { return r.Async }
 
 type SQLMapRequest struct {
 	ScanOptions
@@ -225,9 +227,11 @@ type OSVRequest struct {
 	Path           string `json:"path" jsonschema:"required,source directory to scan recursively"`
 	AdditionalArgs string `json:"additional_args,omitempty" jsonschema:"extra OSV-Scanner arguments"`
 	Timeout        int    `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
+	Async          bool   `json:"async,omitempty" jsonschema:"return a pending job immediately and retain the terminal result for 30 seconds after process exit"`
 }
 
 func (r OSVRequest) GetRequestTimeout() int { return r.Timeout }
+func (r OSVRequest) GetAsync() bool         { return r.Async }
 
 type HTTPRequest struct {
 	ScanOptions

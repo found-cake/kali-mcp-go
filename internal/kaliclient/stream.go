@@ -40,10 +40,26 @@ type streamAccumulator struct {
 	evidence           *dto.EvidenceManifest
 }
 
+type StreamInvocation struct {
+	Result *dto.ToolResult
+	Job    *dto.JobResponse
+}
+
 func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.ToolResult, error) {
+	invocation, err := c.InvokeStream(ctx, endpoint, body)
+	if err != nil {
+		return invocation.Result, err
+	}
+	if invocation.Job != nil {
+		return nil, fmt.Errorf("stream request started asynchronous job %s", invocation.Job.JobID)
+	}
+	return invocation.Result, nil
+}
+
+func (c *Client) InvokeStream(ctx context.Context, endpoint string, body any) (StreamInvocation, error) {
 	callID, err := callid.New()
 	if err != nil {
-		return nil, fmt.Errorf("stream call ID: %w", err)
+		return StreamInvocation{}, fmt.Errorf("stream call ID: %w", err)
 	}
 	requestContext, cancel := c.requestContext(ctx, body)
 	defer cancel()
@@ -51,7 +67,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		method: http.MethodPost, endpoint: endpoint, body: body, authorize: true,
 	})
 	if err != nil {
-		return &dto.ToolResult{CallID: callID}, err
+		return StreamInvocation{Result: &dto.ToolResult{CallID: callID}}, err
 	}
 	request.Header.Set("Accept", "text/event-stream")
 	request.Header.Set(dto.CallIDHeader, callID)
@@ -61,12 +77,19 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 		if contextError := requestContext.Err(); contextError != nil {
 			err = contextError
 		}
-		return &dto.ToolResult{CallID: callID}, fmt.Errorf("stream: %w", err)
+		return StreamInvocation{Result: &dto.ToolResult{CallID: callID}}, fmt.Errorf("stream: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
 		responseBody, _ := io.ReadAll(response.Body)
-		return nil, serverResponseError(response, responseBody)
+		return StreamInvocation{}, serverResponseError(response, responseBody)
+	}
+	if response.StatusCode == http.StatusAccepted || strings.Contains(response.Header.Get("Content-Type"), "application/json") {
+		var job dto.JobResponse
+		if err := json.NewDecoder(response.Body).Decode(&job); err != nil {
+			return StreamInvocation{}, fmt.Errorf("decode asynchronous job: %w", err)
+		}
+		return StreamInvocation{Job: &job}, nil
 	}
 	responseCallID := response.Header.Get(dto.CallIDHeader)
 	if responseCallID == "" {
@@ -79,7 +102,7 @@ func (c *Client) Stream(ctx context.Context, endpoint string, body any) (*dto.To
 			err = fmt.Errorf("stream: %w", contextError)
 		}
 	}
-	return result, err
+	return StreamInvocation{Result: result}, err
 }
 
 func (c *Client) cancelRemoteCall(callID string) {

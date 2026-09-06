@@ -18,6 +18,9 @@ func handleHTTPRequest(c fiber.Ctx) error {
 	if err := tools.ValidateScanProfile("http-request", request.ScanOptions); err != nil {
 		return httpapi.BadRequest(c, err.Error())
 	}
+	if request.Async {
+		return httpapi.BadRequest(c, "asynchronous execution requires a streaming tool route")
+	}
 	provenance, err := targeting.ResolveProvenance(request, httpapi.APIToken(c), time.Now().UTC())
 	if err != nil {
 		return httpapi.BadRequest(c, err.Error())

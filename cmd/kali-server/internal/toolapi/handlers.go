@@ -59,6 +59,9 @@ func handleNmapStream(c fiber.Ctx) error {
 func handleGobuster(c fiber.Ctx) error {
 	return withPreparedTool(c, gobusterExecutionSpec(), func(plan *scanExecutionPlan) error {
 		defer plan.release()
+		if plan.async {
+			return httpapi.BadRequest(c, "asynchronous execution requires a streaming tool route")
+		}
 		result := executeOrPreview(c.Context(), plan)
 		plan.annotate(result)
 		return c.JSON(results.ToToolResult(result))
@@ -168,14 +171,9 @@ func handleRetireStream(c fiber.Ctx) error {
 	}
 	scanPlan.args = retirePlan.Args()
 	scanPlan.ephemeralPaths = []string{retirePlan.EphemeralPath()}
-	execCtx, cancel := context.WithCancel(c.Context())
-	lines, done := executor.StreamExec(execCtx, scanPlan.timeout, scanPlan.args[0], scanPlan.args[1:]...)
-	lines = results.ProtectStream(execCtx, lines, req)
-	done = annotateResult(done, func(result *executor.Result) {
-		scanPlan.annotate(result)
+	return executeToolStream(c, streamExecution{
+		plan: scanPlan, cleanups: []func(){retirePlan.Cleanup},
 	})
-	release := httpapi.RetainExecutionLease(c)
-	return httpapi.SendToolStream(c, lines, done, cancel, release, scanPlan.release, retirePlan.Cleanup)
 }
 
 func handleOSVStream(c fiber.Ctx) error {

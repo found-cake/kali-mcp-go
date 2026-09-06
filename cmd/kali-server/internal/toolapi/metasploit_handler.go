@@ -35,6 +35,9 @@ func handleMetasploit(c fiber.Ctx) error {
 		return scanPreparationError(c, err)
 	}
 	defer plan.release()
+	if plan.async {
+		return httpapi.BadRequest(c, "asynchronous execution requires a streaming tool route")
+	}
 	result := executeOrPreview(c.Context(), plan)
 	plan.annotate(result)
 	return c.JSON(results.ToToolResult(result))

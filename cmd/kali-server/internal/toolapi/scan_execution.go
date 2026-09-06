@@ -75,6 +75,7 @@ type scanExecutionPlan struct {
 	browserScreenshotPath string
 	ephemeralPaths        []string
 	dryRun                bool
+	async                 bool
 }
 
 func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanExecutionPlan, error) {
@@ -96,6 +97,16 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 	dryRun := false
 	if request, ok := any(request).(dto.DryRunRequest); ok {
 		dryRun = request.GetDryRun()
+	}
+	async := false
+	if request, ok := any(request).(dto.AsyncRequest); ok {
+		async = request.GetAsync()
+	}
+	if async && !tools.RuntimeSupportsAsync(args[0]) {
+		return nil, fmt.Errorf("asynchronous execution is not supported by %s", args[0])
+	}
+	if async && dryRun {
+		return nil, fmt.Errorf("async and dry_run cannot be combined")
 	}
 	provenance, err := targeting.ResolveProvenance(request, httpapi.APIToken(c), time.Now().UTC())
 	if err != nil {
@@ -161,6 +172,7 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		release:  release, healthURL: effective.HealthURL, request: request, context: c.Context(),
 		artifactStore:   httpapi.ArtifactStore(c),
 		dryRun:          dryRun,
+		async:           async,
 		timeoutPlanning: timeoutPlanning,
 		extraWarnings:   extraWarnings,
 	}, nil

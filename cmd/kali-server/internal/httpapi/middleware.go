@@ -110,6 +110,12 @@ func callOperation(path string) string {
 		return "result_artifact_read"
 	case strings.HasPrefix(trimmed, "calls/") && strings.HasSuffix(trimmed, "/cancel"):
 		return "cancel_call"
+	case strings.HasPrefix(trimmed, "jobs/"):
+		parts := strings.Split(trimmed, "/")
+		if len(parts) == 3 {
+			return "scan_job_" + strings.ReplaceAll(parts[2], "-", "_")
+		}
+		return "scan_job"
 	case trimmed == "tools/capabilities":
 		return "get_scan_capabilities"
 	case trimmed == "tools/resolve-target":
