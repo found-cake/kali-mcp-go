@@ -70,3 +70,15 @@ func TestPartialStreamResultStartsAsFailed(t *testing.T) {
 		t.Fatalf("unexpected interrupted stream result: %+v", result)
 	}
 }
+
+func TestTerminalFailureOverridesZeroExitCode(t *testing.T) {
+	stream := "data: {\"done\":true,\"return_code\":0,\"failure\":{\"code\":\"sqlmap_abort_code\",\"message\":\"sqlmap_abort_code\",\"retryable\":false,\"resume_supported\":false}}\n\n"
+
+	result, err := parseToolStream(strings.NewReader(stream), "call_abort")
+	if err != nil {
+		t.Fatalf("parse terminal failure: %v", err)
+	}
+	if result.ExecutionStatus != dto.ExecutionFailed || result.Success || result.Failure == nil || result.Failure.Code != "sqlmap_abort_code" {
+		t.Fatalf("terminal failure was classified as success: %+v", result)
+	}
+}

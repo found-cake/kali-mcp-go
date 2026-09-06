@@ -13,6 +13,9 @@ func (a *streamAccumulator) result() (*dto.ToolResult, error) {
 	}
 	result := a.baseResult()
 	result.ExecutionStatus = dto.ExecutionStatusFromResult(a.returnCode, a.timedOut, a.cancelled)
+	if result.ExecutionStatus == dto.ExecutionSucceeded && result.Failure != nil {
+		result.ExecutionStatus = dto.ExecutionFailed
+	}
 	result.Finalize()
 	return result, nil
 }
