@@ -79,14 +79,14 @@ type SQLMapRequest struct {
 	URL            string            `json:"url,omitempty" jsonschema:"target URL; provide exactly one of url, request_file, or raw_request"`
 	RequestFile    string            `json:"request_file,omitempty" jsonschema:"path to a raw HTTP request file; mutually exclusive with url and raw_request"`
 	RawRequest     string            `json:"raw_request,omitempty" jsonschema:"inline raw HTTP request; stored in a mode-0600 temporary file and deleted after the scan"`
-	Data           string            `json:"data,omitempty" jsonschema:"POST body; place an asterisk after a JSON field value to mark its injection point"`
+	Data           string            `json:"data,omitempty" jsonschema:"POST body; place an asterisk after a JSON field value to mark its injection point; use raw_request when another HTTP method is required"`
 	Headers        map[string]string `json:"headers,omitempty" jsonschema:"HTTP headers such as Authorization; Host overrides are rejected with target_context"`
 	Cookie         string            `json:"cookie,omitempty" jsonschema:"Cookie header value"`
 	ContentType    string            `json:"content_type,omitempty" jsonschema:"Content-Type header value e.g. application/json"`
 	AbortCodes     string            `json:"abort_codes,omitempty" jsonschema:"comma-separated HTTP status codes that trigger SQLmap's native immediate abort e.g. 500,503"`
 	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
 	TestParameters string            `json:"test_parameters,omitempty" jsonschema:"comma-separated parameters or JSON fields to test"`
-	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding alternate sources; resolved targets forbid proxy and DNS-OOB destinations; sqli-verify-low-risk pins risk 1, level 1, techniques BEU and forbids takeover, write, broad extraction, tamper, and hook options"`
+	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding alternate sources; resolved targets forbid proxy and DNS-OOB destinations; sqli-verify-low-risk pins risk 1, level 1, techniques BEU and rejects method overrides, takeover, write, broad extraction, tamper, and hook options"`
 	Timeout        int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }
 
