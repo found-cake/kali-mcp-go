@@ -12,7 +12,16 @@ func attachReportedRequestCount(tool string, result *dto.ToolResult) {
 	if tool == "nuclei_scan" {
 		if runtime, ok := parseNucleiRuntimeMetadata(result.Stdout + "\n" + result.Stderr); ok {
 			result.NucleiRuntime = &runtime
+			if result.HTTPRequests == nil && !result.TimedOut && !result.Cancelled && result.ReturnCode == 0 && result.Failure == nil {
+				count := runtime.Requests
+				result.HTTPRequests = &count
+				result.RequestCountSource = dto.RequestCountParsed
+			} else if result.HTTPRequests == nil {
+				result.RequestCountSource = dto.RequestCountUnknown
+				result.Warnings = append(result.Warnings, "Nuclei runtime requests are scheduled or generated work, not measured target deliveries during a partial run")
+			}
 		}
+		return
 	}
 	if result.HTTPRequests != nil {
 		return
@@ -25,8 +34,6 @@ func attachReportedRequestCount(tool string, result *dto.ToolResult) {
 		count, ok = parseNiktoRequestCount(output)
 	case "feroxbuster_scan":
 		count, ok = parseFeroxbusterRequestCount(output)
-	case "nuclei_scan":
-		count, ok = parseNucleiRequestCount(output)
 	}
 	if !ok {
 		return
@@ -58,12 +65,6 @@ func parseFeroxbusterRuntimeStatistics(output string) (errors, initialTargets, c
 		}
 	}
 	return errors, initialTargets, connectionErrors, found
-}
-
-func parseNucleiRequestCount(output string) (int, bool) {
-	return parseStructuredRequestCount(output, func(event scannerStatistics) bool {
-		return event.Duration != "" && event.StartedAt != ""
-	})
 }
 
 type scannerStatistics struct {
@@ -99,8 +100,8 @@ func parseNucleiRuntimeMetadata(output string) (dto.NucleiRuntimeMetadata, bool)
 		return dto.NucleiRuntimeMetadata{}, false
 	}
 	return dto.NucleiRuntimeMetadata{
-		Requests: maximumRequests,
-		Errors:   parseJSONIntegerOrZero(latest.Errors), Hosts: parseJSONIntegerOrZero(latest.Hosts),
+		Requests: maximumRequests, RequestsSemantics: dto.NucleiRequestsScheduled,
+		Errors: parseJSONIntegerOrZero(latest.Errors), Hosts: parseJSONIntegerOrZero(latest.Hosts),
 		Matched: parseJSONIntegerOrZero(latest.Matched), Templates: parseJSONIntegerOrZero(latest.Templates),
 		Total: parseJSONIntegerOrZero(latest.Total), Percent: parseJSONFloatOrZero(latest.Percent),
 		Duration: latest.Duration, StartedAt: latest.StartedAt,

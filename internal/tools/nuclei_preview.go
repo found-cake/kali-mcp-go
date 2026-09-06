@@ -13,7 +13,7 @@ func NucleiTemplateListArgs(request dto.NucleiRequest) ([]string, error) {
 		return nil, err
 	}
 	if request.AllowUnsafe && strings.TrimSpace(request.AdditionalArgs) != "" {
-		return nil, fmt.Errorf("Nuclei dry_run with allow_unsafe requires selection through severity, tags, or templates instead of additional_args")
+		return nil, fmt.Errorf("Nuclei template preview with allow_unsafe requires selection through severity, tags, or templates instead of additional_args")
 	}
 	args := []string{"nuclei", "-tl", "-disable-update-check", "-silent"}
 	if request.Severity != "" {
@@ -35,7 +35,8 @@ func CountNucleiTemplateList(output string) int {
 	count := 0
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
-		if strings.TrimSpace(scanner.Text()) != "" {
+		path := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
 			count++
 		}
 	}

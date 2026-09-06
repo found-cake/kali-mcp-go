@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -31,13 +32,64 @@ func TestPreviewNucleiTemplatesReturnsLocalSelectionCount(t *testing.T) {
 
 	// When: the server prepares a non-network preview.
 	preview, err := previewNucleiTemplates(context.Background(), request)
-
 	// Then: the selected template count is returned without target requests.
 	if err != nil {
 		t.Fatalf("preview Nuclei templates: %v", err)
 	}
 	if preview.TemplatesMatched != 2 || preview.SelectionSource != "tags" || preview.TargetRequestsSent != 0 {
 		t.Fatalf("unexpected Nuclei preview: %+v", preview)
+	}
+}
+
+func TestDecorateNucleiExecutionAddsTemplateAndDurationEstimate(t *testing.T) {
+	// Given: twenty selected templates, five requests per second, and a three-second scan timeout.
+	directory := t.TempDir()
+	executable := filepath.Join(directory, "nuclei")
+	if err := os.WriteFile(executable, []byte("#!/bin/sh\nvalue=1\nwhile [ \"$value\" -le 20 ]; do printf 'template-%s.yaml\\n' \"$value\"; value=$((value + 1)); done\n"), 0o700); err != nil {
+		t.Fatalf("write fake nuclei: %v", err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	request := dto.NucleiRequest{Target: "https://example.test", Tags: "exposure"}
+	plan := &scanExecutionPlan{
+		context: t.Context(),
+		options: dto.ScanOptions{RateLimit: 5},
+		timeout: 3 * time.Second,
+	}
+
+	// When: the real-scan plan is decorated before target traffic begins.
+	err := decorateNucleiExecution(request, plan)
+	// Then: the non-network preview exposes a lower-bound estimate and timeout warning.
+	if err != nil {
+		t.Fatalf("decorate Nuclei execution: %v", err)
+	}
+	preview := plan.nucleiPreview
+	if preview == nil || preview.TemplatesMatched != 20 || preview.MinimumRequestEstimate != 20 {
+		t.Fatalf("missing Nuclei selection estimate: %+v", preview)
+	}
+	if preview.EstimatedMinimumDurationMS != 34000 || !preview.TimeoutLikelyInsufficient {
+		t.Fatalf("unexpected Nuclei duration estimate: %+v", preview)
+	}
+}
+
+func TestDecorateNucleiExecutionKeepsActualScanAvailableWhenPreviewFails(t *testing.T) {
+	// Given: a real scan request and a local Nuclei preview command that cannot enumerate templates.
+	directory := t.TempDir()
+	executable := filepath.Join(directory, "nuclei")
+	if err := os.WriteFile(executable, []byte("#!/bin/sh\nprintf 'template database unavailable' >&2\nexit 1\n"), 0o700); err != nil {
+		t.Fatalf("write fake nuclei: %v", err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	request := dto.NucleiRequest{Target: "https://example.test", Tags: "exposure"}
+	plan := &scanExecutionPlan{context: t.Context(), timeout: time.Minute}
+
+	// When: the optional execution preflight fails.
+	err := decorateNucleiExecution(request, plan)
+	// Then: the actual scan remains runnable and exposes the preflight failure as a warning.
+	if err != nil {
+		t.Fatalf("actual Nuclei scan was blocked by preview: %v", err)
+	}
+	if plan.nucleiPreview != nil || len(plan.extraWarnings) != 1 || !strings.Contains(plan.extraWarnings[0], "preflight") {
+		t.Fatalf("preview failure was not represented safely: preview=%+v warnings=%v", plan.nucleiPreview, plan.extraWarnings)
 	}
 }
 

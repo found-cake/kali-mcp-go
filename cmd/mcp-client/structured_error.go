@@ -54,8 +54,15 @@ func structuredErrorResult(name string, partial *dto.ToolResult, err error) (*mc
 	if partialEvidence {
 		classified := classifyToolResult(name, result)
 		result.FindingStatus = classified.FindingStatus
+		result.FindingTypes = classified.FindingTypes
+		result.HTTPRequests = classified.HTTPRequests
+		result.RequestCountSource = classified.RequestCountSource
+		result.Warnings = classified.Warnings
+		result.NucleiRuntime = classified.NucleiRuntime
+		result.DiscoveredPaths = classified.DiscoveredPaths
 	}
 	result.Finalize()
+	normalizeProgressPhase(&result)
 	result = result.Compact(defaultInlineOutputBytes)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: result.Format()}}, IsError: true,

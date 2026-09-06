@@ -124,17 +124,7 @@ func handleNucleiStream(c fiber.Ctx) error {
 	return withPreparedTool(c, toolExecutionSpec[dto.NucleiRequest]{
 		validate: validateNucleiRequest,
 		argsFor:  tools.NucleiArgs,
-		decorate: func(request dto.NucleiRequest, plan *scanExecutionPlan) error {
-			if !request.DryRun {
-				return nil
-			}
-			preview, err := previewNucleiTemplates(plan.context, request)
-			if err != nil {
-				return err
-			}
-			plan.nucleiPreview = preview
-			return nil
-		},
+		decorate: decorateNucleiExecution,
 	}, func(plan *scanExecutionPlan) error {
 		return executeStreamPlan(c, plan)
 	})

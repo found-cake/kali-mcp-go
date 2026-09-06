@@ -89,3 +89,26 @@ func TestTextResultPreservesPartialOutputOnDeadline(t *testing.T) {
 		t.Fatalf("partial timeout status is inconsistent: %+v", structured)
 	}
 }
+
+func TestTextResultPreservesPartialNucleiMetadataOnDeadline(t *testing.T) {
+	// Given: a client deadline after Nuclei emitted scheduled-work statistics and progress.
+	partial := &dto.ToolResult{
+		CallID:         "call_partial_nuclei",
+		Stderr:         "{\"duration\":\"0:00:05\",\"requests\":\"40\",\"startedAt\":\"2026-09-05T12:00:00Z\"}\n",
+		PartialResults: true,
+		Progress:       &dto.ProgressMetadata{Phase: dto.ProgressCompleted},
+	}
+
+	// When: the interrupted stream is converted to an MCP result.
+	_, structured, err := textResult("nuclei_scan", partial, context.DeadlineExceeded)
+	// Then: runtime semantics survive without claiming measured request delivery.
+	if err != nil {
+		t.Fatalf("textResult() error = %v", err)
+	}
+	if structured.NucleiRuntime == nil || structured.NucleiRuntime.RequestsSemantics != dto.NucleiRequestsScheduled {
+		t.Fatalf("Nuclei runtime metadata was discarded: %+v", structured)
+	}
+	if structured.HTTPRequests != nil || structured.Progress.Phase != dto.ProgressTimedOut {
+		t.Fatalf("partial timeout metadata is contradictory: %+v", structured)
+	}
+}

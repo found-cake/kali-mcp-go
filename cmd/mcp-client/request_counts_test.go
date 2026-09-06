@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -16,6 +17,31 @@ func TestClassifyNucleiResultParsesExactStatisticsCount(t *testing.T) {
 
 	if result.HTTPRequests == nil || *result.HTTPRequests != 7 || result.RequestCountSource != dto.RequestCountParsed {
 		t.Fatalf("Nuclei request count was not parsed: %+v", result)
+	}
+}
+
+func TestClassifyNucleiTimeoutDoesNotExposeScheduledRequestsAsDelivered(t *testing.T) {
+	t.Parallel()
+
+	// Given: Nuclei scheduled forty requests before a timed-out scan delivered them all.
+	result := dto.ToolResult{
+		ReturnCode: -1,
+		TimedOut:   true,
+		Stderr:     "{\"duration\":\"0:00:05\",\"requests\":\"40\",\"startedAt\":\"2026-09-05T12:00:00Z\"}\n",
+	}
+
+	// When: the MCP client classifies the partial scan.
+	classified := classifyToolResult("nuclei_scan", result)
+
+	// Then: the runtime counter is preserved without claiming forty delivered HTTP requests.
+	if classified.HTTPRequests != nil || classified.RequestCountSource != dto.RequestCountUnknown {
+		t.Fatalf("scheduled requests were exposed as delivered: %+v", classified)
+	}
+	if classified.NucleiRuntime == nil || classified.NucleiRuntime.Requests != 40 || classified.NucleiRuntime.RequestsSemantics != dto.NucleiRequestsScheduled {
+		t.Fatalf("Nuclei runtime semantics are missing: %+v", classified.NucleiRuntime)
+	}
+	if len(classified.Warnings) == 0 || !strings.Contains(classified.Warnings[0], "scheduled") {
+		t.Fatalf("scheduled request warning is missing: %v", classified.Warnings)
 	}
 }
 
