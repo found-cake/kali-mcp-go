@@ -33,11 +33,33 @@ func jwtLiveTransportFailure(result dto.ToolResult) bool {
 }
 
 func nucleiReportedFinding(output string) bool {
+	finding, _ := classifyNucleiOutput(output)
+	return finding
+}
+
+func classifyNucleiOutput(output string) (finding, malformed bool) {
 	for line := range strings.Lines(output) {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || nucleiDiagnosticLine(trimmed) {
+			continue
+		}
 		var event struct {
 			TemplateID string `json:"template-id"`
 		}
-		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &event); err == nil && event.TemplateID != "" {
+		if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
+			malformed = true
+			continue
+		}
+		if event.TemplateID != "" {
+			finding = true
+		}
+	}
+	return finding, malformed
+}
+
+func nucleiDiagnosticLine(line string) bool {
+	for _, prefix := range []string{"[DBG]", "[INF]", "[WRN]", "[ERR]", "[FTL]"} {
+		if strings.HasPrefix(line, prefix) {
 			return true
 		}
 	}

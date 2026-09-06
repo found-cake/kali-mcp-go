@@ -111,17 +111,9 @@ func classifyNiktoFinding(result *dto.ToolResult, output string) {
 
 func classifyNucleiFinding(result *dto.ToolResult) {
 	partial := result.NucleiRuntime != nil && result.NucleiRuntime.Errors > 0
+	finding, malformed := classifyNucleiOutput(result.Stdout)
 	switch {
-	case strings.TrimSpace(result.Stdout) == "":
-		if partial {
-			result.FindingStatus = dto.FindingsInconclusive
-			result.PartialResults = true
-			result.ClassificationReason = "nuclei_partial_request_errors"
-		} else {
-			result.FindingStatus = dto.FindingsNotDetected
-			result.ClassificationReason = "scanner_completed_without_output"
-		}
-	case nucleiReportedFinding(result.Stdout):
+	case finding:
 		result.FindingStatus = dto.FindingsDetected
 		if partial {
 			result.PartialResults = true
@@ -129,9 +121,16 @@ func classifyNucleiFinding(result *dto.ToolResult) {
 		} else {
 			result.ClassificationReason = "scanner_emitted_findings"
 		}
-	default:
+	case partial:
+		result.FindingStatus = dto.FindingsInconclusive
+		result.PartialResults = true
+		result.ClassificationReason = "nuclei_partial_request_errors"
+	case malformed:
 		result.FindingStatus = dto.FindingsInconclusive
 		result.ClassificationReason = "nuclei_output_not_valid_jsonl"
+	default:
+		result.FindingStatus = dto.FindingsNotDetected
+		result.ClassificationReason = "scanner_completed_without_output"
 	}
 }
 

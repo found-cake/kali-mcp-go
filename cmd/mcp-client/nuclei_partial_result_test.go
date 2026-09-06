@@ -52,3 +52,23 @@ func TestClassifyNucleiSuccessfulMalformedOutputIsInconclusive(t *testing.T) {
 		t.Fatalf("execution=%q finding=%q, want succeeded/inconclusive", result.ExecutionStatus, result.FindingStatus)
 	}
 }
+
+func TestClassifyNucleiSuccessfulDiagnosticOnlyOutputIsNotDetected(t *testing.T) {
+	// Given: a successful Nuclei run whose stdout contains only a known diagnostic line.
+	input := dto.ToolResult{
+		ReturnCode:      0,
+		ExecutionStatus: dto.ExecutionSucceeded,
+		Stdout:          "[WRN] Loading 1 unsigned templates for scan. Use with caution.\n",
+	}
+
+	// When: the terminal finding status is classified.
+	result := classifyToolResult("nuclei_scan", input)
+
+	// Then: a diagnostic is not treated as malformed finding JSONL.
+	if result.ExecutionStatus != dto.ExecutionSucceeded || result.FindingStatus != dto.FindingsNotDetected {
+		t.Fatalf("unexpected diagnostic-only classification: %+v", result)
+	}
+	if result.ClassificationReason != "scanner_completed_without_output" {
+		t.Fatalf("classification reason=%q", result.ClassificationReason)
+	}
+}

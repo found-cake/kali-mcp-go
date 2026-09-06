@@ -116,7 +116,7 @@ func NucleiArgs(request dto.NucleiRequest) ([]string, error) {
 	if err := validateNucleiSafety(request); err != nil {
 		return nil, err
 	}
-	args := []string{"nuclei", "-u", request.Target, "-jsonl", "-disable-update-check", "-stats-json", "-stats-interval", "5"}
+	args := []string{"nuclei", "-u", request.Target, "-jsonl", "-silent", "-nc", "-disable-update-check", "-stats-json", "-stats-interval", "5"}
 	if request.Severity != "" {
 		args = append(args, "-severity", request.Severity)
 	}

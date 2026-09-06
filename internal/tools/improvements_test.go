@@ -145,7 +145,7 @@ func TestNucleiArgsExcludeUnsafeTemplatesByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build nuclei args: %v", err)
 	}
-	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-disable-update-check", "-stats-json", "-stats-interval", "5", "-retries", "0", "-etags", "dos,fuzz,dast,oast,interactsh", "-no-interactsh"}
+	want := []string{"nuclei", "-u", "https://example.com", "-jsonl", "-silent", "-nc", "-disable-update-check", "-stats-json", "-stats-interval", "5", "-retries", "0", "-etags", "dos,fuzz,dast,oast,interactsh", "-no-interactsh"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}
