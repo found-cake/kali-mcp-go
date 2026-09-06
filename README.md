@@ -327,7 +327,7 @@ TCP connect scans such as `-sT -Pn` work with Docker's default capabilities. Add
 
 ### 5. Configuration reference
 
-For synchronous long scans, configure the MCP host timeout above `mcp-client --timeout`. When the host propagates its deadline, the client reserves five seconds to cancel the remote process and return accumulated output. A host that forcibly terminates the STDIO process cannot receive a final partial-result envelope. Individual tool requests can still set tighter limits. Streaming scan tools also accept `async: true`; this returns a job immediately so the process is no longer coupled to the MCP call deadline.
+For synchronous long scans, configure the MCP host timeout above `mcp-client --timeout`. When the host propagates its deadline, the client reserves five seconds to cancel the remote process and return accumulated output. A host that forcibly terminates the STDIO process cannot receive a final partial-result envelope. Individual tool requests can still set tighter limits. Use `run_tool_async` when the agent expects a tool to exceed that host deadline or wants to start a new run after a synchronous timeout.
 
 #### mcp-client flags
 
@@ -368,9 +368,10 @@ For synchronous long scans, configure the MCP host timeout above `mcp-client --t
 | `get_scan_capabilities` | Inspect profile compatibility, target formats, supported controls, exact registered input schemas, and effective default wordlists |
 | `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target |
 | `result_artifact_read` | Read a retained artifact completely through bounded byte pages or UTF-8 line ranges, including extracted tool stdout/stderr sections |
-| `scan_job_status` | Read pending progress or terminal state for an asynchronous scan |
-| `scan_job_result` | Read an asynchronous scan's existing terminal result |
-| `scan_job_cancel` | Request cancellation of a pending asynchronous scan |
+| `run_tool_async` | Start any executable MCP tool as a new background run using that tool's unchanged argument object |
+| `scan_job_status` | Read pending progress or terminal state for an asynchronous tool run |
+| `scan_job_result` | Read an asynchronous tool run's existing terminal result |
+| `scan_job_cancel` | Request cancellation of a pending asynchronous tool run |
 | `http_request` | Send one bounded HTTP request with structured status, headers, optional target-bound virtual host, body preview, provenance, and artifact output |
 | `execute_command` | Execute an arbitrary shell command (SSE streaming) |
 | `nmap_scan` | Nmap port and service scan (SSE streaming) |
@@ -421,7 +422,7 @@ These MCP tools now stream incremental output over SSE instead of waiting for a 
 
 Streaming requests support an optional `timeout` field (seconds) to override the default 300-second request limit for that specific run. For `tshark_capture`, this request `timeout` is distinct from the capture `duration` field.
 
-Except for `execute_command`, streaming tools also expose `async`. An asynchronous call returns `{job_id,status,data}` with `status: pending`; use `scan_job_status`, `scan_job_result`, or `scan_job_cancel` with that ID. Terminal jobs use `completed` when execution succeeded and `error` for failed, timed-out, or cancelled execution, while `data` contains the same tool result contract used synchronously. Terminal lookup expires 30 seconds after the process exits, so retrieve the result promptly. Result artifacts retain their independent one-hour lifetime. Jobs are in-memory process-control state, not durable workflow or credential sessions, and server shutdown cancels pending processes.
+Executable tools remain synchronous by default and do not expose per-tool `async` fields. To run one in the background, call `run_tool_async` with its MCP `tool_name` and the exact `arguments` object accepted by the dedicated tool. This may be chosen before a likely host timeout or used to start a fresh run after a synchronous timeout; it does not reattach to the abandoned call. The response contains `{job_id,status,data}` with `status: pending`; use `scan_job_status`, `scan_job_result`, or `scan_job_cancel` with that ID. Terminal jobs use `completed` when execution succeeded and `error` for failed, timed-out, or cancelled execution, while `data` contains the same tool result contract used synchronously. Terminal lookup expires 30 seconds after the process exits, so retrieve the result promptly. Result artifacts retain their independent one-hour lifetime. Jobs are in-memory process-control state, not durable workflow or credential sessions, and server shutdown cancels pending processes.
 
 When using OpenCode, the per-tool request `timeout` is not enough by itself for long scans. You should also raise OpenCode's MCP execution timeout and the local `mcp-client --timeout` value as shown above.
 
