@@ -9,6 +9,11 @@ import (
 )
 
 func attachReportedRequestCount(tool string, result *dto.ToolResult) {
+	if tool == "nuclei_scan" {
+		if runtime, ok := parseNucleiRuntimeMetadata(result.Stdout + "\n" + result.Stderr); ok {
+			result.NucleiRuntime = &runtime
+		}
+	}
 	if result.HTTPRequests != nil {
 		return
 	}
@@ -36,6 +41,25 @@ func parseFeroxbusterRequestCount(output string) (int, bool) {
 	})
 }
 
+func parseFeroxbusterRuntimeStatistics(output string) (errors, initialTargets, connectionErrors int, found bool) {
+	maximumRequests := -1
+	for line := range strings.Lines(output) {
+		var event scannerStatistics
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &event); err != nil || event.Type != "statistics" {
+			continue
+		}
+		requests, ok := parseJSONInteger(event.Requests)
+		if ok && requests >= maximumRequests {
+			maximumRequests = requests
+			errors = parseJSONIntegerOrZero(event.Errors)
+			initialTargets = parseJSONIntegerOrZero(event.InitialTargets)
+			connectionErrors = parseJSONIntegerOrZero(event.ConnectionErrors)
+			found = true
+		}
+	}
+	return errors, initialTargets, connectionErrors, found
+}
+
 func parseNucleiRequestCount(output string) (int, bool) {
 	return parseStructuredRequestCount(output, func(event scannerStatistics) bool {
 		return event.Duration != "" && event.StartedAt != ""
@@ -43,10 +67,62 @@ func parseNucleiRequestCount(output string) (int, bool) {
 }
 
 type scannerStatistics struct {
-	Type      string          `json:"type"`
-	Duration  string          `json:"duration"`
-	StartedAt string          `json:"startedAt"`
-	Requests  json.RawMessage `json:"requests"`
+	Type             string          `json:"type"`
+	Duration         string          `json:"duration"`
+	StartedAt        string          `json:"startedAt"`
+	Requests         json.RawMessage `json:"requests"`
+	Errors           json.RawMessage `json:"errors"`
+	Hosts            json.RawMessage `json:"hosts"`
+	Matched          json.RawMessage `json:"matched"`
+	Percent          json.RawMessage `json:"percent"`
+	Templates        json.RawMessage `json:"templates"`
+	Total            json.RawMessage `json:"total"`
+	InitialTargets   json.RawMessage `json:"initial_targets"`
+	ConnectionErrors json.RawMessage `json:"connection_errors"`
+}
+
+func parseNucleiRuntimeMetadata(output string) (dto.NucleiRuntimeMetadata, bool) {
+	var latest scannerStatistics
+	maximumRequests := -1
+	for line := range strings.Lines(output) {
+		var event scannerStatistics
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &event); err != nil || event.Duration == "" || event.StartedAt == "" {
+			continue
+		}
+		requests, ok := parseJSONInteger(event.Requests)
+		if ok && requests >= maximumRequests {
+			latest = event
+			maximumRequests = requests
+		}
+	}
+	if maximumRequests < 0 {
+		return dto.NucleiRuntimeMetadata{}, false
+	}
+	return dto.NucleiRuntimeMetadata{
+		Requests: maximumRequests,
+		Errors:   parseJSONIntegerOrZero(latest.Errors), Hosts: parseJSONIntegerOrZero(latest.Hosts),
+		Matched: parseJSONIntegerOrZero(latest.Matched), Templates: parseJSONIntegerOrZero(latest.Templates),
+		Total: parseJSONIntegerOrZero(latest.Total), Percent: parseJSONFloatOrZero(latest.Percent),
+		Duration: latest.Duration, StartedAt: latest.StartedAt,
+	}, true
+}
+
+func parseJSONIntegerOrZero(raw json.RawMessage) int {
+	value, _ := parseJSONInteger(raw)
+	return value
+}
+
+func parseJSONFloatOrZero(raw json.RawMessage) float64 {
+	var value float64
+	if err := json.Unmarshal(raw, &value); err == nil && value >= 0 {
+		return value
+	}
+	var encoded string
+	if err := json.Unmarshal(raw, &encoded); err != nil {
+		return 0
+	}
+	value, _ = strconv.ParseFloat(encoded, 64)
+	return value
 }
 
 func parseStructuredRequestCount(output string, matches func(scannerStatistics) bool) (int, bool) {

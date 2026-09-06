@@ -102,13 +102,25 @@ func classifyNiktoFinding(result *dto.ToolResult, output string) {
 }
 
 func classifyNucleiFinding(result *dto.ToolResult) {
+	partial := result.NucleiRuntime != nil && result.NucleiRuntime.Errors > 0
 	switch {
 	case strings.TrimSpace(result.Stdout) == "":
-		result.FindingStatus = dto.FindingsNotDetected
-		result.ClassificationReason = "scanner_completed_without_output"
+		if partial {
+			result.FindingStatus = dto.FindingsInconclusive
+			result.PartialResults = true
+			result.ClassificationReason = "nuclei_partial_request_errors"
+		} else {
+			result.FindingStatus = dto.FindingsNotDetected
+			result.ClassificationReason = "scanner_completed_without_output"
+		}
 	case nucleiReportedFinding(result.Stdout):
 		result.FindingStatus = dto.FindingsDetected
-		result.ClassificationReason = "scanner_emitted_findings"
+		if partial {
+			result.PartialResults = true
+			result.ClassificationReason = "nuclei_partial_finding_reported"
+		} else {
+			result.ClassificationReason = "scanner_emitted_findings"
+		}
 	default:
 		result.FindingStatus = dto.FindingsInconclusive
 		result.ClassificationReason = "nuclei_output_not_valid_jsonl"
@@ -129,9 +141,19 @@ func classifyFFUFFinding(result *dto.ToolResult) {
 }
 
 func classifyFeroxbusterFinding(result *dto.ToolResult, _ string) {
+	errors, _, _, hasStats := parseFeroxbusterRuntimeStatistics(result.Stdout + "\n" + result.Stderr)
 	if feroxbusterReportedFinding(result.Stdout) {
 		result.FindingStatus = dto.FindingsDetected
-		result.ClassificationReason = "scanner_emitted_findings"
+		if hasStats && errors > 0 {
+			result.PartialResults = true
+			result.ClassificationReason = "feroxbuster_partial_finding_reported"
+		} else {
+			result.ClassificationReason = "scanner_emitted_findings"
+		}
+	} else if hasStats && errors > 0 {
+		result.FindingStatus = dto.FindingsInconclusive
+		result.PartialResults = true
+		result.ClassificationReason = "feroxbuster_partial_request_errors"
 	} else {
 		result.FindingStatus = dto.FindingsNotDetected
 		result.ClassificationReason = "scanner_completed_without_findings"

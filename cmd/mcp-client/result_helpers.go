@@ -99,6 +99,8 @@ func applyIncompleteReportedFinding(toolName string, result *dto.ToolResult, com
 		found = ffufReportedFinding(result.Stdout)
 	case "nikto_scan":
 		found = niktoReportedFinding(combinedOutput)
+	case "feroxbuster_scan":
+		found = feroxbusterReportedFinding(result.Stdout)
 	}
 	if !found {
 		return

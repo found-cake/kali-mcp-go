@@ -182,6 +182,7 @@ type ToolResult struct {
 	JWTAnalysis          *JWTAnalysisMetadata   `json:"jwt_analysis,omitempty"`
 	SQLMapAnalysis       *SQLMapAnalysis        `json:"sqlmap_analysis,omitempty"`
 	NucleiPreview        *NucleiPreviewMetadata `json:"nuclei_preview,omitempty"`
+	NucleiRuntime        *NucleiRuntimeMetadata `json:"nuclei_runtime,omitempty"`
 	Evidence             *EvidenceManifest      `json:"evidence,omitempty"`
 	Progress             *ProgressMetadata      `json:"progress,omitempty"`
 }

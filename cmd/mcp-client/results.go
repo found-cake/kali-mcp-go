@@ -19,6 +19,7 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		output, "keyword fuzz defined, but not found in headers, method, url or post data",
 	)
 	jwtLiveTransportFailed := toolName == "jwt_analyze" && jwtLiveTransportFailure(result)
+	semanticFailure := semanticToolFailure(toolName, result, output)
 	switch {
 	case niktoInternalTimeout:
 		result.ExecutionStatus = dto.ExecutionTimedOut
@@ -50,6 +51,10 @@ func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		if result.ClassificationReason == "" {
 			result.ClassificationReason = "tool_reported_failure"
 		}
+	case semanticFailure != nil:
+		result.ExecutionStatus = dto.ExecutionFailed
+		result.ClassificationReason = semanticFailure.Code
+		result.Failure = semanticFailure
 	case result.ReturnCode != 0:
 		result.ExecutionStatus = dto.ExecutionFailed
 		result.ClassificationReason = "tool_nonzero_exit"
