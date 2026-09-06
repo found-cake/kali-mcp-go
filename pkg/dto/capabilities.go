@@ -84,6 +84,7 @@ type ScanToolCapability struct {
 	ImpactLevel           ImpactLevel             `json:"impact_level"`
 	ExecutionMode         ToolExecutionMode       `json:"execution_mode"`
 	InputSchemaSource     string                  `json:"input_schema_source"`
+	InputSchemaJSON       string                  `json:"input_schema_json,omitempty"`
 	Available             bool                    `json:"available"`
 	AvailabilityChecked   bool                    `json:"availability_checked"`
 	BuiltIn               bool                    `json:"built_in"`

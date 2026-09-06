@@ -65,39 +65,40 @@ func main() {
 }
 
 func registerTools(srv *mcp.Server, kali *kaliclient.Client) error {
+	registration := toolRegistration{server: srv, kali: kali, schemas: make(toolInputSchemaCatalog)}
 	registerTargetResolver(srv, kali)
-	registerScanCapabilities(srv, kali)
 	registrations := []error{
 		registerResultArtifacts(srv, kali),
-		registerHTTPRequest(srv, kali),
-		addStreamTool[dto.GobusterRequest](srv, kali, "gobuster_scan"),
-		addPostTool[dto.MetasploitRequest](srv, kali, "metasploit_run"),
-		addPostTool[dto.HydraRequest](srv, kali, "hydra_attack"),
-		addPostTool[dto.JohnRequest](srv, kali, "john_crack"),
-		addStreamTool[dto.CommandRequest](srv, kali, "execute_command"),
-		addStreamTool[dto.NmapRequest](srv, kali, "nmap_scan"),
-		addStreamTool[dto.DirbRequest](srv, kali, "dirb_scan"),
-		addStreamTool[dto.NiktoRequest](srv, kali, "nikto_scan"),
-		addStreamTool[dto.SQLMapRequest](srv, kali, "sqlmap_scan"),
-		addStreamTool[dto.TsharkRequest](srv, kali, "tshark_capture"),
-		addStreamTool[dto.HydraRequest](srv, kali, "hydra_attack_stream"),
-		addStreamTool[dto.WPScanRequest](srv, kali, "wpscan_analyze"),
-		addStreamTool[dto.Enum4linuxRequest](srv, kali, "enum4linux_scan"),
-		addStreamTool[dto.FFUFRequest](srv, kali, "ffuf_scan"),
-		addStreamTool[dto.FeroxbusterRequest](srv, kali, "feroxbuster_scan"),
-		addStreamTool[dto.NucleiRequest](srv, kali, "nuclei_scan"),
-		addStreamTool[dto.WhatWebRequest](srv, kali, "whatweb_scan"),
-		addStreamTool[dto.JWTRequest](srv, kali, "jwt_analyze"),
-		addStreamTool[dto.DalfoxRequest](srv, kali, "dalfox_scan"),
-		addStreamTool[dto.BrowserRequest](srv, kali, "browser_check"),
-		addStreamTool[dto.RetireRequest](srv, kali, "retirejs_scan"),
-		addStreamTool[dto.OSVRequest](srv, kali, "osv_scan"),
+		registerHTTPRequest(registration),
+		addStreamTool[dto.GobusterRequest](registration, "gobuster_scan"),
+		addPostTool[dto.MetasploitRequest](registration, "metasploit_run"),
+		addPostTool[dto.HydraRequest](registration, "hydra_attack"),
+		addPostTool[dto.JohnRequest](registration, "john_crack"),
+		addStreamTool[dto.CommandRequest](registration, "execute_command"),
+		addStreamTool[dto.NmapRequest](registration, "nmap_scan"),
+		addStreamTool[dto.DirbRequest](registration, "dirb_scan"),
+		addStreamTool[dto.NiktoRequest](registration, "nikto_scan"),
+		addStreamTool[dto.SQLMapRequest](registration, "sqlmap_scan"),
+		addStreamTool[dto.TsharkRequest](registration, "tshark_capture"),
+		addStreamTool[dto.HydraRequest](registration, "hydra_attack_stream"),
+		addStreamTool[dto.WPScanRequest](registration, "wpscan_analyze"),
+		addStreamTool[dto.Enum4linuxRequest](registration, "enum4linux_scan"),
+		addStreamTool[dto.FFUFRequest](registration, "ffuf_scan"),
+		addStreamTool[dto.FeroxbusterRequest](registration, "feroxbuster_scan"),
+		addStreamTool[dto.NucleiRequest](registration, "nuclei_scan"),
+		addStreamTool[dto.WhatWebRequest](registration, "whatweb_scan"),
+		addStreamTool[dto.JWTRequest](registration, "jwt_analyze"),
+		addStreamTool[dto.DalfoxRequest](registration, "dalfox_scan"),
+		addStreamTool[dto.BrowserRequest](registration, "browser_check"),
+		addStreamTool[dto.RetireRequest](registration, "retirejs_scan"),
+		addStreamTool[dto.OSVRequest](registration, "osv_scan"),
 	}
 	for _, err := range registrations {
 		if err != nil {
 			return err
 		}
 	}
+	registerScanCapabilities(registration)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",
@@ -139,7 +140,13 @@ func formatHealthSummary(h *dto.HealthResult) string {
 	return sb.String()
 }
 
-func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name string) error {
+type toolRegistration struct {
+	server  *mcp.Server
+	kali    *kaliclient.Client
+	schemas toolInputSchemaCatalog
+}
+
+func addStreamTool[T any](registration toolRegistration, name string) error {
 	definition, err := executableToolDefinition(name)
 	if err != nil {
 		return err
@@ -148,14 +155,17 @@ func addStreamTool[T any](srv *mcp.Server, kali *kaliclient.Client, name string)
 	if err != nil {
 		return err
 	}
-	mcp.AddTool(srv, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
-		r, err := kali.Stream(ctx, definition.Endpoint, in)
+	if err := recordToolInputSchema(registration.schemas, tool); err != nil {
+		return err
+	}
+	mcp.AddTool(registration.server, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
+		r, err := registration.kali.Stream(ctx, definition.Endpoint, in)
 		return textResult(definition.Tool, r, err)
 	})
 	return nil
 }
 
-func addPostTool[T any](srv *mcp.Server, kali *kaliclient.Client, name string) error {
+func addPostTool[T any](registration toolRegistration, name string) error {
 	definition, err := executableToolDefinition(name)
 	if err != nil {
 		return err
@@ -164,8 +174,11 @@ func addPostTool[T any](srv *mcp.Server, kali *kaliclient.Client, name string) e
 	if err != nil {
 		return err
 	}
-	mcp.AddTool(srv, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
-		r, err := kali.Post(ctx, definition.Endpoint, in)
+	if err := recordToolInputSchema(registration.schemas, tool); err != nil {
+		return err
+	}
+	mcp.AddTool(registration.server, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in T) (*mcp.CallToolResult, dto.ToolResult, error) {
+		r, err := registration.kali.Post(ctx, definition.Endpoint, in)
 		return textResult(definition.Tool, r, err)
 	})
 	return nil

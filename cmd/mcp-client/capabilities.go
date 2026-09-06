@@ -5,18 +5,20 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/found-cake/kali-mcp-go/internal/kaliclient"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func registerScanCapabilities(server *mcp.Server, kali *kaliclient.Client) {
-	mcp.AddTool(server, &mcp.Tool{
+func registerScanCapabilities(registration toolRegistration) {
+	mcp.AddTool(registration.server, &mcp.Tool{
 		Name:        "get_scan_capabilities",
 		Description: "Inspect safety-profile compatibility, target input formats, supported controls, and effective default wordlists before invoking tools.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, dto.ScanCapabilitiesResult, error) {
-		result, err := kali.ScanCapabilities(ctx)
+		result, err := registration.kali.ScanCapabilities(ctx)
 		if err != nil {
+			return nil, dto.ScanCapabilitiesResult{}, err
+		}
+		if err := attachCapabilityInputSchemas(result, registration.schemas); err != nil {
 			return nil, dto.ScanCapabilitiesResult{}, err
 		}
 		return &mcp.CallToolResult{
@@ -50,7 +52,7 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 		if tool.AvailabilityChecked {
 			available = fmt.Sprintf("%t", tool.Available)
 		}
-		fmt.Fprintf(&output, "- %s: available=%s target=%s profiles=%s impact=%s mode=%s target_context=%t resume=%t", tool.Tool, available, tool.TargetInputFormat, strings.Join(profiles, ","), tool.ImpactLevel, tool.ExecutionMode, tool.RequiresTargetContext, tool.ResumeSupported)
+		fmt.Fprintf(&output, "- %s: available=%s target=%s profiles=%s impact=%s mode=%s target_context=%t resume=%t input_schema=embedded", tool.Tool, available, tool.TargetInputFormat, strings.Join(profiles, ","), tool.ImpactLevel, tool.ExecutionMode, tool.RequiresTargetContext, tool.ResumeSupported)
 		if len(controls) > 0 {
 			fmt.Fprintf(&output, " controls=%s", strings.Join(controls, ","))
 		}
