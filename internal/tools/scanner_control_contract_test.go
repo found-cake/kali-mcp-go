@@ -21,7 +21,7 @@ func TestNativeScannerControlsAreGeneratedFromTypedInputs(t *testing.T) {
 		expected []string
 	}{
 		{
-			name: "Nuclei request failure controls",
+			name:    "Nuclei request failure controls",
 			payload: `{"target":"https://example.test","max_host_errors":5,"request_timeout":3,"retries":2}`,
 			build: func(payload []byte) ([]string, error) {
 				var request dto.NucleiRequest
@@ -33,7 +33,7 @@ func TestNativeScannerControlsAreGeneratedFromTypedInputs(t *testing.T) {
 			expected: []string{"-mhe", "5", "-timeout", "3", "-retries", "2"},
 		},
 		{
-			name: "Nikto request failure controls",
+			name:    "Nikto request failure controls",
 			payload: `{"target":"https://example.test","request_timeout":3,"failure_limit":5}`,
 			build: func(payload []byte) ([]string, error) {
 				var request dto.NiktoRequest
@@ -45,7 +45,7 @@ func TestNativeScannerControlsAreGeneratedFromTypedInputs(t *testing.T) {
 			expected: []string{"-timeout", "3", "-Option", "FAILURES=5"},
 		},
 		{
-			name: "Dalfox bounded request controls",
+			name:    "Dalfox bounded request controls",
 			payload: `{"target":"https://example.test/?q=FUZZ","request_timeout":3,"scan_timeout":30,"retries":1}`,
 			build: func(payload []byte) ([]string, error) {
 				var request dto.DalfoxRequest
@@ -94,6 +94,50 @@ func TestSafeDiscoveryScannersUseNativeFailureStops(t *testing.T) {
 	}
 	if !slices.Contains(ferox, "--auto-bail") || !containsFlagValue(ferox, "--scan-limit", "1") {
 		t.Fatalf("Feroxbuster global scan bound is missing: %v", ferox)
+	}
+}
+
+func TestFeroxbusterSafeProfileUsesAutoBailWithoutAutoTune(t *testing.T) {
+	t.Parallel()
+
+	// Given: a bounded discovery profile and a valid wordlist.
+	wordlist := filepath.Join(t.TempDir(), "paths.txt")
+	if err := os.WriteFile(wordlist, []byte("admin\n"), 0o600); err != nil {
+		t.Fatalf("write wordlist: %v", err)
+	}
+
+	// When: Feroxbuster arguments are generated.
+	args, err := FeroxbusterArgs(dto.FeroxbusterRequest{
+		ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
+		URL:         "https://example.test/",
+		Wordlist:    wordlist,
+	})
+
+	// Then: the mutually exclusive adaptive modes are not combined.
+	if err != nil || !slices.Contains(args, "--auto-bail") || slices.Contains(args, "--auto-tune") {
+		t.Fatalf("safe Feroxbuster adaptive modes are invalid: args=%v err=%v", args, err)
+	}
+}
+
+func TestFeroxbusterExplicitCustomRetainsAutoTune(t *testing.T) {
+	t.Parallel()
+
+	// Given: an explicit custom scan with a valid wordlist.
+	wordlist := filepath.Join(t.TempDir(), "paths.txt")
+	if err := os.WriteFile(wordlist, []byte("admin\n"), 0o600); err != nil {
+		t.Fatalf("write wordlist: %v", err)
+	}
+
+	// When: Feroxbuster arguments are generated.
+	args, err := FeroxbusterArgs(dto.FeroxbusterRequest{
+		ScanOptions: dto.ScanOptions{Profile: dto.ProfileExplicitCustom},
+		URL:         "https://example.test/",
+		Wordlist:    wordlist,
+	})
+
+	// Then: auto-tuning remains enabled without the profile-only bailout mode.
+	if err != nil || !slices.Contains(args, "--auto-tune") || slices.Contains(args, "--auto-bail") {
+		t.Fatalf("custom Feroxbuster adaptive mode changed: args=%v err=%v", args, err)
 	}
 }
 

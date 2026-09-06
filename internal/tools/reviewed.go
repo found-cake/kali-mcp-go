@@ -75,10 +75,13 @@ func FeroxbusterArgs(request dto.FeroxbusterRequest) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"feroxbuster", "--url", request.URL, "--wordlist", wordlist, "--auto-tune", "--json", "--output", "/dev/stdout"}
+	args := []string{"feroxbuster", "--url", request.URL, "--wordlist", wordlist}
 	if isDiscoveryProfile(request.Profile) {
 		args = append(args, "--auto-bail", "--scan-limit", "1")
+	} else {
+		args = append(args, "--auto-tune")
 	}
+	args = append(args, "--json", "--output", "/dev/stdout")
 	if request.FilterSize != "" {
 		args = append(args, "--filter-size", request.FilterSize)
 	}
