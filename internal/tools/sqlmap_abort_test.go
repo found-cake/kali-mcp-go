@@ -41,3 +41,41 @@ func TestSQLMapAnalysisReportsNativeAbortCode(t *testing.T) {
 		t.Fatalf("native abort metadata missing: %+v", analysis)
 	}
 }
+
+func TestSQLMapPlanAppliesTypedComparisonAndPayloadOptions(t *testing.T) {
+	// Given: SQLmap's native response oracles and payload selectors as typed fields.
+	request := dto.SQLMapRequest{
+		URL:            "https://example.test/?id=1",
+		TrueString:     "Welcome back",
+		FalseString:    "Access denied",
+		TrueRegexp:     `user-[0-9]+`,
+		TrueStatusCode: 200,
+		PayloadPrefix:  "'))",
+		PayloadSuffix:  "-- ",
+		TestFilter:     "boolean-based blind",
+	}
+
+	// When: the SQLmap command is prepared.
+	plan, err := PrepareSQLMap(request)
+	if err != nil {
+		t.Fatalf("prepare SQLmap typed options: %v", err)
+	}
+	defer plan.Cleanup()
+
+	// Then: every value is forwarded through its official SQLmap flag.
+	args := plan.Args()
+	for flag, value := range map[string]string{
+		"--string":      request.TrueString,
+		"--not-string":  request.FalseString,
+		"--regexp":      request.TrueRegexp,
+		"--code":        "200",
+		"--prefix":      request.PayloadPrefix,
+		"--suffix":      request.PayloadSuffix,
+		"--test-filter": request.TestFilter,
+	} {
+		index := slices.Index(args, flag)
+		if index < 0 || index+1 >= len(args) || args[index+1] != value {
+			t.Fatalf("SQLmap option %s=%q missing: %v", flag, value, args)
+		}
+	}
+}

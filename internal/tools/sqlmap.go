@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
@@ -39,6 +40,10 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 		return nil, fmt.Errorf("invalid additional_args: %w", err)
 	}
 	if err := rejectArguments(additional, "additional_args", "use the typed abort_codes and ignore_codes fields", "--abort-code", "--ignore-code"); err != nil {
+		return nil, err
+	}
+	if err := rejectArguments(additional, "additional_args", "use the corresponding typed SQLmap request field",
+		"--string", "--not-string", "--regexp", "--code", "--prefix", "--suffix", "--test-filter"); err != nil {
 		return nil, err
 	}
 	abortCodes, err := ParseSQLMapStatusCodes("abort_codes", request.AbortCodes)
@@ -95,6 +100,27 @@ func PrepareSQLMap(request dto.SQLMapRequest) (*SQLMapPlan, error) {
 	}
 	if request.TestParameters != "" {
 		plan.args = append(plan.args, "-p", request.TestParameters)
+	}
+	if request.TrueString != "" {
+		plan.args = append(plan.args, "--string", request.TrueString)
+	}
+	if request.FalseString != "" {
+		plan.args = append(plan.args, "--not-string", request.FalseString)
+	}
+	if request.TrueRegexp != "" {
+		plan.args = append(plan.args, "--regexp", request.TrueRegexp)
+	}
+	if request.TrueStatusCode != 0 {
+		plan.args = append(plan.args, "--code", strconv.Itoa(request.TrueStatusCode))
+	}
+	if request.PayloadPrefix != "" {
+		plan.args = append(plan.args, "--prefix", request.PayloadPrefix)
+	}
+	if request.PayloadSuffix != "" {
+		plan.args = append(plan.args, "--suffix", request.PayloadSuffix)
+	}
+	if request.TestFilter != "" {
+		plan.args = append(plan.args, "--test-filter", request.TestFilter)
 	}
 	plan.args = append(plan.args, "-t", plan.trafficFile, "--output-dir", filepath.Join(tempDir, "output"))
 	plan.args, err = appendTargetSafeArgs(plan.args, request.AdditionalArgs, "additional_args", false,

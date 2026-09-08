@@ -27,6 +27,25 @@ func validateSQLMapRequest(request dto.SQLMapRequest) error {
 	if containsLineBreak(request.Cookie) || containsLineBreak(request.ContentType) {
 		return fmt.Errorf("cookie and content_type must not contain line breaks")
 	}
+	values := []struct {
+		name  string
+		value string
+	}{
+		{name: "true_string", value: request.TrueString},
+		{name: "false_string", value: request.FalseString},
+		{name: "true_regexp", value: request.TrueRegexp},
+		{name: "payload_prefix", value: request.PayloadPrefix},
+		{name: "payload_suffix", value: request.PayloadSuffix},
+		{name: "test_filter", value: request.TestFilter},
+	}
+	for _, candidate := range values {
+		if containsLineBreak(candidate.value) {
+			return fmt.Errorf("%s must not contain line breaks", candidate.name)
+		}
+	}
+	if request.TrueStatusCode != 0 && (request.TrueStatusCode < 100 || request.TrueStatusCode > 599) {
+		return fmt.Errorf("true_status_code must be between 100 and 599")
+	}
 	abortCodes, err := tools.ParseSQLMapStatusCodes("abort_codes", request.AbortCodes)
 	if err != nil {
 		return err

@@ -87,6 +87,13 @@ type SQLMapRequest struct {
 	AbortCodes     string            `json:"abort_codes,omitempty" jsonschema:"comma-separated HTTP status codes that trigger SQLmap's native immediate abort e.g. 500,503"`
 	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
 	TestParameters string            `json:"test_parameters,omitempty" jsonschema:"comma-separated parameters or JSON fields to test"`
+	TrueString     string            `json:"true_string,omitempty" jsonschema:"text present when the tested condition is true; passed to SQLmap --string"`
+	FalseString    string            `json:"false_string,omitempty" jsonschema:"text present when the tested condition is false; passed to SQLmap --not-string"`
+	TrueRegexp     string            `json:"true_regexp,omitempty" jsonschema:"regular expression matching a true response; passed to SQLmap --regexp"`
+	TrueStatusCode int               `json:"true_status_code,omitempty" jsonschema:"HTTP status code indicating a true response (100-599); passed to SQLmap --code"`
+	PayloadPrefix  string            `json:"payload_prefix,omitempty" jsonschema:"SQL injection payload prefix; passed to SQLmap --prefix"`
+	PayloadSuffix  string            `json:"payload_suffix,omitempty" jsonschema:"SQL injection payload suffix; passed to SQLmap --suffix"`
+	TestFilter     string            `json:"test_filter,omitempty" jsonschema:"SQLmap payload test-title filter; passed to SQLmap --test-filter"`
 	AdditionalArgs string            `json:"additional_args,omitempty" jsonschema:"extra SQLmap arguments excluding alternate sources; resolved targets forbid proxy and DNS-OOB destinations; sqli-verify-low-risk pins risk 1, level 1, techniques BEU and rejects method overrides, takeover, write, broad extraction, tamper, and hook options"`
 	Timeout        int               `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }

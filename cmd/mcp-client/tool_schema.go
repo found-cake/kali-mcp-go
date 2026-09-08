@@ -14,6 +14,13 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 	if err != nil {
 		return nil, fmt.Errorf("infer %s input schema: %w", definition.Tool, err)
 	}
+	if definition.Tool == "sqlmap_scan" {
+		minimumStatus := float64(100)
+		maximumStatus := float64(599)
+		statusSchema := schema.Properties["true_status_code"]
+		statusSchema.Minimum = &minimumStatus
+		statusSchema.Maximum = &maximumStatus
+	}
 	supported := make(map[dto.ScanControl]bool, len(definition.Controls))
 	for _, control := range definition.Controls {
 		supported[control.Control] = true

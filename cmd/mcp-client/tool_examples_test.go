@@ -18,7 +18,7 @@ func TestToolInputExamplesAreExposedInSchemaAndDescription(t *testing.T) {
 		"dalfox_scan":          `{"target":"https://host/?q=FUZZ","headers":{"Authorization":"Bearer ..."},"cookies":"session=...","profile":"browser-xss-confirm"}`,
 		"result_artifact_read": `{"artifact_id":"...","limit":65536}`,
 		"retirejs_scan":        `{"url":"https://host/app","headers":{"Authorization":"Bearer ..."},"profile":"safe-recon"}`,
-		"sqlmap_scan":          `{"url":"https://host/api/search","data":"{\"query\":\"test*\"}","content_type":"application/json","test_parameters":"query","profile":"sqli-verify-low-risk"}`,
+		"sqlmap_scan":          `{"url":"https://host/api/login","data":"{\"email\":\"test*\"}","content_type":"application/json","test_parameters":"email","true_string":"Welcome","false_string":"Invalid credentials","payload_prefix":"'))","payload_suffix":"-- ","profile":"sqli-verify-low-risk"}`,
 	}
 
 	for name, encoded := range want {
