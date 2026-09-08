@@ -58,7 +58,7 @@ type EvidenceManifest struct {
 }
 
 type ArtifactReadRequest struct {
-	ArtifactID string          `json:"artifact_id" jsonschema:"opaque result artifact ID returned by a scan"`
+	ArtifactID string          `json:"artifact_id" jsonschema:"opaque artifact ID returned by the tool call that originally produced the evidence"`
 	Section    ArtifactSection `json:"section,omitempty" jsonschema:"raw|stdout|stderr section to read (default raw); stdout and stderr require a tool-result-json artifact"`
 	Offset     int64           `json:"offset,omitempty" jsonschema:"byte offset returned by the previous page (default 0); mutually exclusive with start_line and line_count"`
 	Limit      int             `json:"limit,omitempty" jsonschema:"page size in bytes (default 16384, minimum 256, maximum 65536); mutually exclusive with start_line and line_count"`
@@ -67,7 +67,7 @@ type ArtifactReadRequest struct {
 }
 
 type ArtifactReadResult struct {
-	CallID           string                 `json:"call_id"`
+	CallID           string                 `json:"call_id" jsonschema:"call ID of this result_artifact_read operation"`
 	ArtifactID       string                 `json:"artifact_id"`
 	Content          string                 `json:"content"`
 	Offset           int64                  `json:"offset"`
@@ -83,7 +83,7 @@ type ArtifactReadResult struct {
 	ExpiresAt        time.Time              `json:"expires_at"`
 	ExpiresInSeconds int64                  `json:"expires_in_seconds"`
 	ExpiringSoon     bool                   `json:"expiring_soon"`
-	SourceCallID     string                 `json:"source_call_id"`
+	SourceCallID     string                 `json:"source_call_id" jsonschema:"call ID of the original tool operation that produced the artifact"`
 	MediaType        string                 `json:"media_type"`
 	Encoding         ArtifactEncoding       `json:"encoding"`
 	RedactionState   ArtifactRedactionState `json:"redaction_state"`
