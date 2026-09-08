@@ -9,7 +9,7 @@ func TestCountNucleiTemplateListIgnoresRuntimeWarnings(t *testing.T) {
 	// When: the local selection is counted.
 	count := CountNucleiTemplateList(output)
 
-	// Then: only the template path contributes to the estimate.
+	// Then: only the template path contributes to the selected count.
 	if count != 1 {
 		t.Fatalf("template count=%d want=1", count)
 	}

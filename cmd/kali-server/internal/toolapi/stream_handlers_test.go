@@ -140,7 +140,7 @@ func TestRunToolStreamUsesRequestTimeout(t *testing.T) {
 	}
 	request.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 
-	// When: the stream runs past the request budget.
+	// When: the stream runs past the explicit timeout.
 	response, err := app.Test(request, fiber.TestConfig{Timeout: 4 * time.Second})
 	if err != nil {
 		t.Fatalf("app test: %v", err)

@@ -49,7 +49,6 @@ func (r *Result) FinalizeProgress() {
 	}
 	r.Progress.Phase = progressPhase(r)
 	r.Progress.HTTPRequests = r.HTTPRequests
-	r.Progress.HTTPRequestBudget = r.Policy.TimeoutRequestBudget
 }
 
 func progressPhase(result *Result) dto.ProgressPhase {

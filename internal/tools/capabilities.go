@@ -47,10 +47,9 @@ func ScanCapabilities(availability ...func(string) bool) dto.ScanCapabilitiesRes
 			Profile: profile,
 			Tools:   compatibleMCPTools(profile),
 			Limits: dto.ScanLimits{
-				TimeoutRequestBudget: limits.TimeoutRequestBudget,
-				RateLimit:            limits.RateLimit,
-				Concurrency:          limits.Concurrency,
-				Max5xxResponses:      limits.Max5xxResponses,
+				RateLimit:       limits.RateLimit,
+				Concurrency:     limits.Concurrency,
+				Max5xxResponses: limits.Max5xxResponses,
 			},
 		})
 	}

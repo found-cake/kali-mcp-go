@@ -33,9 +33,9 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 	for _, profile := range result.Profiles {
 		fmt.Fprintf(
 			&output,
-			"- %s: tools=%s limits=rate_limit=%d,concurrency=%d,timeout_request_budget=%d,max_5xx_responses=%d\n",
+			"- %s: tools=%s limits=rate_limit=%d,concurrency=%d,max_5xx_responses=%d\n",
 			profile.Profile, strings.Join(profile.Tools, ","), profile.Limits.RateLimit,
-			profile.Limits.Concurrency, profile.Limits.TimeoutRequestBudget, profile.Limits.Max5xxResponses,
+			profile.Limits.Concurrency, profile.Limits.Max5xxResponses,
 		)
 	}
 	output.WriteString("tools:\n")

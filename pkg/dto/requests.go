@@ -149,7 +149,7 @@ type NucleiRequest struct {
 	RequestTimeout int      `json:"request_timeout,omitempty" jsonschema:"per-request network timeout in seconds (tool default when omitted, maximum 300)"`
 	Retries        int      `json:"retries,omitempty" jsonschema:"number of failed-request retries; omitted means zero retries for MCP scans (maximum 10)"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Nuclei arguments excluding single, list, inline, resume, and config target sources; resolved targets also forbid cross-host redirects, TLS-name overrides, and proxy routing"`
-	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds; 0 derives it from request and rate budgets, while shorter explicit values are preserved with a warning"`
+	Timeout        int      `json:"timeout,omitempty" jsonschema:"outer timeout in seconds (0 = default 300s); no duration is inferred from template count or rate limit"`
 }
 
 func (r NucleiRequest) GetRequestTimeout() int { return r.Timeout }

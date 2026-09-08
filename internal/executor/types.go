@@ -24,7 +24,6 @@ type Result struct {
 	ToolVersion           string
 	ArgvRedacted          []string
 	Timeout               time.Duration
-	TimeoutPlanning       *dto.TimeoutPlanning
 	ProcessStarted        bool
 	GracefulStop          time.Duration
 	Target                *dto.TargetProvenance

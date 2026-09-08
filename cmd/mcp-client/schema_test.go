@@ -90,7 +90,7 @@ func TestToolSchemasExposeOnlySupportedScanControls(t *testing.T) {
 		}
 
 		// Then: every scan-control property agrees with the capability contract.
-		for _, control := range []string{"timeout", "rate_limit", "concurrency", "timeout_request_budget", "max_5xx_responses", "dry_run"} {
+		for _, control := range []string{"timeout", "rate_limit", "concurrency", "max_5xx_responses", "dry_run"} {
 			_, exposed := properties[control]
 			if exposed != supported[control] {
 				t.Fatalf("tool %s control %s schema exposure=%t capability support=%t", tool.Name, control, exposed, supported[control])
@@ -112,7 +112,7 @@ func TestToolSchemasExposeProfileControlMaximums(t *testing.T) {
 	}{
 		{tool: "nmap_scan", profile: "safe-recon", control: "rate_limit", profileMax: 10, explicitMax: 1000},
 		{tool: "nuclei_scan", profile: "safe-recon", control: "concurrency", profileMax: 2, explicitMax: 100},
-		{tool: "feroxbuster_scan", profile: "web-discovery-low-rate", control: "timeout_request_budget", profileMax: 1000, explicitMax: 1_000_000},
+		{tool: "feroxbuster_scan", profile: "web-discovery-low-rate", control: "rate_limit", profileMax: 5, explicitMax: 1000},
 	}
 
 	for _, test := range tests {

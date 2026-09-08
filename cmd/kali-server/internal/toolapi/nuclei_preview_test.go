@@ -41,55 +41,51 @@ func TestPreviewNucleiTemplatesReturnsLocalSelectionCount(t *testing.T) {
 	}
 }
 
-func TestDecorateNucleiExecutionAddsTemplateAndDurationEstimate(t *testing.T) {
-	// Given: twenty selected templates, five requests per second, and a three-second scan timeout.
+func TestDecorateNucleiExecutionSkipsPreviewForActualScan(t *testing.T) {
+	// Given: an actual scan and a local preview executable whose invocation is observable.
 	directory := t.TempDir()
 	executable := filepath.Join(directory, "nuclei")
-	if err := os.WriteFile(executable, []byte("#!/bin/sh\nvalue=1\nwhile [ \"$value\" -le 20 ]; do printf 'template-%s.yaml\\n' \"$value\"; value=$((value + 1)); done\n"), 0o700); err != nil {
+	marker := filepath.Join(directory, "preview-invoked")
+	if err := os.WriteFile(executable, []byte("#!/bin/sh\nprintf invoked > \"$NUCLEI_PREVIEW_MARKER\"\nprintf 'template.yaml\\n'\n"), 0o700); err != nil {
 		t.Fatalf("write fake nuclei: %v", err)
 	}
+	t.Setenv("NUCLEI_PREVIEW_MARKER", marker)
 	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 	request := dto.NucleiRequest{Target: "https://example.test", Tags: "exposure"}
-	plan := &scanExecutionPlan{
-		context: t.Context(),
-		options: dto.ScanOptions{RateLimit: 5},
-		timeout: 3 * time.Second,
-	}
+	plan := &scanExecutionPlan{context: t.Context(), timeout: 3 * time.Second}
 
-	// When: the real-scan plan is decorated before target traffic begins.
+	// When: the real scan plan is decorated.
 	err := decorateNucleiExecution(request, plan)
-	// Then: the non-network preview exposes a lower-bound estimate and timeout warning.
+
+	// Then: no local template preview or duration estimation runs implicitly.
 	if err != nil {
 		t.Fatalf("decorate Nuclei execution: %v", err)
 	}
-	preview := plan.nucleiPreview
-	if preview == nil || preview.TemplatesMatched != 20 || preview.MinimumRequestEstimate != 20 {
-		t.Fatalf("missing Nuclei selection estimate: %+v", preview)
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("normal scan invoked Nuclei preview: %v", err)
 	}
-	if preview.EstimatedMinimumDurationMS != 34000 || !preview.TimeoutLikelyInsufficient {
-		t.Fatalf("unexpected Nuclei duration estimate: %+v", preview)
+	if plan.nucleiPreview != nil || len(plan.extraWarnings) != 0 {
+		t.Fatalf("normal scan retained preview metadata: preview=%+v warnings=%v", plan.nucleiPreview, plan.extraWarnings)
 	}
 }
 
-func TestDecorateNucleiExecutionKeepsActualScanAvailableWhenPreviewFails(t *testing.T) {
-	// Given: a real scan request and a local Nuclei preview command that cannot enumerate templates.
+func TestDecorateNucleiExecutionReportsDryRunPreviewFailure(t *testing.T) {
+	// Given: an explicit dry run and a local Nuclei command that cannot enumerate templates.
 	directory := t.TempDir()
 	executable := filepath.Join(directory, "nuclei")
 	if err := os.WriteFile(executable, []byte("#!/bin/sh\nprintf 'template database unavailable' >&2\nexit 1\n"), 0o700); err != nil {
 		t.Fatalf("write fake nuclei: %v", err)
 	}
 	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
-	request := dto.NucleiRequest{Target: "https://example.test", Tags: "exposure"}
+	request := dto.NucleiRequest{Target: "https://example.test", Tags: "exposure", DryRun: true}
 	plan := &scanExecutionPlan{context: t.Context(), timeout: time.Minute}
 
-	// When: the optional execution preflight fails.
+	// When: the requested local preview fails.
 	err := decorateNucleiExecution(request, plan)
-	// Then: the actual scan remains runnable and exposes the preflight failure as a warning.
-	if err != nil {
-		t.Fatalf("actual Nuclei scan was blocked by preview: %v", err)
-	}
-	if plan.nucleiPreview != nil || len(plan.extraWarnings) != 1 || !strings.Contains(plan.extraWarnings[0], "preflight") {
-		t.Fatalf("preview failure was not represented safely: preview=%+v warnings=%v", plan.nucleiPreview, plan.extraWarnings)
+
+	// Then: the dry run reports the preview error instead of pretending it completed.
+	if err == nil || !strings.Contains(err.Error(), "template database unavailable") {
+		t.Fatalf("dry-run preview failure was hidden: %v", err)
 	}
 }
 

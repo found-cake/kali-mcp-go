@@ -22,7 +22,6 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 		dto.ScanControlTimeout,
 		dto.ScanControlRateLimit,
 		dto.ScanControlConcurrency,
-		dto.ScanControlTimeoutRequestBudget,
 		dto.ScanControlMax5xx,
 		dto.ScanControlDryRun,
 	} {
@@ -42,7 +41,6 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 	for _, control := range []dto.ScanControl{
 		dto.ScanControlRateLimit,
 		dto.ScanControlConcurrency,
-		dto.ScanControlTimeoutRequestBudget,
 		dto.ScanControlMax5xx,
 	} {
 		controlSchema, ok := schema.Properties[string(control)]

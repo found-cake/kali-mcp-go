@@ -190,7 +190,7 @@ func TestNucleiTemplatePreviewUsesOnlyLocalSelectionFilters(t *testing.T) {
 		t.Fatalf("template count=%d want=2", count)
 	}
 	preview := SummarizeNucleiTemplateList(request, "one.yaml\ntwo.yaml\n")
-	if preview.TemplatesMatched != 2 || preview.SelectionSource != "tags" || preview.TargetRequestsSent != 0 || preview.RequestEstimateAvailable {
+	if preview.TemplatesMatched != 2 || preview.SelectionSource != "tags" || preview.TargetRequestsSent != 0 {
 		t.Fatalf("unexpected Nuclei preview metadata: %+v", preview)
 	}
 	if source := NucleiSelectionSource(dto.NucleiRequest{Tags: "exposure", Templates: []string{"http/test.yaml"}}); source != "templates_and_tags" {

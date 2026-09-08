@@ -9,8 +9,6 @@ func ScanControlMaximum(profile dto.SafetyProfile, control dto.ScanControl) int 
 			return 1000
 		case dto.ScanControlConcurrency:
 			return 100
-		case dto.ScanControlTimeoutRequestBudget:
-			return 1_000_000
 		case dto.ScanControlMax5xx:
 			return 1000
 		default:
@@ -23,8 +21,6 @@ func ScanControlMaximum(profile dto.SafetyProfile, control dto.ScanControl) int 
 		return limits.RateLimit
 	case dto.ScanControlConcurrency:
 		return limits.Concurrency
-	case dto.ScanControlTimeoutRequestBudget:
-		return limits.TimeoutRequestBudget
 	case dto.ScanControlMax5xx:
 		return limits.Max5xxResponses
 	default:

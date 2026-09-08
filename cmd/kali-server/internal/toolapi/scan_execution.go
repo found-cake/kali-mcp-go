@@ -61,7 +61,6 @@ type scanExecutionPlan struct {
 	controls              dto.ScanControlApplication
 	target                *dto.TargetProvenance
 	timeout               time.Duration
-	timeoutPlanning       *dto.TimeoutPlanning
 	release               func()
 	healthURL             string
 	request               any
@@ -134,53 +133,20 @@ func prepareScanExecution[T any](c fiber.Ctx, request T, args []string) (*scanEx
 		requestedTimeout = timeoutRequest.GetRequestTimeout()
 	}
 	timeout := commandTimeout(requestedTimeout)
-	timeoutPlanning := &dto.TimeoutPlanning{Source: dto.TimeoutSourceDefault}
 	extraWarnings := []string(nil)
 	if nucleiRequest, ok := any(request).(dto.NucleiRequest); ok && strings.TrimSpace(nucleiRequest.Tags) == "" && len(nucleiRequest.Templates) == 0 {
 		extraWarnings = append(extraWarnings, "Nuclei tags or templates were not selected; all locally installed safe templates may be evaluated")
-	}
-	if requestedTimeout > 0 {
-		timeoutPlanning.Source = dto.TimeoutSourceRequest
-	}
-	if effective.TimeoutRequestBudget > 0 && effective.RateLimit > 0 {
-		budgetSeconds := (effective.TimeoutRequestBudget + effective.RateLimit - 1) / effective.RateLimit
-		budgetTimeout := time.Duration(budgetSeconds) * time.Second
-		startupGrace := scanStartupGrace(controlledArgs[0])
-		estimatedTimeout := budgetTimeout + startupGrace
-		timeoutPlanning.RequestBudgetEstimateMS = budgetTimeout.Milliseconds()
-		timeoutPlanning.StartupGraceMS = startupGrace.Milliseconds()
-		if requestedTimeout == 0 {
-			timeout = estimatedTimeout
-			timeoutPlanning.Source = dto.TimeoutSourceRequestBudget
-		} else if controlledArgs[0] == "nuclei" && timeout < estimatedTimeout {
-			extraWarnings = append(extraWarnings, fmt.Sprintf(
-				"explicit Nuclei timeout %s is below the calculated request budget %s; partial timeout results are likely",
-				timeout, estimatedTimeout,
-			))
-		}
 	}
 	return &scanExecutionPlan{
 		callID: httpapi.CallID(c),
 		args:   controlledArgs, options: effective, target: provenance, timeout: timeout,
 		controls: tools.ScanControlApplication(args[0], options, effective),
 		release:  release, healthURL: effective.HealthURL, request: request, context: c.Context(),
-		artifactStore:   httpapi.ArtifactStore(c),
-		dryRun:          dryRun,
-		async:           async,
-		timeoutPlanning: timeoutPlanning,
-		extraWarnings:   extraWarnings,
+		artifactStore: httpapi.ArtifactStore(c),
+		dryRun:        dryRun,
+		async:         async,
+		extraWarnings: extraWarnings,
 	}, nil
-}
-
-func scanStartupGrace(tool string) time.Duration {
-	switch tool {
-	case "ffuf", "nmap":
-		return 5 * time.Second
-	case "nuclei", "sqlmap":
-		return 30 * time.Second
-	default:
-		return 10 * time.Second
-	}
 }
 
 func (p *scanExecutionPlan) annotate(result *executor.Result) {
@@ -194,7 +160,6 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.BrowserScreenshotPath = p.browserScreenshotPath
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
-	result.TimeoutPlanning = p.timeoutPlanning
 	result.Warnings = append(result.Warnings, p.extraWarnings...)
 	result.FinalizeProgress()
 	results.HideImplementationPaths(result, p.ephemeralPaths...)

@@ -27,13 +27,13 @@ func TestProbeTargetHealthRejectsCrossOriginRedirect(t *testing.T) {
 	}
 }
 
-func TestPrepareScanExecution_preserves_explicit_timeout_when_request_budget_is_shorter(t *testing.T) {
-	// Given: an explicit two-minute timeout and a forty-second request-budget estimate.
+func TestPrepareScanExecutionPreservesExplicitTimeout(t *testing.T) {
+	// Given: an explicit two-minute timeout and scan-rate metadata.
 	app := fiber.New()
 	var effectiveTimeout time.Duration
 	app.Get("/prepare", func(c fiber.Ctx) error {
 		plan, err := prepareScanExecution(c, dto.FFUFRequest{
-			ScanOptions: dto.ScanOptions{TimeoutRequestBudget: 200, RateLimit: 5},
+			ScanOptions: dto.ScanOptions{RateLimit: 5},
 			URL:         "https://example.com/FUZZ",
 			Timeout:     120,
 		}, []string{"ffuf", "-u", "https://example.com/FUZZ"})
@@ -62,14 +62,13 @@ func TestPrepareScanExecution_preserves_explicit_timeout_when_request_budget_is_
 	}
 }
 
-func TestPrepareScanExecution_adds_startup_grace_to_derived_request_budget(t *testing.T) {
-	// Given: an omitted timeout and a forty-second FFUF request-budget estimate.
+func TestPrepareScanExecutionUsesDefaultTimeoutWhenRequestTimeoutIsOmitted(t *testing.T) {
+	// Given: an omitted timeout and scan-rate metadata.
 	app := fiber.New()
 	var planTimeout time.Duration
-	var planning *dto.TimeoutPlanning
 	app.Get("/prepare", func(c fiber.Ctx) error {
 		plan, err := prepareScanExecution(c, dto.FFUFRequest{
-			ScanOptions: dto.ScanOptions{TimeoutRequestBudget: 200, RateLimit: 5},
+			ScanOptions: dto.ScanOptions{RateLimit: 5},
 			URL:         "https://example.com/FUZZ",
 		}, []string{"ffuf", "-u", "https://example.com/FUZZ"})
 		if err != nil {
@@ -77,11 +76,10 @@ func TestPrepareScanExecution_adds_startup_grace_to_derived_request_budget(t *te
 		}
 		defer plan.release()
 		planTimeout = plan.timeout
-		planning = plan.timeoutPlanning
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 
-	// When: the execution plan derives its timeout from the request budget.
+	// When: the execution plan is prepared.
 	request, err := http.NewRequest(http.MethodGet, "/prepare", nil)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
@@ -92,24 +90,20 @@ func TestPrepareScanExecution_adds_startup_grace_to_derived_request_budget(t *te
 	}
 	defer response.Body.Close()
 
-	// Then: FFUF gets five seconds of startup grace and the estimate remains non-authoritative.
-	if response.StatusCode != fiber.StatusNoContent || planTimeout != 45*time.Second {
-		t.Fatalf("unexpected derived timeout: status=%d timeout=%s", response.StatusCode, planTimeout)
-	}
-	if planning == nil || planning.Source != dto.TimeoutSourceRequestBudget || planning.RequestBudgetEstimateMS != 40000 || planning.StartupGraceMS != 5000 || planning.RequestBudgetHardLimit {
-		t.Fatalf("unexpected timeout planning metadata: %+v", planning)
+	// Then: the documented command timeout is used without deriving duration from request estimates.
+	if response.StatusCode != fiber.StatusNoContent || planTimeout != dto.DefaultTimeout {
+		t.Fatalf("unexpected default timeout: status=%d timeout=%s", response.StatusCode, planTimeout)
 	}
 }
 
-func TestPrepareScanExecution_warns_when_nuclei_timeout_is_below_estimated_budget(t *testing.T) {
-	// Given: an explicit one-minute Nuclei timeout with a one-hundred-second request estimate.
+func TestPrepareScanExecutionDoesNotEstimateNucleiDuration(t *testing.T) {
+	// Given: an explicit one-minute Nuclei timeout and native rate limit.
 	app := fiber.New()
 	var planTimeout time.Duration
-	var planning *dto.TimeoutPlanning
 	var warnings []string
 	app.Get("/prepare", func(c fiber.Ctx) error {
 		plan, err := prepareScanExecution(c, dto.NucleiRequest{
-			ScanOptions: dto.ScanOptions{TimeoutRequestBudget: 1000, RateLimit: 10},
+			ScanOptions: dto.ScanOptions{RateLimit: 10},
 			Target:      "https://example.com",
 			Tags:        "http",
 			Timeout:     60,
@@ -119,12 +113,11 @@ func TestPrepareScanExecution_warns_when_nuclei_timeout_is_below_estimated_budge
 		}
 		defer plan.release()
 		planTimeout = plan.timeout
-		planning = plan.timeoutPlanning
 		warnings = append(warnings, plan.extraWarnings...)
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 
-	// When: the execution plan compares the explicit timeout with its calculated budget.
+	// When: the execution plan is prepared.
 	request, err := http.NewRequest(http.MethodGet, "/prepare", nil)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
@@ -135,15 +128,12 @@ func TestPrepareScanExecution_warns_when_nuclei_timeout_is_below_estimated_budge
 	}
 	defer response.Body.Close()
 
-	// Then: the user limit remains authoritative while the shortfall is observable.
+	// Then: the user limit remains authoritative and no duration estimate is added.
 	if response.StatusCode != fiber.StatusNoContent || planTimeout != 60*time.Second {
 		t.Fatalf("explicit timeout changed: status=%d timeout=%s", response.StatusCode, planTimeout)
 	}
-	if planning == nil || planning.Source != dto.TimeoutSourceRequest || planning.RequestBudgetEstimateMS != 100000 || planning.StartupGraceMS != 30000 {
-		t.Fatalf("unexpected timeout planning metadata: %+v", planning)
-	}
-	if len(warnings) != 1 {
-		t.Fatalf("expected one timeout budget warning, got %v", warnings)
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected duration-estimate warning: %v", warnings)
 	}
 }
 

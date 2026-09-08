@@ -45,11 +45,9 @@ func CountNucleiTemplateList(output string) int {
 
 func SummarizeNucleiTemplateList(request dto.NucleiRequest, output string) dto.NucleiPreviewMetadata {
 	return dto.NucleiPreviewMetadata{
-		TemplatesMatched:         CountNucleiTemplateList(output),
-		SelectionSource:          NucleiSelectionSource(request),
-		TargetRequestsSent:       0,
-		RequestEstimateAvailable: false,
-		RequestEstimateReason:    "Nuclei templates can issue a variable number of requests based on runtime matching and workflows",
+		TemplatesMatched:   CountNucleiTemplateList(output),
+		SelectionSource:    NucleiSelectionSource(request),
+		TargetRequestsSent: 0,
 	}
 }
 

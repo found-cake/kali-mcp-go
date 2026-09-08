@@ -15,7 +15,6 @@ type ProgressMetadata struct {
 	ObservedOutputItems int           `json:"observed_output_items"`
 	LastObservedOutput  string        `json:"last_observed_output,omitempty"`
 	HTTPRequests        *int          `json:"http_requests"`
-	HTTPRequestBudget   int           `json:"http_request_budget"`
 	Checkpoint          string        `json:"checkpoint,omitempty"`
 	ResumeSupported     bool          `json:"resume_supported"`
 }

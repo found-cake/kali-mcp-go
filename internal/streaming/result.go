@@ -37,23 +37,21 @@ func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr, cal
 		RequestCountSource: result.RequestCountSource,
 		DurationMS:         result.Duration.Milliseconds(),
 		Execution: dto.ExecutionMetadata{
-			Tool:                 result.Tool,
-			ToolVersion:          result.ToolVersion,
-			ArgvRedacted:         result.ArgvRedacted,
-			StartedAt:            result.StartedAt,
-			EndedAt:              result.StartedAt.Add(result.Duration),
-			TimeoutMS:            result.Timeout.Milliseconds(),
-			TimeoutPlanning:      result.TimeoutPlanning,
-			ProcessStarted:       result.ProcessStarted,
-			GracefulStopMS:       result.GracefulStop.Milliseconds(),
-			DryRun:               result.DryRun,
-			Profile:              result.Policy.Profile,
-			TimeoutRequestBudget: result.Policy.TimeoutRequestBudget,
-			RateLimit:            result.Policy.RateLimit,
-			Concurrency:          result.Policy.Concurrency,
-			HealthURL:            result.Policy.HealthURL,
-			Max5xxResponses:      result.Policy.Max5xxResponses,
-			Controls:             result.Controls,
+			Tool:            result.Tool,
+			ToolVersion:     result.ToolVersion,
+			ArgvRedacted:    result.ArgvRedacted,
+			StartedAt:       result.StartedAt,
+			EndedAt:         result.StartedAt.Add(result.Duration),
+			TimeoutMS:       result.Timeout.Milliseconds(),
+			ProcessStarted:  result.ProcessStarted,
+			GracefulStopMS:  result.GracefulStop.Milliseconds(),
+			DryRun:          result.DryRun,
+			Profile:         result.Policy.Profile,
+			RateLimit:       result.Policy.RateLimit,
+			Concurrency:     result.Policy.Concurrency,
+			HealthURL:       result.Policy.HealthURL,
+			Max5xxResponses: result.Policy.Max5xxResponses,
+			Controls:        result.Controls,
 		},
 		Target:            result.Target,
 		SPABaseline:       result.SPABaseline,
@@ -69,17 +67,15 @@ func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr, cal
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr
 		doneEvent.Failure = &dto.FailureInfo{
-			Code:          result.FailureCode,
-			Message:       terminalErr,
-			Retryable:     result.TimedOut || result.Cancelled,
-			RetryEstimate: &dto.RetryEstimate{RequestBudget: result.Policy.TimeoutRequestBudget, TimeoutMS: result.Timeout.Milliseconds()},
+			Code:      result.FailureCode,
+			Message:   terminalErr,
+			Retryable: result.TimedOut || result.Cancelled,
 		}
 	} else if result.FailureCode != "" {
 		doneEvent.Failure = &dto.FailureInfo{
-			Code:          result.FailureCode,
-			Message:       result.FailureCode,
-			Retryable:     result.TimedOut || result.Cancelled,
-			RetryEstimate: &dto.RetryEstimate{RequestBudget: result.Policy.TimeoutRequestBudget, TimeoutMS: result.Timeout.Milliseconds()},
+			Code:      result.FailureCode,
+			Message:   result.FailureCode,
+			Retryable: result.TimedOut || result.Cancelled,
 		}
 	}
 	payload, err := json.Marshal(doneEvent)

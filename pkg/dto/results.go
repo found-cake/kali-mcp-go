@@ -54,52 +54,29 @@ const (
 	RunCancelled RunStatus = "cancelled"
 )
 
-type RetryEstimate struct {
-	RequestBudget int   `json:"request_budget"`
-	TimeoutMS     int64 `json:"timeout_ms"`
-}
-
 type FailureInfo struct {
-	Code            string         `json:"code"`
-	Message         string         `json:"message"`
-	Retryable       bool           `json:"retryable"`
-	ResumeSupported bool           `json:"resume_supported"`
-	RetryEstimate   *RetryEstimate `json:"retry_estimate,omitempty"`
-}
-
-type TimeoutSource string
-
-const (
-	TimeoutSourceDefault       TimeoutSource = "default"
-	TimeoutSourceRequest       TimeoutSource = "request"
-	TimeoutSourceRequestBudget TimeoutSource = "request_budget_estimate"
-)
-
-type TimeoutPlanning struct {
-	Source                  TimeoutSource `json:"source"`
-	RequestBudgetEstimateMS int64         `json:"request_budget_estimate_ms"`
-	StartupGraceMS          int64         `json:"startup_grace_ms"`
-	RequestBudgetHardLimit  bool          `json:"request_budget_hard_limit"`
+	Code            string `json:"code"`
+	Message         string `json:"message"`
+	Retryable       bool   `json:"retryable"`
+	ResumeSupported bool   `json:"resume_supported"`
 }
 
 type ExecutionMetadata struct {
-	Tool                 string                 `json:"tool"`
-	ToolVersion          string                 `json:"tool_version"`
-	ArgvRedacted         []string               `json:"argv_redacted"`
-	StartedAt            time.Time              `json:"started_at"`
-	EndedAt              time.Time              `json:"ended_at"`
-	TimeoutMS            int64                  `json:"timeout_ms"`
-	TimeoutPlanning      *TimeoutPlanning       `json:"timeout_planning,omitempty"`
-	ProcessStarted       bool                   `json:"process_started"`
-	GracefulStopMS       int64                  `json:"graceful_stop_ms"`
-	DryRun               bool                   `json:"dry_run"`
-	Profile              SafetyProfile          `json:"profile"`
-	TimeoutRequestBudget int                    `json:"timeout_request_budget"`
-	RateLimit            int                    `json:"rate_limit"`
-	Concurrency          int                    `json:"concurrency"`
-	HealthURL            string                 `json:"health_url"`
-	Max5xxResponses      int                    `json:"max_5xx_responses"`
-	Controls             ScanControlApplication `json:"controls"`
+	Tool            string                 `json:"tool"`
+	ToolVersion     string                 `json:"tool_version"`
+	ArgvRedacted    []string               `json:"argv_redacted"`
+	StartedAt       time.Time              `json:"started_at"`
+	EndedAt         time.Time              `json:"ended_at"`
+	TimeoutMS       int64                  `json:"timeout_ms"`
+	ProcessStarted  bool                   `json:"process_started"`
+	GracefulStopMS  int64                  `json:"graceful_stop_ms"`
+	DryRun          bool                   `json:"dry_run"`
+	Profile         SafetyProfile          `json:"profile"`
+	RateLimit       int                    `json:"rate_limit"`
+	Concurrency     int                    `json:"concurrency"`
+	HealthURL       string                 `json:"health_url"`
+	Max5xxResponses int                    `json:"max_5xx_responses"`
+	Controls        ScanControlApplication `json:"controls"`
 }
 
 type ScanControlApplication struct {

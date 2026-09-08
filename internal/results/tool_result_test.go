@@ -1,6 +1,8 @@
 package results
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,5 +63,27 @@ func TestToToolResultPreservesExecutionSemantics(t *testing.T) {
 				t.Fatalf("unexpected end time: %s", got.Execution.EndedAt)
 			}
 		})
+	}
+}
+
+func TestToToolResultDoesNotEstimateRetryCost(t *testing.T) {
+	// Given: a timed-out execution that callers may retry.
+	result := executor.Result{
+		ReturnCode:  -1,
+		TimedOut:    true,
+		FailureCode: "timeout",
+		StartedAt:   time.Now(),
+		Timeout:     30 * time.Second,
+	}
+
+	// When: the public result is serialized.
+	payload, err := json.Marshal(ToToolResult(&result))
+	if err != nil {
+		t.Fatalf("marshal tool result: %v", err)
+	}
+
+	// Then: retryability is reported without predicting a future retry's cost.
+	if strings.Contains(string(payload), "retry_estimate") {
+		t.Fatalf("result still exposes retry cost estimation: %s", payload)
 	}
 }

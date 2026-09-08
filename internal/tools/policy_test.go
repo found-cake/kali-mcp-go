@@ -140,7 +140,7 @@ func TestEffectiveScanOptionsAppliesOnlyEnforceableProfileDefaults(t *testing.T)
 	if err != nil {
 		t.Fatalf("apply WhatWeb profile: %v", err)
 	}
-	if whatweb.RateLimit != 0 || whatweb.Concurrency != 0 || whatweb.TimeoutRequestBudget != 0 || whatweb.Max5xxResponses != 0 {
+	if whatweb.RateLimit != 0 || whatweb.Concurrency != 0 || whatweb.Max5xxResponses != 0 {
 		t.Fatalf("unsupported defaults were presented as effective: %+v", whatweb)
 	}
 
@@ -148,22 +148,25 @@ func TestEffectiveScanOptionsAppliesOnlyEnforceableProfileDefaults(t *testing.T)
 	if err != nil {
 		t.Fatalf("apply Nmap profile: %v", err)
 	}
-	if nmap.RateLimit != 10 || nmap.TimeoutRequestBudget != 2000 || nmap.Concurrency != 0 || nmap.Max5xxResponses != 0 {
+	if nmap.RateLimit != 10 || nmap.Concurrency != 0 || nmap.Max5xxResponses != 0 {
 		t.Fatalf("Nmap profile did not preserve only enforceable defaults: %+v", nmap)
 	}
 }
 
 func TestScanControlApplicationReportsEnforcementMethod(t *testing.T) {
-	requested := dto.ScanOptions{TimeoutRequestBudget: 50}
-	effective := dto.ScanOptions{RateLimit: 10, Concurrency: 2, TimeoutRequestBudget: 50}
+	requested := dto.ScanOptions{RateLimit: 4, Concurrency: 1}
+	effective := dto.ScanOptions{RateLimit: 4, Concurrency: 1}
 	application := ScanControlApplication("ffuf", requested, effective)
 
 	methods := make(map[dto.ScanControl]dto.AppliedScanControl)
 	for _, control := range application.Controls {
 		methods[control.Control] = control
 	}
-	if methods[dto.ScanControlTimeoutRequestBudget].Enforcement != dto.ControlDerivedTimeout || !methods[dto.ScanControlTimeoutRequestBudget].Applied {
-		t.Fatalf("max request enforcement is not explicit: %+v", application)
+	if methods[dto.ScanControlRateLimit].Enforcement != dto.ControlNativeCLI || !methods[dto.ScanControlRateLimit].Applied {
+		t.Fatalf("rate-limit enforcement is not explicit: %+v", application)
+	}
+	if methods[dto.ScanControlConcurrency].Enforcement != dto.ControlNativeCLI || !methods[dto.ScanControlConcurrency].Applied {
+		t.Fatalf("concurrency enforcement is not explicit: %+v", application)
 	}
 	if _, advertised := methods[dto.ScanControlMax5xx]; advertised {
 		t.Fatalf("FFUF must not advertise output-observed 5xx enforcement: %+v", application)
