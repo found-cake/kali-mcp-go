@@ -18,6 +18,9 @@ const (
 )
 
 func (s *Store) ReadPage(request dto.ArtifactReadRequest, now time.Time) (dto.ArtifactReadResult, error) {
+	if (request.Section == "" || request.Section == dto.ArtifactSectionRaw) && request.StartLine == 0 && request.LineCount == 0 {
+		return s.readRawBytePage(request, now)
+	}
 	reference, payload, err := s.Read(request.ArtifactID, now)
 	if err != nil {
 		return dto.ArtifactReadResult{}, err

@@ -78,21 +78,33 @@ func (s *Store) Save(content Content, now time.Time) (dto.ArtifactRef, error) {
 }
 
 func (s *Store) Read(id string, now time.Time) (dto.ArtifactRef, []byte, error) {
+	artifact, err := s.lookup(id, now)
+	if err != nil {
+		return dto.ArtifactRef{}, nil, ErrNotFound
+	}
+	payload, err := os.ReadFile(artifact.path)
+	if err != nil {
+		s.forget(id)
+		return dto.ArtifactRef{}, nil, ErrNotFound
+	}
+	return artifact.reference, payload, nil
+}
+
+func (s *Store) lookup(id string, now time.Time) (storedArtifact, error) {
 	s.prune(now)
 	s.mu.Lock()
 	artifact, ok := s.items[id]
 	s.mu.Unlock()
 	if !ok {
-		return dto.ArtifactRef{}, nil, ErrNotFound
+		return storedArtifact{}, ErrNotFound
 	}
-	payload, err := os.ReadFile(artifact.path)
-	if err != nil {
-		s.mu.Lock()
-		delete(s.items, id)
-		s.mu.Unlock()
-		return dto.ArtifactRef{}, nil, ErrNotFound
-	}
-	return artifact.reference, payload, nil
+	return artifact, nil
+}
+
+func (s *Store) forget(id string) {
+	s.mu.Lock()
+	delete(s.items, id)
+	s.mu.Unlock()
 }
 
 func (s *Store) Close() error {
