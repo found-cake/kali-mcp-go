@@ -59,15 +59,15 @@ const (
 )
 
 type ScanLimits struct {
-	RateLimit       int `json:"rate_limit"`
-	Concurrency     int `json:"concurrency"`
-	Max5xxResponses int `json:"max_5xx_responses"`
+	RateLimit       int `json:"rate_limit" jsonschema:"profile ceiling for tools whose supported_controls include rate_limit; not a guaranteed applied default"`
+	Concurrency     int `json:"concurrency" jsonschema:"profile ceiling for tools whose supported_controls include concurrency; not a guaranteed applied default"`
+	Max5xxResponses int `json:"max_5xx_responses" jsonschema:"profile ceiling for tools whose supported_controls include max_5xx_responses; not a guaranteed applied default"`
 }
 
 type ScanProfileCapability struct {
 	Profile SafetyProfile `json:"profile"`
 	Tools   []string      `json:"tools"`
-	Limits  ScanLimits    `json:"limits"`
+	Limits  ScanLimits    `json:"limits" jsonschema:"profile ceilings; inspect each tool's supported_controls and execution.controls for actual applicability"`
 }
 
 type ScanToolCapability struct {

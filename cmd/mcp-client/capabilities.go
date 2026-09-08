@@ -12,7 +12,7 @@ import (
 func registerScanCapabilities(registration toolRegistration) {
 	mcp.AddTool(registration.server, &mcp.Tool{
 		Name:        "get_scan_capabilities",
-		Description: "Inspect safety-profile compatibility, bounded coverage, target input formats, supported controls, and effective default wordlists before invoking tools. Safe profiles and a root-only target do not imply exhaustive application coverage.",
+		Description: "Inspect safety-profile compatibility, bounded coverage, target input formats, supported controls, and effective default wordlists before invoking tools. Profile limits are ceilings and apply only when the selected tool lists that control. Safe profiles and a root-only target do not imply exhaustive application coverage.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, dto.ScanCapabilitiesResult, error) {
 		result, err := registration.kali.ScanCapabilities(ctx)
 		if err != nil {
@@ -33,7 +33,7 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 	for _, profile := range result.Profiles {
 		fmt.Fprintf(
 			&output,
-			"- %s: tools=%s limits=rate_limit=%d,concurrency=%d,max_5xx_responses=%d\n",
+			"- %s: tools=%s profile_ceilings=rate_limit=%d,concurrency=%d,max_5xx_responses=%d\n",
 			profile.Profile, strings.Join(profile.Tools, ","), profile.Limits.RateLimit,
 			profile.Limits.Concurrency, profile.Limits.Max5xxResponses,
 		)

@@ -17,7 +17,7 @@ type ScanOptions struct {
 	RateLimit         int           `json:"rate_limit,omitempty" jsonschema:"requests-per-second value passed to the tool's native limiter; inspect capability enforcement because Nuclei applies a bursty average throttle rather than a rolling-window hard limit; 0 means unset, not unlimited"`
 	Concurrency       int           `json:"concurrency,omitempty" jsonschema:"maximum tool-level concurrency when supported; 0 means unset, not unlimited"`
 	HealthURL         string        `json:"health_url,omitempty" jsonschema:"optional same-service target health URL checked before and after the scan; cross-origin redirects are rejected"`
-	Max5xxResponses   int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when supported; 0 means unset, not unlimited"`
+	Max5xxResponses   int           `json:"max_5xx_responses,omitempty" jsonschema:"stop threshold for observed target 5xx responses when the selected tool supports it; 0 means unset or unsupported, not unlimited"`
 	RedactValues      []string      `json:"redact_values,omitempty" jsonschema:"optional exact values to replace in output and artifacts; all other content is preserved verbatim"`
 }
 

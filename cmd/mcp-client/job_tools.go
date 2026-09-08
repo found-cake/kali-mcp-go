@@ -49,7 +49,7 @@ func registerAsyncTool(server *mcp.Server, kali *kaliclient.Client, schemas tool
 	}
 	tool := &mcp.Tool{
 		Name:        "run_tool_async",
-		Description: "Start any registered executable tool as a new asynchronous run. Pass the exact arguments accepted by that dedicated tool. Use this before a likely timeout or to retry from the beginning after a synchronous timeout.",
+		Description: "Start any registered executable tool as a new asynchronous run. Async avoids the MCP host deadline but preserves arguments.timeout. For a broad low-rate scan, set that timeout high enough to finish. After a process timeout, start a new run with a longer timeout or narrower scope; this is not resume.",
 		InputSchema: asyncToolInputSchema(), OutputSchema: jobResponseOutputSchema(),
 	}
 	mcp.AddTool(server, tool, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.AsyncToolRequest) (*mcp.CallToolResult, dto.JobResponse, error) {

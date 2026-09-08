@@ -9,6 +9,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+const outerTimeoutDescription = "Outer tool-process deadline in seconds (0 = 300), separate from rate and concurrency. Increase it for broad low-rate scans or reduce scope; use run_tool_async to avoid an MCP host deadline, which does not override this value. A timeout means incomplete coverage."
+
 func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, error) {
 	schema, err := jsonschema.For[T](nil)
 	if err != nil {
@@ -20,6 +22,9 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 		statusSchema := schema.Properties["true_status_code"]
 		statusSchema.Minimum = &minimumStatus
 		statusSchema.Maximum = &maximumStatus
+	}
+	if timeoutSchema, ok := schema.Properties[string(dto.ScanControlTimeout)]; ok {
+		timeoutSchema.Description = outerTimeoutDescription
 	}
 	supported := make(map[dto.ScanControl]bool, len(definition.Controls))
 	for _, control := range definition.Controls {
