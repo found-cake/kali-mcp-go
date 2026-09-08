@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/found-cake/kali-mcp-go/internal/executor"
+	"github.com/found-cake/kali-mcp-go/internal/results"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
@@ -36,33 +37,17 @@ func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr, cal
 		HTTPRequests:       result.HTTPRequests,
 		RequestCountSource: result.RequestCountSource,
 		DurationMS:         result.Duration.Milliseconds(),
-		Execution: dto.ExecutionMetadata{
-			Tool:            result.Tool,
-			ToolVersion:     result.ToolVersion,
-			ArgvRedacted:    result.ArgvRedacted,
-			StartedAt:       result.StartedAt,
-			EndedAt:         result.StartedAt.Add(result.Duration),
-			TimeoutMS:       result.Timeout.Milliseconds(),
-			ProcessStarted:  result.ProcessStarted,
-			GracefulStopMS:  result.GracefulStop.Milliseconds(),
-			DryRun:          result.DryRun,
-			Profile:         result.Policy.Profile,
-			RateLimit:       result.Policy.RateLimit,
-			Concurrency:     result.Policy.Concurrency,
-			HealthURL:       result.Policy.HealthURL,
-			Max5xxResponses: result.Policy.Max5xxResponses,
-			Controls:        result.Controls,
-		},
-		Target:            result.Target,
-		SPABaseline:       result.SPABaseline,
-		FalsePositiveRisk: result.FalsePositiveRisk,
-		Warnings:          result.Warnings,
-		Artifacts:         result.Artifacts,
-		Progress:          result.Progress,
-		JWTAnalysis:       result.JWTAnalysis,
-		SQLMapAnalysis:    result.SQLMapAnalysis,
-		NucleiPreview:     result.NucleiPreview,
-		Evidence:          result.Evidence,
+		Execution:          results.ExecutionMetadataFromResult(result),
+		Target:             result.Target,
+		SPABaseline:        result.SPABaseline,
+		FalsePositiveRisk:  result.FalsePositiveRisk,
+		Warnings:           result.Warnings,
+		Artifacts:          result.Artifacts,
+		Progress:           result.Progress,
+		JWTAnalysis:        result.JWTAnalysis,
+		SQLMapAnalysis:     result.SQLMapAnalysis,
+		NucleiPreview:      result.NucleiPreview,
+		Evidence:           result.Evidence,
 	}
 	if terminalErr := terminalStreamError(result, streamedStderr); terminalErr != "" {
 		doneEvent.Error = terminalErr
