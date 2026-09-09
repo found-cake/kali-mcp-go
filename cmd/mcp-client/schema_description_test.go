@@ -2,10 +2,47 @@ package main
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestRateLimitSchemaKeepsNucleiSemanticsToolSpecific(t *testing.T) {
+	// Given: scanner schemas that share the common rate-limit input.
+	toolNames := []string{"nmap_scan", "ffuf_scan"}
+
+	// When: an orchestrator inspects the rate-limit descriptions.
+	for _, toolName := range toolNames {
+		properties, ok := schemaProperties(listedToolByName(t, toolName).InputSchema)
+		if !ok {
+			t.Fatalf("%s has an invalid input schema", toolName)
+		}
+		rateLimit, ok := properties["rate_limit"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s has no rate_limit schema", toolName)
+		}
+		description, _ := rateLimit["description"].(string)
+
+		// Then: a non-Nuclei scanner does not inherit Nuclei-specific routing guidance.
+		if strings.Contains(description, "Nuclei") {
+			t.Fatalf("%s rate_limit description contains Nuclei-specific guidance: %q", toolName, description)
+		}
+	}
+
+	properties, ok := schemaProperties(listedToolByName(t, "nuclei_scan").InputSchema)
+	if !ok {
+		t.Fatal("nuclei_scan has an invalid input schema")
+	}
+	rateLimit, ok := properties["rate_limit"].(map[string]any)
+	if !ok {
+		t.Fatal("nuclei_scan has no rate_limit schema")
+	}
+	description, _ := rateLimit["description"].(string)
+	if !strings.Contains(description, "Nuclei") {
+		t.Fatalf("nuclei_scan rate_limit description lacks its tool-specific routing marker: %q", description)
+	}
+}
 
 func TestJWTInputSchemaExposesOfflineAndLiveVerificationInputs(t *testing.T) {
 	// Given: the JWT tool schema exposed to an MCP orchestrator.
