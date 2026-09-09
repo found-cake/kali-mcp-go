@@ -149,7 +149,7 @@ func classifyFFUFFinding(result *dto.ToolResult) {
 
 func classifyFeroxbusterFinding(result *dto.ToolResult, _ string) {
 	errors, _, _, hasStats := parseFeroxbusterRuntimeStatistics(result.Stdout + "\n" + result.Stderr)
-	if feroxbusterReportedFinding(result.Stdout) {
+	if len(result.DiscoveredPaths) > 0 {
 		result.FindingStatus = dto.FindingsDetected
 		if hasStats && errors > 0 {
 			result.PartialResults = true
