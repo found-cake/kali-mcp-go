@@ -204,7 +204,7 @@ func textResult(name string, r *dto.ToolResult, err error) (*mcp.CallToolResult,
 	structured := classifyToolResult(name, *r)
 	structured = compactToolResult(name, structured)
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: structured.Format()}},
+		Content: []mcp.Content{&mcp.TextContent{Text: formatToolResultText(name, structured)}},
 		IsError: structured.ExecutionStatus != dto.ExecutionSucceeded,
 	}, structured, nil
 }

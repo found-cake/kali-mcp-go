@@ -130,7 +130,8 @@ func jobMCPResult(response *dto.JobResponse, operationErr error) (*mcp.CallToolR
 	}
 	text := string(encoded)
 	if result != nil {
-		text = result.Format()
+		toolName, _ := toolmeta.MCPToolForRuntime(result.Execution.Tool)
+		text = formatToolResultText(toolName, *result)
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: text}},
