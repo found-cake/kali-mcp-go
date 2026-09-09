@@ -101,7 +101,9 @@ func registerTools(srv *mcp.Server, kali *kaliclient.Client) error {
 	if err := registerAsyncJobs(srv, kali, registration.schemas); err != nil {
 		return err
 	}
-	registerScanCapabilities(registration)
+	if err := registerScanCapabilities(registration); err != nil {
+		return err
+	}
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "server_health",

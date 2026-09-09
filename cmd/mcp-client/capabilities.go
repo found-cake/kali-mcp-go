@@ -5,17 +5,28 @@ import (
 	"fmt"
 	"strings"
 
+	toolmeta "github.com/found-cake/kali-mcp-go/internal/tools"
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func registerScanCapabilities(registration toolRegistration) {
+func registerScanCapabilities(registration toolRegistration) error {
+	schema, err := scanCapabilitiesInputSchema()
+	if err != nil {
+		return err
+	}
+	description := applyToolInputExample("get_scan_capabilities", "Inspect safety-profile compatibility, bounded coverage, target input formats, supported controls, and effective default wordlists before invoking tools. Set tool_name to return one compact tool capability; omit it for the complete registry. Profile limits are ceilings and apply only when the selected tool lists that control. Safe profiles and a root-only target do not imply exhaustive application coverage.", schema)
 	mcp.AddTool(registration.server, &mcp.Tool{
 		Name:        "get_scan_capabilities",
-		Description: "Inspect safety-profile compatibility, bounded coverage, target input formats, supported controls, and effective default wordlists before invoking tools. Profile limits are ceilings and apply only when the selected tool lists that control. Safe profiles and a root-only target do not imply exhaustive application coverage.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, dto.ScanCapabilitiesResult, error) {
+		Description: description,
+		InputSchema: schema,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.ScanCapabilitiesRequest) (*mcp.CallToolResult, dto.ScanCapabilitiesResult, error) {
 		result, err := registration.kali.ScanCapabilities(ctx)
 		if err != nil {
+			return nil, dto.ScanCapabilitiesResult{}, err
+		}
+		if err := filterScanCapabilities(result, request.ToolName); err != nil {
 			return nil, dto.ScanCapabilitiesResult{}, err
 		}
 		if err := attachCapabilityInputSchemas(result, registration.schemas); err != nil {
@@ -25,6 +36,29 @@ func registerScanCapabilities(registration toolRegistration) {
 			Content: []mcp.Content{&mcp.TextContent{Text: formatScanCapabilities(result)}},
 		}, *result, nil
 	})
+	return nil
+}
+
+func scanCapabilitiesInputSchema() (*jsonschema.Schema, error) {
+	schema, err := jsonschema.For[dto.ScanCapabilitiesRequest](nil)
+	if err != nil {
+		return nil, fmt.Errorf("infer get_scan_capabilities input schema: %w", err)
+	}
+	schema.Properties["tool_name"].Enum = stringEnums(toolmeta.ExecutableToolNames())
+	return schema, nil
+}
+
+func filterScanCapabilities(result *dto.ScanCapabilitiesResult, toolName string) error {
+	if toolName == "" {
+		return nil
+	}
+	for _, tool := range result.Tools {
+		if tool.Tool == toolName {
+			result.Tools = []dto.ScanToolCapability{tool}
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown capability tool_name %q", toolName)
 }
 
 func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {

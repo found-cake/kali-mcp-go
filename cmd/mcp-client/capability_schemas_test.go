@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 
@@ -13,6 +14,48 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestScanCapabilitiesInputSchemaExposesToolFilter(t *testing.T) {
+	t.Parallel()
+
+	// Given: the executable tool registry.
+	toolNames := toolmeta.ExecutableToolNames()
+
+	// When: the capability tool input schema is generated.
+	schema, err := scanCapabilitiesInputSchema()
+
+	// Then: callers can select exactly one registered executable tool.
+	if err != nil {
+		t.Fatalf("build capability input schema: %v", err)
+	}
+	property, found := schema.Properties["tool_name"]
+	if !found {
+		t.Fatal("get_scan_capabilities schema is missing tool_name")
+	}
+	for _, toolName := range toolNames {
+		if !slices.Contains(property.Enum, any(toolName)) {
+			t.Fatalf("tool_name enum is missing %s", toolName)
+		}
+	}
+}
+
+func TestFilterScanCapabilitiesReturnsRequestedTool(t *testing.T) {
+	t.Parallel()
+
+	// Given: the complete capability registry.
+	result := toolmeta.ScanCapabilities()
+
+	// When: one tool is selected for a compact response.
+	err := filterScanCapabilities(&result, "feroxbuster_scan")
+
+	// Then: only that tool and its eventual input schema remain in the large tool list.
+	if err != nil {
+		t.Fatalf("filter capabilities: %v", err)
+	}
+	if len(result.Tools) != 1 || result.Tools[0].Tool != "feroxbuster_scan" {
+		t.Fatalf("unexpected filtered tools: %+v", result.Tools)
+	}
+}
 
 func TestAttachCapabilityInputSchemasUsesRegisteredToolSchemas(t *testing.T) {
 	t.Parallel()

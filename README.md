@@ -494,7 +494,7 @@ For a loopback target, call `resolve_target`, choose one returned candidate, and
 
 Dedicated scan requests accept a `profile` plus optional `timeout`, `rate_limit`, `concurrency`, `health_url`, and `max_5xx_responses` controls when supported by that tool. Profile limits are ceilings rather than guaranteed defaults; the selected tool's `supported_controls` and the result's `execution.controls` identify actual applicability. The MCP server executes the selected scope and reports actual duration and observed request counts; it does not predict scan duration or derive timeout values from estimated request counts. Available profiles are:
 
-Call `get_scan_capabilities` before composing a scan when profile compatibility, exact input fields, or a wordlist path is uncertain. Its response uses MCP-facing tool names, includes each tool's registered schema as `input_schema_json`, reports the effective environment-configured defaults, and marks missing wordlist files unavailable. An explicitly supplied missing wordlist remains an error and is never silently replaced.
+Call `get_scan_capabilities` before composing a scan when profile compatibility, exact input fields, or a wordlist path is uncertain. Pass `tool_name` to return one compact tool capability or omit it for the complete registry. Its response uses MCP-facing tool names, includes each returned tool's registered schema as `input_schema_json`, reports the effective environment-configured defaults, and marks missing wordlist files unavailable. An explicitly supplied missing wordlist remains an error and is never silently replaced.
 
 | Profile | Intended use |
 |---|---|

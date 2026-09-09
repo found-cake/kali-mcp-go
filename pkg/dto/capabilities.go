@@ -106,3 +106,7 @@ type ScanCapabilitiesResult struct {
 	Tools     []ScanToolCapability    `json:"tools"`
 	Wordlists []WordlistCapability    `json:"wordlists"`
 }
+
+type ScanCapabilitiesRequest struct {
+	ToolName string `json:"tool_name,omitempty" jsonschema:"optional executable MCP tool name used to return one compact tool capability; omit for the complete registry"`
+}
