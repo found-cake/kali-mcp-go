@@ -55,10 +55,11 @@ const (
 )
 
 type FailureInfo struct {
-	Code            string `json:"code"`
-	Message         string `json:"message"`
-	Retryable       bool   `json:"retryable"`
-	ResumeSupported bool   `json:"resume_supported"`
+	Code            string            `json:"code"`
+	Message         string            `json:"message"`
+	Retryable       bool              `json:"retryable"`
+	ResumeSupported bool              `json:"resume_supported"`
+	Capacity        *CapacityMetadata `json:"capacity,omitempty"`
 }
 
 type ExecutionMetadata struct {

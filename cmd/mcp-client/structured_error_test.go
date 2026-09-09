@@ -47,7 +47,7 @@ func TestTextResultReturnsStructuredServerFailure(t *testing.T) {
 	requestError := &kaliclient.ServerError{
 		StatusCode: http.StatusServiceUnavailable,
 		CallID:     "call_server_failure",
-		Body:       `{"error":"scan capacity exceeded"}`,
+		Body:       `{"error":"target scan capacity exceeded","code":"target_capacity_exceeded","capacity":{"scope":"target","used":3,"limit":3,"requested_weight":1}}`,
 	}
 
 	mcpResult, structured, err := textResult("nuclei_scan", nil, requestError)
@@ -57,8 +57,11 @@ func TestTextResultReturnsStructuredServerFailure(t *testing.T) {
 	if mcpResult == nil || !mcpResult.IsError || structured.CallID != "call_server_failure" {
 		t.Fatalf("server failure was not structured: result=%#v structured=%+v", mcpResult, structured)
 	}
-	if structured.Failure == nil || structured.Failure.Code != "server_error" || structured.ExecutionStatus != dto.ExecutionFailed {
+	if structured.Failure == nil || structured.Failure.Code != dto.FailureCodeTargetCapacityExceeded || structured.ExecutionStatus != dto.ExecutionFailed {
 		t.Fatalf("unexpected server failure envelope: %+v", structured)
+	}
+	if structured.Failure.Capacity == nil || structured.Failure.Capacity.Scope != dto.CapacityScopeTarget || structured.Failure.Capacity.Used != 3 || structured.Failure.Capacity.Limit != 3 || structured.Failure.Capacity.RequestedWeight != 1 {
+		t.Fatalf("capacity metadata was not preserved: %+v", structured.Failure)
 	}
 }
 

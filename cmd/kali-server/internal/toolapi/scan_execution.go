@@ -48,8 +48,20 @@ func scanPreparationError(c fiber.Ctx, err error) error {
 	if errors.Is(err, httpapi.ErrCallIDAlreadyActive) {
 		return httpapi.Conflict(c, err.Error())
 	}
-	if errors.Is(err, admission.ErrGlobalCapacityExceeded) || errors.Is(err, admission.ErrTargetCapacityExceeded) {
-		return httpapi.ServiceUnavailable(c, err.Error())
+	var capacityErr *admission.CapacityError
+	if errors.As(err, &capacityErr) {
+		code := dto.FailureCodeGlobalCapacityExceeded
+		scope := dto.CapacityScopeGlobal
+		if capacityErr.Scope() == admission.CapacityScopeTarget {
+			code = dto.FailureCodeTargetCapacityExceeded
+			scope = dto.CapacityScopeTarget
+		}
+		return c.Status(fiber.StatusServiceUnavailable).JSON(dto.ErrorResponse{
+			Error: err.Error(), Code: code,
+			Capacity: &dto.CapacityMetadata{
+				Scope: scope, Used: capacityErr.Used(), Limit: capacityErr.Limit(), RequestedWeight: capacityErr.RequestedWeight(),
+			},
+		})
 	}
 	return httpapi.BadRequest(c, err.Error())
 }

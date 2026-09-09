@@ -29,6 +29,55 @@ func TestSchedulerEnforcesGlobalAndPerTargetCapacity(t *testing.T) {
 	}
 }
 
+func TestSchedulerTargetCapacityErrorReportsRejectedLease(t *testing.T) {
+	// Given: one target already consuming its entire weighted capacity.
+	scheduler := NewScheduler(4, 3)
+	release, err := scheduler.Acquire("target-a", 3)
+	if err != nil {
+		t.Fatalf("acquire target capacity: %v", err)
+	}
+	defer release()
+
+	// When: another lease is requested for that target.
+	_, err = scheduler.Acquire("target-a", 1)
+
+	// Then: the rejection exposes the scope and exact capacity values.
+	var capacityErr *CapacityError
+	if !errors.As(err, &capacityErr) {
+		t.Fatalf("capacity error = %v, want *CapacityError", err)
+	}
+	if capacityErr.Scope() != CapacityScopeTarget || capacityErr.Used() != 3 || capacityErr.Limit() != 3 || capacityErr.RequestedWeight() != 1 {
+		t.Fatalf("unexpected target capacity metadata: %+v", capacityErr)
+	}
+}
+
+func TestSchedulerGlobalCapacityErrorReportsRejectedLease(t *testing.T) {
+	// Given: independent targets already consuming the global weighted capacity.
+	scheduler := NewScheduler(4, 3)
+	releaseFirst, err := scheduler.Acquire("target-a", 3)
+	if err != nil {
+		t.Fatalf("acquire first target: %v", err)
+	}
+	defer releaseFirst()
+	releaseSecond, err := scheduler.Acquire("target-b", 1)
+	if err != nil {
+		t.Fatalf("acquire second target: %v", err)
+	}
+	defer releaseSecond()
+
+	// When: another lease would exceed the global capacity.
+	_, err = scheduler.Acquire("target-c", 1)
+
+	// Then: the rejection exposes the scope and exact capacity values.
+	var capacityErr *CapacityError
+	if !errors.As(err, &capacityErr) {
+		t.Fatalf("capacity error = %v, want *CapacityError", err)
+	}
+	if capacityErr.Scope() != CapacityScopeGlobal || capacityErr.Used() != 4 || capacityErr.Limit() != 4 || capacityErr.RequestedWeight() != 1 {
+		t.Fatalf("unexpected global capacity metadata: %+v", capacityErr)
+	}
+}
+
 func TestSchedulerReleaseIsIdempotentAndRestoresCapacity(t *testing.T) {
 	// Given: a full scheduler lease for one target.
 	scheduler := NewScheduler(3, 3)

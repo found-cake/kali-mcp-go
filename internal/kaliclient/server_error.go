@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 type ServerError struct {
@@ -20,15 +22,14 @@ func (e *ServerError) Error() string {
 	return fmt.Sprintf("server error %d (call_id %s): %s", e.StatusCode, e.CallID, e.Body)
 }
 
-func (e *ServerError) Message() string {
-	var payload struct {
-		Error string `json:"error"`
-	}
+func (e *ServerError) Details() dto.ErrorResponse {
+	var payload dto.ErrorResponse
 	if err := json.Unmarshal([]byte(e.Body), &payload); err == nil && strings.TrimSpace(payload.Error) != "" {
-		return strings.TrimSpace(payload.Error)
+		payload.Error = strings.TrimSpace(payload.Error)
+		return payload
 	}
 	if body := strings.TrimSpace(e.Body); body != "" {
-		return body
+		return dto.ErrorResponse{Error: body}
 	}
-	return http.StatusText(e.StatusCode)
+	return dto.ErrorResponse{Error: http.StatusText(e.StatusCode)}
 }

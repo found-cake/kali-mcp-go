@@ -37,11 +37,20 @@ func structuredErrorResult(name string, partial *dto.ToolResult, err error) (*mc
 		result.ClassificationReason = "client_cancelled"
 		result.Failure = &dto.FailureInfo{Code: "client_cancelled", Message: err.Error(), Retryable: true}
 	case errors.As(err, &serverError):
+		details := serverError.Details()
 		result.CallID = serverError.CallID
-		result.Stderr = serverError.Message()
+		result.Stderr = details.Error
 		result.ClassificationReason = "server_request_failed"
+		failureCode := "server_error"
+		if details.Code != "" {
+			failureCode = details.Code
+		}
 		result.Failure = &dto.FailureInfo{
-			Code: "server_error", Message: serverError.Message(), Retryable: serverError.StatusCode >= http.StatusInternalServerError,
+			Code: failureCode, Message: details.Error, Retryable: serverError.StatusCode >= http.StatusInternalServerError,
+			Capacity: details.Capacity,
+		}
+		if failureCode == dto.FailureCodeTargetCapacityExceeded || failureCode == dto.FailureCodeGlobalCapacityExceeded {
+			result.ClassificationReason = "capacity_exceeded"
 		}
 		if serverError.StatusCode == http.StatusBadRequest {
 			result.FindingStatus = dto.FindingsInconclusive
