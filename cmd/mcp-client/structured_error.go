@@ -68,6 +68,10 @@ func structuredErrorResult(name string, partial *dto.ToolResult, err error) (*mc
 		result.RequestCountSource = classified.RequestCountSource
 		result.Warnings = classified.Warnings
 		result.NucleiRuntime = classified.NucleiRuntime
+		result.NucleiFindings = classified.NucleiFindings
+		result.NucleiFindingsTotal = classified.NucleiFindingsTotal
+		result.NucleiFindingsTruncated = classified.NucleiFindingsTruncated
+		result.JWTLiveAnalysis = classified.JWTLiveAnalysis
 		result.DiscoveredPaths = classified.DiscoveredPaths
 	}
 	result.Finalize()

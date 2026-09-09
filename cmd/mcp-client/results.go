@@ -8,6 +8,12 @@ import (
 
 func classifyToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 	result.FindingTypes = findingTypesForTool(toolName)
+	if toolName == "jwt_analyze" {
+		attachJWTLiveAnalysis(&result)
+	}
+	if toolName == "nuclei_scan" {
+		attachNucleiFindings(&result)
+	}
 	attachReportedRequestCount(toolName, &result)
 	switch toolName {
 	case "dirb_scan":

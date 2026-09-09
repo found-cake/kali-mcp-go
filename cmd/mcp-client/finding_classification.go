@@ -72,7 +72,9 @@ func classifySuccessfulFinding(toolName string, result *dto.ToolResult, output s
 		}
 	case "jwt_analyze":
 		if result.JWTAnalysis != nil && result.JWTAnalysis.ParseStatus == dto.JWTParsed {
-			if strings.Contains(output, "cannot find a valid jwt") {
+			if result.JWTLiveAnalysis != nil {
+				classifyJWTLiveFinding(result)
+			} else if strings.Contains(output, "cannot find a valid jwt") {
 				result.FindingStatus = dto.FindingsInconclusive
 				result.PartialResults = true
 				result.ClassificationReason = "jwt_live_token_not_observed"

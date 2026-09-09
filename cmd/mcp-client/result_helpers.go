@@ -38,23 +38,8 @@ func nucleiReportedFinding(output string) bool {
 }
 
 func classifyNucleiOutput(output string) (finding, malformed bool) {
-	for line := range strings.Lines(output) {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || nucleiDiagnosticLine(trimmed) {
-			continue
-		}
-		var event struct {
-			TemplateID string `json:"template-id"`
-		}
-		if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
-			malformed = true
-			continue
-		}
-		if event.TemplateID != "" {
-			finding = true
-		}
-	}
-	return finding, malformed
+	_, total, malformed := parseNucleiFindings(output)
+	return total > 0, malformed
 }
 
 func nucleiDiagnosticLine(line string) bool {
