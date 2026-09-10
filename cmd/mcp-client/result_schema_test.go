@@ -27,3 +27,20 @@ func TestToolResultOutputSchemaAcceptsClassifiedResult(t *testing.T) {
 		t.Fatalf("classified result does not match output schema: %v", err)
 	}
 }
+
+func TestToolResultOutputSchemaSeparatesDiscoveryResponseSize(t *testing.T) {
+	// Given: the common executable-tool output schema.
+	schema := toolResultOutputSchema()
+
+	// When: an orchestrator inspects structured discovery results.
+	discoveries := schema.Properties["discovered_paths"]
+
+	// Then: scanner-reported response bytes are a described field distinct from stdout size.
+	if discoveries == nil || discoveries.Items == nil {
+		t.Fatalf("discovered_paths item schema is missing: %+v", discoveries)
+	}
+	responseBytes := discoveries.Items.Properties["response_bytes"]
+	if responseBytes == nil || responseBytes.Type != "integer" || responseBytes.Description == "" {
+		t.Fatalf("response_bytes schema is ambiguous: %+v", responseBytes)
+	}
+}

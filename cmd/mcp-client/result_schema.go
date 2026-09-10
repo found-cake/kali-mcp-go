@@ -3,6 +3,18 @@ package main
 import "github.com/google/jsonschema-go/jsonschema"
 
 func toolResultOutputSchema() *jsonschema.Schema {
+	discoveredPaths := nullableArraySchema()
+	discoveredPaths.Description = "discovery scanner response metadata; response_bytes is the size reported for that scanner's own request, not stdout_bytes or a separately fetched HTTP Content-Length"
+	discoveredPaths.Items = &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"url":            stringSchema(),
+			"status_code":    integerSchema(),
+			"response_bytes": {Type: "integer", Description: "response size in bytes reported by the discovery scanner for its own request"},
+			"directory":      booleanSchema(),
+		},
+		Required: []string{"url", "directory"},
+	}
 	properties := map[string]*jsonschema.Schema{
 		"call_id":                   stringSchema(),
 		"stdout":                    stringSchema(),
@@ -44,7 +56,7 @@ func toolResultOutputSchema() *jsonschema.Schema {
 		"nuclei_findings":           nullableArraySchema(),
 		"nuclei_findings_total":     integerSchema(),
 		"nuclei_findings_truncated": booleanSchema(),
-		"discovered_paths":          nullableArraySchema(),
+		"discovered_paths":          discoveredPaths,
 		"evidence":                  nullableSchema("object"),
 		"progress":                  nullableSchema("object"),
 	}

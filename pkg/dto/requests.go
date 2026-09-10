@@ -85,12 +85,12 @@ type SQLMapRequest struct {
 	Cookie         string            `json:"cookie,omitempty" jsonschema:"Cookie header value"`
 	ContentType    string            `json:"content_type,omitempty" jsonschema:"Content-Type header value e.g. application/json"`
 	AbortCodes     string            `json:"abort_codes,omitempty" jsonschema:"comma-separated HTTP status codes that trigger SQLmap's native immediate abort e.g. 500,503"`
-	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes to ignore e.g. 401,500"`
+	IgnoreCodes    string            `json:"ignore_codes,omitempty" jsonschema:"comma-separated expected HTTP error codes SQLmap must continue through, such as 401 for a failed-login baseline"`
 	TestParameters string            `json:"test_parameters,omitempty" jsonschema:"comma-separated parameters or JSON fields to test"`
 	TrueString     string            `json:"true_string,omitempty" jsonschema:"text present when the tested condition is true; passed to SQLmap --string"`
 	FalseString    string            `json:"false_string,omitempty" jsonschema:"text present when the tested condition is false; passed to SQLmap --not-string"`
 	TrueRegexp     string            `json:"true_regexp,omitempty" jsonschema:"regular expression matching a true response; passed to SQLmap --regexp"`
-	TrueStatusCode int               `json:"true_status_code,omitempty" jsonschema:"HTTP status code indicating a true response (100-599); passed to SQLmap --code"`
+	TrueStatusCode int               `json:"true_status_code,omitempty" jsonschema:"HTTP status code indicating a true response (100-599), such as 200 when a failed-login baseline returns an ignored 401; passed to SQLmap --code"`
 	PayloadPrefix  string            `json:"payload_prefix,omitempty" jsonschema:"SQL injection payload prefix; passed to SQLmap --prefix"`
 	PayloadSuffix  string            `json:"payload_suffix,omitempty" jsonschema:"SQL injection payload suffix; passed to SQLmap --suffix"`
 	TestFilter     string            `json:"test_filter,omitempty" jsonschema:"SQLmap payload test-title filter; passed to SQLmap --test-filter"`

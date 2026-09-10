@@ -11,14 +11,15 @@ func TestToolInputExamplesAreExposedInSchemaAndDescription(t *testing.T) {
 	t.Parallel()
 
 	want := map[string]string{
-		"browser_check":        `{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"local_storage":{"access_token":"..."},"profile":"browser-xss-confirm"}`,
-		"nmap_scan":            `{"target":"host","scan_type":"-sCV"}`,
-		"nikto_scan":           `{"target":"https://host","request_timeout":10,"failure_limit":20,"profile":"web-discovery-low-rate"}`,
-		"nuclei_scan":          `{"target":"https://host","severity":"medium,high,critical","max_host_errors":20,"request_timeout":10}`,
-		"dalfox_scan":          `{"target":"https://host/?q=FUZZ","headers":{"Authorization":"Bearer ..."},"cookies":"session=...","profile":"browser-xss-confirm"}`,
-		"result_artifact_read": `{"artifact_id":"...","limit":65536}`,
-		"retirejs_scan":        `{"url":"https://host/app","headers":{"Authorization":"Bearer ..."},"profile":"safe-recon"}`,
-		"sqlmap_scan":          `{"url":"https://host/api/login","data":"{\"email\":\"test*\"}","content_type":"application/json","test_parameters":"email","true_string":"Welcome","false_string":"Invalid credentials","payload_prefix":"'))","payload_suffix":"-- ","profile":"sqli-verify-low-risk"}`,
+		"browser_check":         `{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"local_storage":{"access_token":"..."},"profile":"browser-xss-confirm"}`,
+		"get_scan_capabilities": `{"tool_names":["nuclei_scan","feroxbuster_scan"]}`,
+		"nmap_scan":             `{"target":"host","scan_type":"-sCV"}`,
+		"nikto_scan":            `{"target":"https://host","request_timeout":10,"failure_limit":20,"profile":"web-discovery-low-rate"}`,
+		"nuclei_scan":           `{"target":"https://host","severity":"medium,high,critical","max_host_errors":20,"request_timeout":10}`,
+		"dalfox_scan":           `{"target":"https://host/?q=FUZZ","headers":{"Authorization":"Bearer ..."},"cookies":"session=...","profile":"browser-xss-confirm"}`,
+		"result_artifact_read":  `{"artifact_id":"...","limit":65536}`,
+		"retirejs_scan":         `{"url":"https://host/app","headers":{"Authorization":"Bearer ..."},"profile":"safe-recon"}`,
+		"sqlmap_scan":           `{"url":"https://host/api/login","data":"{\"email\":\"test*\"}","content_type":"application/json","ignore_codes":"401","test_parameters":"email","true_status_code":200,"payload_prefix":"'))","payload_suffix":"-- ","profile":"sqli-verify-low-risk"}`,
 	}
 
 	for name, encoded := range want {
