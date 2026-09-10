@@ -14,7 +14,7 @@ import (
 func registerTargetResolver(server *mcp.Server, kali *kaliclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "resolve_target",
-		Description: "Resolve once per target and environment, explicitly select a candidate, then reuse its signed target_context until context_expires_at. Re-resolve only after expiry, connectivity failure, or an environment change.",
+		Description: "Resolve target candidates and return signed target_context values with context_expires_at. The caller explicitly selects a candidate and decides when another connectivity check and fresh target_context are needed; the server never silently chooses or renews a candidate.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, request dto.ResolveTargetRequest) (*mcp.CallToolResult, dto.TargetResolutionResult, error) {
 		result, err := kali.ResolveTarget(ctx, request)
 		if err != nil {
