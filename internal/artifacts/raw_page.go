@@ -1,7 +1,6 @@
 package artifacts
 
 import (
-	"encoding/base64"
 	"errors"
 	"io"
 	"os"
@@ -72,13 +71,9 @@ func readRawBytePage(source rawPageSource, request dto.ArtifactReadRequest, now 
 	if source.reference.Encoding == dto.ArtifactEncodingUTF8 {
 		pageLength = utf8PageEnd(payload, 0, contentLength, int64(len(payload)))
 	}
-	content := string(payload[:pageLength])
-	if source.reference.Encoding == dto.ArtifactEncodingBase64 {
-		content = base64.StdEncoding.EncodeToString(payload[:pageLength])
-	}
 	nextOffset := request.Offset + pageLength
 	page := artifactPageMetadata(source.reference, request.ArtifactID, dto.ArtifactSectionRaw, source.total, now)
-	page.Content = content
+	page.Content = pageContent(payload[:pageLength], source.reference.Encoding)
 	page.Offset = request.Offset
 	page.NextOffset = nextOffset
 	page.HasMore = nextOffset < source.total
