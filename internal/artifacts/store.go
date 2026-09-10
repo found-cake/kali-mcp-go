@@ -39,9 +39,10 @@ type storedArtifact struct {
 }
 
 type Store struct {
-	mu        sync.Mutex
-	directory string
-	items     map[string]storedArtifact
+	mu         sync.RWMutex
+	directory  string
+	items      map[string]storedArtifact
+	nextExpiry time.Time
 }
 
 func New() (*Store, error) {
@@ -73,6 +74,9 @@ func (s *Store) Save(content Content, now time.Time) (dto.ArtifactRef, error) {
 	s.prune(now)
 	s.mu.Lock()
 	s.items[id] = storedArtifact{path: path, reference: reference}
+	if s.nextExpiry.IsZero() || reference.ExpiresAt.Before(s.nextExpiry) {
+		s.nextExpiry = reference.ExpiresAt
+	}
 	s.mu.Unlock()
 	return reference, nil
 }
@@ -91,10 +95,14 @@ func (s *Store) Read(id string, now time.Time) (dto.ArtifactRef, []byte, error) 
 }
 
 func (s *Store) lookup(id string, now time.Time) (storedArtifact, error) {
-	s.prune(now)
-	s.mu.Lock()
+	s.mu.RLock()
+	if !now.Before(s.nextExpiry) {
+		s.mu.RUnlock()
+		s.prune(now)
+		s.mu.RLock()
+	}
 	artifact, ok := s.items[id]
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	if !ok {
 		return storedArtifact{}, ErrNotFound
 	}
@@ -110,15 +118,24 @@ func (s *Store) forget(id string) {
 func (s *Store) Close() error {
 	s.mu.Lock()
 	s.items = make(map[string]storedArtifact)
+	s.nextExpiry = time.Time{}
 	s.mu.Unlock()
 	return os.RemoveAll(s.directory)
 }
 
 func (s *Store) prune(now time.Time) {
 	s.mu.Lock()
+	if now.Before(s.nextExpiry) {
+		s.mu.Unlock()
+		return
+	}
+	s.nextExpiry = time.Time{}
 	var expired []string
 	for id, artifact := range s.items {
 		if now.Before(artifact.reference.ExpiresAt) {
+			if s.nextExpiry.IsZero() || artifact.reference.ExpiresAt.Before(s.nextExpiry) {
+				s.nextExpiry = artifact.reference.ExpiresAt
+			}
 			continue
 		}
 		expired = append(expired, artifact.path)
