@@ -2,6 +2,7 @@ package dto
 
 import (
 	"net/http"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -195,7 +196,7 @@ func compactUTF8(value string, maximumBytes int) (string, bool) {
 	for end > 0 && !utf8.RuneStart(value[end]) {
 		end--
 	}
-	return value[:end], true
+	return strings.Clone(value[:end]), true
 }
 
 func (r *ToolResult) Finalize() {
