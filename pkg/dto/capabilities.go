@@ -108,5 +108,6 @@ type ScanCapabilitiesResult struct {
 }
 
 type ScanCapabilitiesRequest struct {
-	ToolName string `json:"tool_name,omitempty" jsonschema:"optional executable MCP tool name used to return one compact tool capability; omit for the complete registry"`
+	ToolName  string   `json:"tool_name,omitempty" jsonschema:"optional executable MCP tool name used to return one compact tool capability; mutually exclusive with tool_names"`
+	ToolNames []string `json:"tool_names,omitempty" jsonschema:"optional executable MCP tool names used to return one compact batch; mutually exclusive with tool_name, maximum 16"`
 }

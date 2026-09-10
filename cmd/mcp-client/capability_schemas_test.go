@@ -15,7 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestScanCapabilitiesInputSchemaExposesToolFilter(t *testing.T) {
+func TestScanCapabilitiesInputSchemaExposesSingleAndBatchToolFilters(t *testing.T) {
 	t.Parallel()
 
 	// Given: the executable tool registry.
@@ -24,31 +24,98 @@ func TestScanCapabilitiesInputSchemaExposesToolFilter(t *testing.T) {
 	// When: the capability tool input schema is generated.
 	schema, err := scanCapabilitiesInputSchema()
 
-	// Then: callers can select exactly one registered executable tool.
+	// Then: callers can select one tool or a bounded set from the same registry.
 	if err != nil {
 		t.Fatalf("build capability input schema: %v", err)
 	}
-	property, found := schema.Properties["tool_name"]
+	single, found := schema.Properties["tool_name"]
 	if !found {
 		t.Fatal("get_scan_capabilities schema is missing tool_name")
 	}
+	batch, found := schema.Properties["tool_names"]
+	if !found || batch.Items == nil || batch.MaxItems == nil || *batch.MaxItems != maxCapabilityToolFilters || !batch.UniqueItems {
+		t.Fatalf("get_scan_capabilities batch schema is incomplete: %+v", batch)
+	}
 	for _, toolName := range toolNames {
-		if !slices.Contains(property.Enum, any(toolName)) {
+		if !slices.Contains(single.Enum, any(toolName)) || !slices.Contains(batch.Items.Enum, any(toolName)) {
 			t.Fatalf("tool_name enum is missing %s", toolName)
 		}
 	}
 }
 
-func TestFilterScanCapabilitiesReturnsRequestedTool(t *testing.T) {
+func TestScanCapabilitiesInputSchemaRejectsAmbiguousBatchFilters(t *testing.T) {
+	// Given: the resolved capability input schema.
+	schema, err := scanCapabilitiesInputSchema()
+	if err != nil {
+		t.Fatalf("build capability input schema: %v", err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatalf("resolve capability input schema: %v", err)
+	}
+
+	// When: a caller combines the single and batch selectors.
+	err = resolved.Validate(map[string]any{
+		"tool_name": "nmap_scan", "tool_names": []any{"whatweb_scan"},
+	})
+
+	// Then: the ambiguous selection is rejected before execution.
+	if err == nil {
+		t.Fatal("schema accepted both tool_name and tool_names")
+	}
+}
+
+func TestFilterScanCapabilitiesReturnsCompactRequestedTools(t *testing.T) {
 	t.Parallel()
 
 	// Given: the complete capability registry.
 	result := toolmeta.ScanCapabilities()
+	request := dto.ScanCapabilitiesRequest{ToolNames: []string{"john_crack", "feroxbuster_scan"}}
+
+	// When: two tools are selected for one compact response.
+	err := filterScanCapabilities(&result, request)
+
+	// Then: tools retain request order and unrelated profile and wordlist entries are removed.
+	if err != nil {
+		t.Fatalf("filter capabilities: %v", err)
+	}
+	if len(result.Tools) != 2 || result.Tools[0].Tool != "john_crack" || result.Tools[1].Tool != "feroxbuster_scan" {
+		t.Fatalf("unexpected filtered tools: %+v", result.Tools)
+	}
+	selected := map[string]bool{"john_crack": true, "feroxbuster_scan": true}
+	for _, profile := range result.Profiles {
+		if len(profile.Tools) == 0 {
+			t.Fatalf("empty profile retained: %+v", profile)
+		}
+		for _, toolName := range profile.Tools {
+			if !selected[toolName] {
+				t.Fatalf("unrelated profile tool retained: %+v", profile)
+			}
+		}
+	}
+	for _, wordlist := range result.Wordlists {
+		if len(wordlist.DefaultFor) == 0 {
+			t.Fatalf("unrelated wordlist retained: %+v", wordlist)
+		}
+		for _, toolName := range wordlist.DefaultFor {
+			if !selected[toolName] {
+				t.Fatalf("unrelated wordlist tool retained: %+v", wordlist)
+			}
+		}
+	}
+}
+
+func TestFilterScanCapabilitiesPreservesSingleToolSelection(t *testing.T) {
+	t.Parallel()
+
+	// Given: the complete capability registry and the legacy single selector.
+	result := toolmeta.ScanCapabilities()
+	request := dto.ScanCapabilitiesRequest{ToolName: "feroxbuster_scan"}
 
 	// When: one tool is selected for a compact response.
-	err := filterScanCapabilities(&result, "feroxbuster_scan")
+	err := filterScanCapabilities(&result, request)
 
-	// Then: only that tool and its eventual input schema remain in the large tool list.
+	// Then: the existing selector still returns only the requested tool.
 	if err != nil {
 		t.Fatalf("filter capabilities: %v", err)
 	}
