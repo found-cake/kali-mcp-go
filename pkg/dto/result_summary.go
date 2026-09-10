@@ -36,9 +36,9 @@ type inlineResultSummary struct {
 	NucleiPreview  *NucleiPreviewMetadata     `json:"nuclei_preview,omitempty"`
 }
 
-func (r ToolResult) inlineStructuredSummary() (string, error) {
+func (r *ToolResult) inlineStructuredSummary() ([]byte, error) {
 	if r.HTTPResponse == nil && r.SQLMapAnalysis == nil && r.JWTAnalysis == nil && r.NucleiPreview == nil {
-		return "", nil
+		return nil, nil
 	}
 	summary := inlineResultSummary{
 		Assessment: inlineResultAssessment{
@@ -67,6 +67,5 @@ func (r ToolResult) inlineStructuredSummary() (string, error) {
 		}
 		summary.HTTPResponse = &httpSummary
 	}
-	encoded, err := json.Marshal(summary)
-	return string(encoded), err
+	return json.Marshal(summary)
 }

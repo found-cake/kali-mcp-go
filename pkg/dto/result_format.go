@@ -7,6 +7,11 @@ import (
 
 func (r *ToolResult) Format() string {
 	var sb strings.Builder
+	size := len(r.Stdout) + len(r.Stderr)
+	if r.Stdout != "" && r.Stderr != "" {
+		size += len("\n[stderr]\n")
+	}
+	sb.Grow(size)
 	if r.Stdout != "" {
 		sb.WriteString(r.Stdout)
 	}
@@ -27,16 +32,23 @@ func (r *ToolResult) Format() string {
 		sb.WriteString("\n\n[output truncated — read the result artifact for full retained output]")
 	}
 	if r.Evidence != nil && len(r.Evidence.Artifacts) > 0 {
-		fmt.Fprintf(&sb, "\n\n[evidence group: %s]", r.Evidence.GroupID)
+		sb.WriteString("\n\n[evidence group: ")
+		sb.WriteString(r.Evidence.GroupID)
+		sb.WriteByte(']')
 		for _, artifact := range r.Evidence.Artifacts {
-			fmt.Fprintf(&sb, "\n- %s (%s): %s", artifact.Relation, artifact.Kind, artifact.ID)
+			sb.WriteString("\n- ")
+			sb.WriteString(string(artifact.Relation))
+			sb.WriteString(" (")
+			sb.WriteString(artifact.Kind)
+			sb.WriteString("): ")
+			sb.WriteString(artifact.ID)
 		}
 	}
 	if summary, err := r.inlineStructuredSummary(); err != nil {
-		fmt.Fprintf(&sb, "\n\n[structured summary unavailable: %v]", err)
-	} else if summary != "" {
+		sb.WriteString(fmt.Sprintf("\n\n[structured summary unavailable: %v]", err))
+	} else if len(summary) != 0 {
 		sb.WriteString("\n\n[structured summary]\n")
-		sb.WriteString(summary)
+		sb.Write(summary)
 	}
 	if sb.Len() == 0 {
 		sb.WriteString("(no output)")
