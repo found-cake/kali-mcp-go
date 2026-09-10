@@ -78,16 +78,17 @@ func protectBrowserEvidence(store *artifactstore.Store, result *executor.Result,
 	if request.CaptureScreenshot {
 		protectBrowserScreenshot(store, result, &report)
 	}
+	secrets := tools.RequestSecrets(request)
 	if request.CaptureNetwork && report.NetworkCaptured {
-		secrets := tools.RequestSecrets(request)
+		redactor := tools.NewRedactor(secrets)
 		for index := range report.Network {
-			report.Network[index].URL = tools.RedactText(report.Network[index].URL, secrets)
-			report.Network[index].Failure = tools.RedactText(report.Network[index].Failure, secrets)
+			report.Network[index].URL = redactor.Text(report.Network[index].URL)
+			report.Network[index].Failure = redactor.Text(report.Network[index].Failure)
 		}
 		protectBrowserNetwork(store, result, &report, secrets)
 	}
 	if request.IncludeDOM {
-		protectBrowserDOM(store, result, &report, tools.RequestSecrets(request))
+		protectBrowserDOM(store, result, &report, secrets)
 	}
 	encoded, err := json.Marshal(report)
 	if err != nil {

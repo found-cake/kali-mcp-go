@@ -29,38 +29,39 @@ func Protect(store *artifactstore.Store, result *executor.Result, request any) {
 		return
 	}
 	secrets := tools.RequestSecrets(request)
+	redactor := tools.NewRedactor(secrets)
 	if browserRequest, ok := request.(dto.BrowserRequest); ok {
 		protectBrowserEvidence(store, result, browserRequest)
 	}
-	result.Stdout = tools.RedactText(result.Stdout, secrets)
-	result.Stderr = tools.RedactText(result.Stderr, secrets)
+	result.Stdout = redactor.Text(result.Stdout)
+	result.Stderr = redactor.Text(result.Stderr)
 	if result.Progress != nil {
-		result.Progress.LastObservedOutput = tools.RedactText(result.Progress.LastObservedOutput, secrets)
+		result.Progress.LastObservedOutput = redactor.Text(result.Progress.LastObservedOutput)
 	}
 	for index := range result.ArgvRedacted {
-		result.ArgvRedacted[index] = tools.RedactText(result.ArgvRedacted[index], secrets)
+		result.ArgvRedacted[index] = redactor.Text(result.ArgvRedacted[index])
 	}
-	result.Policy.HealthURL = tools.RedactText(result.Policy.HealthURL, secrets)
+	result.Policy.HealthURL = redactor.Text(result.Policy.HealthURL)
 	if result.Target != nil {
-		result.Target.Original = tools.RedactText(result.Target.Original, secrets)
-		result.Target.Selected = tools.RedactText(result.Target.Selected, secrets)
+		result.Target.Original = redactor.Text(result.Target.Original)
+		result.Target.Selected = redactor.Text(result.Target.Selected)
 	}
 	if result.HTTPRequest != nil {
-		result.HTTPRequest.Headers = tools.RedactHeaders(result.HTTPRequest.Headers, secrets)
-		result.HTTPRequest.URL = tools.RedactURL(result.HTTPRequest.URL, secrets)
-		result.HTTPRequest.Host = tools.RedactText(result.HTTPRequest.Host, secrets)
+		result.HTTPRequest.Headers = redactor.Headers(result.HTTPRequest.Headers)
+		result.HTTPRequest.URL = redactor.Text(result.HTTPRequest.URL)
+		result.HTTPRequest.Host = redactor.Text(result.HTTPRequest.Host)
 	}
 	if result.HTTPResponse != nil {
-		result.HTTPResponse.Headers = tools.RedactHeaders(result.HTTPResponse.Headers, secrets)
-		result.HTTPResponse.FinalURL = tools.RedactURL(result.HTTPResponse.FinalURL, secrets)
+		result.HTTPResponse.Headers = redactor.Headers(result.HTTPResponse.Headers)
+		result.HTTPResponse.FinalURL = redactor.Text(result.HTTPResponse.FinalURL)
 		if result.HTTPResponse.Summary != nil {
-			result.HTTPResponse.Summary.Location = tools.RedactURL(result.HTTPResponse.Summary.Location, secrets)
-			result.HTTPResponse.Summary.BodyExcerpt = tools.RedactText(result.HTTPResponse.Summary.BodyExcerpt, secrets)
+			result.HTTPResponse.Summary.Location = redactor.Text(result.HTTPResponse.Summary.Location)
+			result.HTTPResponse.Summary.BodyExcerpt = redactor.Text(result.HTTPResponse.Summary.BodyExcerpt)
 		}
 	}
 	if result.SQLMapAnalysis != nil {
 		for index := range result.SQLMapAnalysis.Parameters {
-			result.SQLMapAnalysis.Parameters[index].Name = tools.RedactText(result.SQLMapAnalysis.Parameters[index].Name, secrets)
+			result.SQLMapAnalysis.Parameters[index].Name = redactor.Text(result.SQLMapAnalysis.Parameters[index].Name)
 		}
 	}
 	attachResultArtifact(store, result, artifactRedactionState(secrets))
@@ -79,6 +80,7 @@ func ProtectStream(ctx context.Context, lines <-chan executor.Line, request any)
 	if len(secrets) == 0 && (!protectBrowser || (!browserRequest.CaptureNetwork && !browserRequest.IncludeDOM)) {
 		return lines
 	}
+	redactor := tools.NewRedactor(secrets)
 	protected := make(chan executor.Line, cap(lines))
 	go func() {
 		defer close(protected)
@@ -86,7 +88,7 @@ func ProtectStream(ctx context.Context, lines <-chan executor.Line, request any)
 			if protectBrowser {
 				line = protectBrowserStreamLine(line, browserRequest)
 			}
-			line.Text = tools.RedactText(line.Text, secrets)
+			line.Text = redactor.Text(line.Text)
 			select {
 			case protected <- line:
 			case <-ctx.Done():
