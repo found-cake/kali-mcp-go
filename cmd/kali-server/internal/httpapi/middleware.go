@@ -44,6 +44,7 @@ func DebugRequestLogMiddleware(print LogPrinter) fiber.Handler {
 }
 
 func BearerAuthMiddleware(apiToken string) fiber.Handler {
+	expectedSum := sha256.Sum256([]byte(apiToken))
 	return func(c fiber.Ctx) error {
 		authHeader := strings.TrimSpace(c.Get(fiber.HeaderAuthorization))
 		const prefix = "Bearer "
@@ -52,7 +53,6 @@ func BearerAuthMiddleware(apiToken string) fiber.Handler {
 		}
 		providedToken := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
 		providedSum := sha256.Sum256([]byte(providedToken))
-		expectedSum := sha256.Sum256([]byte(apiToken))
 		if subtle.ConstantTimeCompare(providedSum[:], expectedSum[:]) != 1 {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid bearer token"})
 		}
