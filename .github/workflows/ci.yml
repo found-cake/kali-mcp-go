@@ -1,0 +1,50 @@
+name: CI
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: "24"
+        package-manager-cache: false
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify modules
+      run: |
+        go mod tidy -diff
+        go mod verify
+
+    - name: Run static analysis
+      run: go vet ./...
+
+    - name: Run Go tests
+      run: go test -race -shuffle=on -count=1 -timeout=5m ./...
+
+    - name: Run JavaScript tests
+      run: node --test browser-evidence.test.cjs
+
+    - name: Build Go packages
+      run: go build ./...
