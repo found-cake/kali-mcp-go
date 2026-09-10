@@ -30,9 +30,9 @@ func (a *streamAccumulator) partialResult() *dto.ToolResult {
 }
 
 func (a *streamAccumulator) baseResult() *dto.ToolResult {
-	stderr := append([]string(nil), a.stderr...)
+	stderr := a.stderr
 	if a.finalError != "" {
-		stderr = append(stderr, a.finalError)
+		stderr = append(append([]string(nil), stderr...), a.finalError)
 	}
 	return &dto.ToolResult{
 		CallID: a.callID, Stdout: joinStreamLines(a.stdout), Stderr: joinStreamLines(stderr),
@@ -50,8 +50,21 @@ func (a *streamAccumulator) baseResult() *dto.ToolResult {
 }
 
 func joinStreamLines(lines []string) string {
-	if len(lines) == 0 {
+	switch len(lines) {
+	case 0:
 		return ""
+	case 1:
+		return lines[0] + "\n"
 	}
-	return strings.Join(lines, "\n") + "\n"
+	size := len(lines)
+	for _, line := range lines {
+		size += len(line)
+	}
+	var joined strings.Builder
+	joined.Grow(size)
+	for _, line := range lines {
+		joined.WriteString(line)
+		joined.WriteByte('\n')
+	}
+	return joined.String()
 }
