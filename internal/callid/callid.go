@@ -24,6 +24,7 @@ func Valid(value string) bool {
 	if len(value) != len(prefix)+encodedBytes || !strings.HasPrefix(value, prefix) {
 		return false
 	}
-	_, err := hex.DecodeString(strings.TrimPrefix(value, prefix))
+	var decoded [randomBytes]byte
+	_, err := hex.Decode(decoded[:], []byte(value[len(prefix):]))
 	return err == nil
 }
