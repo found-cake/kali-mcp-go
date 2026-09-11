@@ -9,6 +9,7 @@ func ExecutionMetadataFromResult(result *executor.Result) dto.ExecutionMetadata 
 	return dto.ExecutionMetadata{
 		Tool:            result.Tool,
 		ToolVersion:     result.ToolVersion,
+		Plugins:         result.Plugins,
 		ArgvRedacted:    result.ArgvRedacted,
 		StartedAt:       result.StartedAt,
 		EndedAt:         result.StartedAt.Add(result.Duration),

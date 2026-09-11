@@ -26,10 +26,10 @@ func TestValidateNativeScannerControlRanges(t *testing.T) {
 		field    string
 	}{
 		{name: "Nikto request timeout", validate: func() error {
-			return validateNiktoRequest(dto.NiktoRequest{Target: "https://example.test", RequestTimeout: 301})
+			return validateNiktoRequest(dto.NiktoRequest{Target: "https://example.test", Plugins: []string{"headers"}, RequestTimeout: 301})
 		}, field: "request_timeout"},
 		{name: "Nikto failure limit", validate: func() error {
-			return validateNiktoRequest(dto.NiktoRequest{Target: "https://example.test", FailureLimit: -1})
+			return validateNiktoRequest(dto.NiktoRequest{Target: "https://example.test", Plugins: []string{"headers"}, FailureLimit: -1})
 		}, field: "failure_limit"},
 		{name: "Nuclei host errors", validate: func() error {
 			return validateNucleiRequest(dto.NucleiRequest{Target: "https://example.test", MaxHostErrors: 1001})

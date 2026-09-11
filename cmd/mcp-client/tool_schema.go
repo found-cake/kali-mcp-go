@@ -26,6 +26,13 @@ func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, err
 		statusSchema.Minimum = &minimumStatus
 		statusSchema.Maximum = &maximumStatus
 	}
+	if definition.Tool == "nikto_scan" {
+		minimumPlugins := 1
+		pluginsSchema := schema.Properties["plugins"]
+		pluginsSchema.MinItems = &minimumPlugins
+		pluginsSchema.UniqueItems = true
+		schema.Required = append(schema.Required, "plugins")
+	}
 	if timeoutSchema, ok := schema.Properties[string(dto.ScanControlTimeout)]; ok {
 		timeoutSchema.Description = outerTimeoutDescription
 	}

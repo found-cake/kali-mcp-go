@@ -34,7 +34,7 @@ func TestNativeScannerControlsAreGeneratedFromTypedInputs(t *testing.T) {
 		},
 		{
 			name:    "Nikto request failure controls",
-			payload: `{"target":"https://example.test","request_timeout":3,"failure_limit":5}`,
+			payload: `{"target":"https://example.test","plugins":["headers"],"request_timeout":3,"failure_limit":5}`,
 			build: func(payload []byte) ([]string, error) {
 				var request dto.NiktoRequest
 				if err := json.Unmarshal(payload, &request); err != nil {

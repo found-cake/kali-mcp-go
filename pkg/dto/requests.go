@@ -54,7 +54,7 @@ type NiktoRequest struct {
 	RequestTimeout int      `json:"request_timeout,omitempty" jsonschema:"per-request network timeout in seconds (tool default when omitted, maximum 300)"`
 	FailureLimit   int      `json:"failure_limit,omitempty" jsonschema:"stop after this many consecutive request failures (tool default when omitted, maximum 1000)"`
 	Tuning         string   `json:"tuning,omitempty" jsonschema:"Nikto tuning selectors e.g. 123; web-discovery-low-rate rejects DoS category 6 and command-execution category 8 unless excluded with x"`
-	Plugins        []string `json:"plugins,omitempty" jsonschema:"Nikto plugin names; web-discovery-low-rate accepts only its bounded read-only allow-list"`
+	Plugins        []string `json:"plugins,omitempty" jsonschema:"installed Nikto plugin names selected by the caller; inspect nikto_scan.plugin_inventory through get_scan_capabilities; put_del_test requires explicit-custom"`
 	AdditionalArgs string   `json:"additional_args,omitempty" jsonschema:"extra Nikto arguments excluding host and config overrides"`
 	Timeout        int      `json:"timeout,omitempty" jsonschema:"request timeout in seconds for the scan (0 = default 300s)"`
 }

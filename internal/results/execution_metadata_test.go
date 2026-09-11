@@ -15,6 +15,7 @@ func TestExecutionMetadataFromResultMapsEveryField(t *testing.T) {
 	result := &executor.Result{
 		Tool:           "nuclei",
 		ToolVersion:    "v3.4.10",
+		Plugins:        []string{"headers", "ssl"},
 		ArgvRedacted:   []string{"nuclei", "-u", "https://example.test"},
 		StartedAt:      startedAt,
 		Duration:       1234 * time.Millisecond,
@@ -34,6 +35,7 @@ func TestExecutionMetadataFromResultMapsEveryField(t *testing.T) {
 	want := dto.ExecutionMetadata{
 		Tool:            "nuclei",
 		ToolVersion:     "v3.4.10",
+		Plugins:         []string{"headers", "ssl"},
 		ArgvRedacted:    []string{"nuclei", "-u", "https://example.test"},
 		StartedAt:       startedAt,
 		EndedAt:         startedAt.Add(1234 * time.Millisecond),

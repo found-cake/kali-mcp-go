@@ -22,6 +22,7 @@ type Result struct {
 	FailureCode           string
 	Tool                  string
 	ToolVersion           string
+	Plugins               []string
 	ArgvRedacted          []string
 	Timeout               time.Duration
 	ProcessStarted        bool

@@ -89,6 +89,9 @@ func validateNiktoRequest(req dto.NiktoRequest) error {
 	if req.Target == "" {
 		return fmt.Errorf("target is required")
 	}
+	if len(req.Plugins) == 0 {
+		return fmt.Errorf("plugins must contain at least one installed Nikto plugin; inspect get_scan_capabilities")
+	}
 	if req.PauseSeconds < 0 {
 		return fmt.Errorf("pause_seconds must not be negative")
 	}

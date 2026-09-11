@@ -150,6 +150,25 @@ func formatScanCapabilities(result *dto.ScanCapabilitiesResult) string {
 			fmt.Fprintf(&output, " controls=%s", strings.Join(controls, ","))
 		}
 		output.WriteByte('\n')
+		if tool.PluginInventory != nil {
+			version := tool.PluginInventory.RuntimeVersion
+			if version == "" {
+				version = "unknown"
+			}
+			plugins := make([]string, 0, len(tool.PluginInventory.Plugins))
+			for _, plugin := range tool.PluginInventory.Plugins {
+				value := plugin.Name
+				if len(plugin.RiskHints) > 0 {
+					hints := make([]string, 0, len(plugin.RiskHints))
+					for _, hint := range plugin.RiskHints {
+						hints = append(hints, string(hint))
+					}
+					value += "[" + strings.Join(hints, ",") + "]"
+				}
+				plugins = append(plugins, value)
+			}
+			fmt.Fprintf(&output, "  plugins: available=%t version=%s risk_hints_complete=%t values=%s\n", tool.PluginInventory.Available, version, tool.PluginInventory.RiskHintsComplete, strings.Join(plugins, ","))
+		}
 	}
 	output.WriteString("wordlists:\n")
 	for _, wordlist := range result.Wordlists {

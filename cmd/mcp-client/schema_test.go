@@ -225,6 +225,21 @@ func TestToolSchemasKeepOptionalFieldsOptional(t *testing.T) {
 	}
 }
 
+func TestNiktoSchemaRequiresAnExplicitPluginSelection(t *testing.T) {
+	t.Parallel()
+
+	schema := listedToolByName(t, "nikto_scan").InputSchema.(map[string]any)
+	required, _ := schema["required"].([]any)
+	if !slices.Contains(required, any("plugins")) {
+		t.Fatalf("nikto_scan required fields = %v", required)
+	}
+	properties, _ := schemaProperties(schema)
+	plugins, _ := properties["plugins"].(map[string]any)
+	if plugins["minItems"] != float64(1) || plugins["uniqueItems"] != true {
+		t.Fatalf("nikto_scan plugins schema = %v", plugins)
+	}
+}
+
 func TestRegisteredMCPToolNamesRemainStable(t *testing.T) {
 	t.Parallel()
 

@@ -66,6 +66,7 @@ type FailureInfo struct {
 type ExecutionMetadata struct {
 	Tool            string                 `json:"tool"`
 	ToolVersion     string                 `json:"tool_version"`
+	Plugins         []string               `json:"plugins,omitempty"`
 	ArgvRedacted    []string               `json:"argv_redacted"`
 	StartedAt       time.Time              `json:"started_at"`
 	EndedAt         time.Time              `json:"ended_at"`

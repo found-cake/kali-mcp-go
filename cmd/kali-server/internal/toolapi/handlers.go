@@ -79,7 +79,25 @@ func handleDirbStream(c fiber.Ctx) error {
 }
 
 func handleNiktoStream(c fiber.Ctx) error {
-	return runToolStream(c, validateNiktoRequest, tools.NiktoArgs)
+	return withPreparedTool(c, toolExecutionSpec[dto.NiktoRequest]{
+		validate: validateNiktoRequest,
+		argsFor: func(request dto.NiktoRequest) ([]string, error) {
+			inventory, err := tools.InspectNiktoPlugins(c.Context())
+			if err != nil {
+				return nil, fmt.Errorf("inspect installed Nikto plugins: %w", err)
+			}
+			if err := tools.ValidateNiktoPluginSelection(request.Plugins, inventory); err != nil {
+				return nil, err
+			}
+			return tools.NiktoArgs(request)
+		},
+		decorate: func(request dto.NiktoRequest, plan *scanExecutionPlan) error {
+			plan.plugins = append([]string(nil), request.Plugins...)
+			return nil
+		},
+	}, func(plan *scanExecutionPlan) error {
+		return executeStreamPlan(c, plan)
+	})
 }
 
 func handleWPScanStream(c fiber.Ctx) error {
@@ -213,6 +231,8 @@ func annotateResult(done <-chan *executor.Result, annotate func(*executor.Result
 
 func handleScanCapabilities(c fiber.Ctx) error {
 	result := tools.ScanCapabilities(executor.Which)
+	inventory, _ := tools.InspectNiktoPlugins(c.Context())
+	tools.AttachNiktoPluginInventory(&result, inventory)
 	result.CallID = httpapi.CallID(c)
 	return c.JSON(result)
 }

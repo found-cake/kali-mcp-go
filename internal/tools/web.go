@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	safeNiktoPlugins = "headers;httpoptions;ssl;cookies;robots;favicon;msgs;outdated;springboot;optionsbleed"
 	safeNiktoPause   = 0.2
 	niktoFinishGrace = 5
 )
@@ -158,21 +157,20 @@ func niktoMaxTime(request dto.NiktoRequest) (string, error) {
 
 func niktoPlugins(request dto.NiktoRequest) (string, error) {
 	plugins := request.Plugins
-	if request.Profile == dto.ProfileWebDiscoveryLowRate && len(plugins) == 0 {
-		return safeNiktoPlugins, nil
+	if len(plugins) == 0 {
+		return "", fmt.Errorf("plugins must contain at least one installed Nikto plugin; inspect get_scan_capabilities")
 	}
-	allowed := make(map[string]bool)
-	if request.Profile == dto.ProfileWebDiscoveryLowRate {
-		for name := range strings.SplitSeq(safeNiktoPlugins, ";") {
-			allowed[name] = true
-		}
-	}
+	seen := make(map[string]bool, len(plugins))
 	for _, name := range plugins {
 		if !niktoPluginName.MatchString(name) {
 			return "", fmt.Errorf("invalid Nikto plugin name %q", name)
 		}
-		if request.Profile == dto.ProfileWebDiscoveryLowRate && !allowed[name] {
-			return "", fmt.Errorf("Nikto plugin %q is not permitted by web-discovery-low-rate", name)
+		if seen[name] {
+			return "", fmt.Errorf("duplicate Nikto plugin %q", name)
+		}
+		seen[name] = true
+		if name == "put_del_test" && request.Profile != dto.ProfileExplicitCustom {
+			return "", fmt.Errorf("Nikto plugin %q changes target state and requires explicit-custom", name)
 		}
 	}
 	return strings.Join(plugins, ";"), nil

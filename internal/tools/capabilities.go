@@ -61,6 +61,14 @@ func cloneToolCapability(capability dto.ScanToolCapability) dto.ScanToolCapabili
 	copy.Profiles = slices.Clone(capability.Profiles)
 	copy.Controls = slices.Clone(capability.Controls)
 	copy.SupportedControls = slices.Clone(capability.SupportedControls)
+	if capability.PluginInventory != nil {
+		inventory := *capability.PluginInventory
+		inventory.Plugins = slices.Clone(capability.PluginInventory.Plugins)
+		for index := range inventory.Plugins {
+			inventory.Plugins[index].RiskHints = slices.Clone(inventory.Plugins[index].RiskHints)
+		}
+		copy.PluginInventory = &inventory
+	}
 	return copy
 }
 

@@ -70,6 +70,30 @@ type ScanProfileCapability struct {
 	Limits  ScanLimits    `json:"limits" jsonschema:"profile ceilings; inspect each tool's supported_controls and execution.controls for actual applicability"`
 }
 
+type PluginRiskHint string
+
+const (
+	PluginRiskTargetStateChange      PluginRiskHint = "target_state_change"
+	PluginRiskLargeSensitiveResponse PluginRiskHint = "potentially_large_sensitive_response"
+	PluginRiskHighRequestCount       PluginRiskHint = "high_request_count"
+	PluginRiskNonstandardHTTPMethods PluginRiskHint = "nonstandard_http_methods"
+	PluginRiskActiveExploitProbe     PluginRiskHint = "active_exploit_probe"
+)
+
+type ToolPluginCapability struct {
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	RiskHints   []PluginRiskHint `json:"risk_hints,omitempty"`
+}
+
+type ToolPluginInventory struct {
+	Source            string                 `json:"source"`
+	Available         bool                   `json:"available"`
+	RuntimeVersion    string                 `json:"runtime_version,omitempty"`
+	RiskHintsComplete bool                   `json:"risk_hints_complete"`
+	Plugins           []ToolPluginCapability `json:"plugins"`
+}
+
 type ScanToolCapability struct {
 	Tool                  string                  `json:"tool"`
 	RuntimeTool           string                  `json:"runtime_tool"`
@@ -89,6 +113,7 @@ type ScanToolCapability struct {
 	Essential             bool                    `json:"essential"`
 	RequiresTargetContext bool                    `json:"requires_target_context"`
 	ResumeSupported       bool                    `json:"resume_supported"`
+	PluginInventory       *ToolPluginInventory    `json:"plugin_inventory,omitempty"`
 }
 
 type WordlistCapability struct {

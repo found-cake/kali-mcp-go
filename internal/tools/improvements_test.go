@@ -128,11 +128,11 @@ func TestSQLMapPlanRejectsOversizedRequestFile(t *testing.T) {
 func TestNiktoArgsAddsLoadControls(t *testing.T) {
 	t.Parallel()
 
-	args, err := NiktoArgs(dto.NiktoRequest{Target: "https://example.com", PauseSeconds: 0.5, MaxTime: "2m", Tuning: "123"})
+	args, err := NiktoArgs(dto.NiktoRequest{Target: "https://example.com", PauseSeconds: 0.5, MaxTime: "2m", Tuning: "123", Plugins: []string{"headers"}})
 	if err != nil {
 		t.Fatalf("build nikto args: %v", err)
 	}
-	want := []string{"nikto", "-h", "https://example.com", "-nocheck", "-nointeractive", "-Pause", "0.5", "-maxtime", "2m", "-Tuning", "123"}
+	want := []string{"nikto", "-h", "https://example.com", "-nocheck", "-nointeractive", "-Pause", "0.5", "-maxtime", "2m", "-Tuning", "123", "-Plugins", "headers"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
 	}

@@ -7,11 +7,12 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func TestNiktoLowRateProfileAppliesBoundedDefaults(t *testing.T) {
-	// Given: a low-rate Nikto request without caller-supplied load controls.
+func TestNiktoLowRateProfileUsesCallerSelectedPluginsWithBoundedDefaults(t *testing.T) {
+	// Given: a low-rate Nikto request with caller-selected installed plugins.
 	request := dto.NiktoRequest{
 		ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
 		Target:      "https://example.com", Timeout: 60,
+		Plugins: []string{"headers", "content_search"},
 	}
 
 	// When: the safe command arguments are generated.
@@ -20,18 +21,19 @@ func TestNiktoLowRateProfileAppliesBoundedDefaults(t *testing.T) {
 		t.Fatalf("build low-rate Nikto args: %v", err)
 	}
 
-	// Then: a native delay, an internal completion deadline, and the safe plugin allow-list are enforced.
+	// Then: load controls are enforced while the caller's exact plugin selection is preserved.
 	joined := strings.Join(args, " ")
-	for _, expected := range []string{"-Pause 0.2", "-maxtime 55s", "-Plugins " + safeNiktoPlugins} {
+	for _, expected := range []string{"-Pause 0.2", "-maxtime 55s", "-Plugins headers;content_search"} {
 		if !strings.Contains(joined, expected) {
-			t.Fatalf("Nikto safe defaults missing %q from %v", expected, args)
+			t.Fatalf("Nikto arguments missing %q from %v", expected, args)
 		}
 	}
 }
 
-func TestNiktoLowRateProfileRejectsFasterPauseAndUnsafePlugin(t *testing.T) {
-	// Given: low-rate requests that weaken delay or escape the plugin allow-list.
+func TestNiktoLowRateProfileRejectsMissingPluginsFasterPauseAndStateChange(t *testing.T) {
+	// Given: low-rate requests without an explicit selection or with unsafe controls.
 	requests := []dto.NiktoRequest{
+		{ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate}, Target: "https://example.com"},
 		{ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate}, Target: "https://example.com", PauseSeconds: 0.1},
 		{ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate}, Target: "https://example.com", Plugins: []string{"put_del_test"}},
 	}
@@ -47,6 +49,22 @@ func TestNiktoLowRateProfileRejectsFasterPauseAndUnsafePlugin(t *testing.T) {
 	}
 }
 
+func TestNiktoExplicitCustomAllowsStateChangingPlugin(t *testing.T) {
+	request := dto.NiktoRequest{
+		ScanOptions: dto.ScanOptions{Profile: dto.ProfileExplicitCustom},
+		Target:      "https://example.com",
+		Plugins:     []string{"put_del_test"},
+	}
+
+	args, err := NiktoArgs(request)
+	if err != nil {
+		t.Fatalf("build explicit-custom Nikto args: %v", err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "-Plugins put_del_test") {
+		t.Fatalf("explicit plugin selection missing from %v", args)
+	}
+}
+
 func TestNiktoSafeProfileKeepsInternalDeadlineInsideOuterTimeout(t *testing.T) {
 	// Given: a low-rate Nikto request whose internal deadline consumes the full outer timeout.
 	request := dto.NiktoRequest{
@@ -54,6 +72,7 @@ func TestNiktoSafeProfileKeepsInternalDeadlineInsideOuterTimeout(t *testing.T) {
 		Target:      "https://example.com",
 		MaxTime:     "60s",
 		Timeout:     60,
+		Plugins:     []string{"headers"},
 	}
 
 	// When: the safe execution arguments are validated.

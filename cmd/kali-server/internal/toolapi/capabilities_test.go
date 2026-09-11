@@ -34,6 +34,15 @@ func TestHandleScanCapabilitiesReturnsProfileToolCompatibility(t *testing.T) {
 	if response.StatusCode != fiber.StatusOK || len(result.Profiles) == 0 || len(result.Tools) == 0 {
 		t.Fatalf("unexpected capabilities response: status=%d result=%+v", response.StatusCode, result)
 	}
+	foundNiktoInventory := false
+	for _, tool := range result.Tools {
+		if tool.Tool == "nikto_scan" && tool.PluginInventory != nil && tool.PluginInventory.Source == "nikto -list-plugins" {
+			foundNiktoInventory = true
+		}
+	}
+	if !foundNiktoInventory {
+		t.Fatalf("Nikto plugin inventory is missing: %+v", result.Tools)
+	}
 }
 
 func TestToolStatusTracksWordlistReadinessSeparatelyFromEssentialFlagSemantics(t *testing.T) {

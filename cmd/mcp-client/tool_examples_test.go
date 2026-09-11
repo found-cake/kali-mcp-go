@@ -14,7 +14,7 @@ func TestToolInputExamplesAreExposedInSchemaAndDescription(t *testing.T) {
 		"browser_check":         `{"url":"https://host/app#route","headers":{"Cookie":"session=..."},"local_storage":{"access_token":"..."},"profile":"browser-xss-confirm"}`,
 		"get_scan_capabilities": `{"tool_names":["nuclei_scan","feroxbuster_scan"]}`,
 		"nmap_scan":             `{"target":"host","scan_type":"-sCV"}`,
-		"nikto_scan":            `{"target":"https://host","request_timeout":10,"failure_limit":20,"profile":"web-discovery-low-rate"}`,
+		"nikto_scan":            `{"target":"https://host","plugins":["headers","ssl"],"request_timeout":10,"failure_limit":20,"profile":"web-discovery-low-rate"}`,
 		"nuclei_scan":           `{"target":"https://host","severity":"medium,high,critical","max_host_errors":20,"request_timeout":10}`,
 		"dalfox_scan":           `{"target":"https://host/?q=FUZZ","headers":{"Authorization":"Bearer ..."},"cookies":"session=...","profile":"browser-xss-confirm"}`,
 		"result_artifact_read":  `{"artifact_id":"...","limit":65536}`,

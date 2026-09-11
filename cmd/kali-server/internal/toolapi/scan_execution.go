@@ -83,6 +83,7 @@ type scanExecutionPlan struct {
 	artifactStore         *artifactstore.Store
 	jwtAnalysis           *dto.JWTAnalysisMetadata
 	nucleiPreview         *dto.NucleiPreviewMetadata
+	plugins               []string
 	browserScreenshotPath string
 	ephemeralPaths        []string
 	dryRun                bool
@@ -169,6 +170,7 @@ func (p *scanExecutionPlan) annotate(result *executor.Result) {
 	result.Controls = p.controls
 	result.JWTAnalysis = p.jwtAnalysis
 	result.NucleiPreview = p.nucleiPreview
+	result.Plugins = append([]string(nil), p.plugins...)
 	result.BrowserScreenshotPath = p.browserScreenshotPath
 	result.SPABaseline = p.spaBaseline
 	result.FalsePositiveRisk = p.falsePositiveRisk
