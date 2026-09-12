@@ -1,28 +1,35 @@
 # kali-mcp-go
 
-Go reimplementation of [MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server), built to eliminate the bottlenecks encountered when running multiple AI agents simultaneously.
+Concurrent, policy-aware MCP runtime for authorized security testing with Kali tooling. It connects AI clients to a provisioned security environment while keeping target selection, scan limits, execution evidence, and tool safety explicit.
 
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go)](https://go.dev/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/found-cake/kali-mcp-go)](https://goreportcard.com/report/github.com/found-cake/kali-mcp-go)
 [![Release](https://img.shields.io/github/v/release/found-cake/kali-mcp-go)](https://github.com/found-cake/kali-mcp-go/releases/latest)
 
----
+## Contents
 
-## Background
+- [Highlights](#highlights) · [Architecture](#architecture)
+- [Prerequisites](#prerequisites) · [Installation](#installation)
+- [Usage](#usage): [Launch mode](#1-choose-a-launch-mode) · [Client registration](#2-register-the-launcher) · [First assessment](#3-start-an-assessment)
+- [Configuration](#configuration)
+- [Available tools](#available-tools)
+- [Detailed reference](#detailed-reference)
+- [Project structure](#project-structure) · [Security notice](#security-notice)
 
-[MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server) by [@Wh0am123](https://github.com/Wh0am123) was the project that first proved connecting AI agents to Kali Linux tools over MCP works — it's even shipped as an official Kali package. This project owes a lot to that work.
+## Highlights
 
-The rewrite was motivated by running into real bottlenecks when spinning up multiple AI agents in parallel against CTF challenges:
-
-| | MCP-Kali-Server (Python) | kali-mcp-go (Go) |
-|---|---|---|
-| Concurrency | Flask single-worker — agents block each other | Fiber v3 / fasthttp — fully concurrent |
-| Output delivery | Buffered: full output returned when process exits | SSE streaming: output delivered line by line |
-| Authentication | None | Bearer token (SHA-256 constant-time comparison) |
-| Metasploit temp files | Hardcoded `/tmp/mks_msf_resource.rc` | `os.CreateTemp` — race-free, unique filenames |
-| Prompt injection defense | — | Safety instructions baked into MCP server |
-
----
+| Area | Behavior |
+|---|---|
+| Multi-agent execution | Concurrent Go server with global and per-target admission controls |
+| Streaming | Incremental stdout, stderr, heartbeat, progress, and terminal metadata over SSE |
+| Tool routing | Dedicated tools and descriptions for reconnaissance, web assessment, authentication checks, browser verification, and dependency analysis |
+| Target safety | Explicit loopback resolution with signed, expiring target contexts; scan tools never silently rewrite targets |
+| Scan controls | Profiles, explicit timeouts, rate limits, concurrency limits, health checks, and tool-declared 5xx circuit breaking where supported |
+| Evidence | Structured findings, request counts, execution metadata, browser evidence, and paged result artifacts |
+| Authentication | Bearer-token authentication with constant-time comparison between `mcp-client` and `kali-server` |
+| Agent safety | Tool output is treated as untrusted data, and MCP instructions prohibit replacing the provisioned runtime during an assessment |
+| Deployment | One-shot or persistent Docker operation, standalone binaries, VMs, and directly installed Linux hosts |
+| Orchestration boundary | Short-lived scan jobs prevent abandoned processes; the MCP host still owns workflow state and credential management |
 
 ## Architecture
 
@@ -40,71 +47,40 @@ The rewrite was motivated by running into real bottlenecks when spinning up mult
   [nmap · gobuster · sqlmap · msfconsole · ...]
 ```
 
----
-
 ## Prerequisites
 
 | Component | Requirement |
 |---|---|
-| `kali-server` host | Any environment with the required security tools installed (Kali Linux, other Linux distros, macOS, etc.) |
+| `kali-server` host | Linux with the required security tools installed (Kali Linux recommended; other Linux distributions are supported when dependencies are available) |
 | `mcp-client` host | Linux, Windows, or macOS |
 | Build from source | Go 1.27+ |
 
-Required tools: `nmap`, `gobuster`, `dirb`, `nikto`, `tshark`, `sqlmap`, `msfconsole`, `hydra`, `john`, `wpscan`, `enum4linux`
+Core tools: `nmap`, `gobuster`, `dirb`, `nikto`, `tshark`, `sqlmap`, `msfconsole`, `hydra`, `john`, `wpscan`, `enum4linux`
 
----
+The Docker image also includes `ffuf`, `feroxbuster`, `nuclei`, `whatweb`, `jwt_tool`, `dalfox`, Playwright with Chromium, `retire`, `osv-scanner`, `jq`, Node.js, and npm.
+
+Docker image builds resolve the latest published Dalfox, jwt_tool, and OSV-Scanner releases and the npm `latest` tags for Playwright and Retire.js. Release checksums are verified when upstream publishes them. This keeps security tooling current but means rebuilding the same commit later can produce different tool versions.
 
 ## Installation
 
-### Option A — Pre-built binaries (recommended)
+### Release binaries
 
-Download the latest binaries from the [Releases page](https://github.com/found-cake/kali-mcp-go/releases/latest).
+Download the matching asset and `checksums.txt` from the [latest release](https://github.com/found-cake/kali-mcp-go/releases/latest).
 
-**kali-server:**
+| Component | Supported targets | Asset name |
+|---|---|---|
+| `kali-server` | Linux amd64 / arm64 | `kali-server_linux_<arch>` |
+| `mcp-client` | Linux amd64 / arm64 | `mcp-client_linux_<arch>` |
+| `mcp-client` | macOS amd64 / arm64 | `mcp-client_darwin_<arch>` |
+| `mcp-client` | Windows amd64 / arm64 | `mcp-client_windows_<arch>.exe` |
 
-```bash
-# x86_64
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/kali-server_linux_amd64 \
-  -o kali-server && chmod +x kali-server
-
-# arm64
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/kali-server_linux_arm64 \
-  -o kali-server && chmod +x kali-server
-```
-
-**mcp-client:**
+On Linux or macOS, make each downloaded binary executable. Verify its SHA-256 digest against `checksums.txt` before use.
 
 ```bash
-# Linux x64
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_linux_amd64 \
-  -o mcp-client && chmod +x mcp-client
-
-# Linux arm64
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_linux_arm64 \
-  -o mcp-client && chmod +x mcp-client
-
-# macOS Apple Silicon
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_darwin_arm64 \
-  -o mcp-client && chmod +x mcp-client
-
-# macOS Intel
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_darwin_amd64 \
-  -o mcp-client && chmod +x mcp-client
-
-# Windows x64
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_windows_amd64.exe -o mcp-client.exe
-
-# Windows arm64
-curl -L https://github.com/found-cake/kali-mcp-go/releases/latest/download/mcp-client_windows_arm64.exe -o mcp-client.exe
+chmod +x <downloaded-file>
 ```
 
-Verify integrity with `checksums.txt` from the same release:
-
-```bash
-sha256sum -c checksums.txt
-```
-
-### Option B — Build from source
+### Build from source
 
 ```bash
 git clone https://github.com/found-cake/kali-mcp-go.git
@@ -118,246 +94,157 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o mcp-client ./cmd/mcp-client
 ```
 
-### Option C — Docker (single-command MCP setup)
+### Docker image (recommended)
 
-The published image contains `mcp-client`, `kali-server`, and the required Kali security tools. The container starts `kali-server` internally and exposes the MCP client's stdio transport, so no separate server process or port mapping is required.
-
-No API token configuration is required in Docker mode. When `KALI_MCP_API_TOKEN` is not provided, the container generates an ephemeral token and shares it only between its internal `kali-server` and `mcp-client` processes.
-
-#### Faster startup with a persistent container
-
-If starting a fresh container whenever the MCP host opens is too slow, keep `kali-server` running and have the host start only `mcp-client` with `docker exec`. The image is pulled and initialized once, and no host port is exposed.
-
-Start the server container:
+The published image contains both binaries and the provisioned security tools. Pull the stable image once; the usage section explains one-shot and persistent launch modes.
 
 ```bash
+docker pull ghcr.io/found-cake/kali-mcp-go:latest
+```
+
+Use `:rolling` for the biweekly Kali Rolling build, or a version tag such as `:v1.2.3` for a release-aligned deployment. Pin the resolved image digest (`image@sha256:...`) when byte-identical deployment inputs are required. To build locally:
+
+```bash
+docker build -t kali-mcp-go:local .
+```
+
+## Usage
+
+### 1. Choose a launch mode
+
+| Mode | Best for | MCP launcher |
+|---|---|---|
+| One-shot Docker | Fastest setup and automatic image updates | `/path/to/kali-mcp-docker ...` |
+| Persistent Docker | Repeated use without container startup time | `docker exec ...` |
+| Separate processes | A VM, remote Kali host, or existing Linux installation | `mcp-client --server ...` |
+
+The **MCP launcher** is the local STDIO command registered with your AI client. Choose one mode below, then use its launcher in the host-specific examples.
+
+#### One-shot Docker
+
+This is the simplest setup. Download the launcher once; it verifies and caches the Chromium seccomp profile, applies the required Docker isolation options, starts both services, and removes the container when the MCP session closes. No host port is exposed.
+
+```bash
+curl -fsSLo kali-mcp-docker \
+  https://raw.githubusercontent.com/found-cake/kali-mcp-go/b6349f79b52e7359e94a56b1566fb3a8c87cc442/scripts/run-docker.sh
+chmod +x kali-mcp-docker
+./kali-mcp-docker --timeout 3600
+```
+
+When running from a repository checkout, use `./scripts/run-docker.sh` instead. Set `KALI_MCP_DOCKER_IMAGE` to select a different image tag. For a locally built image, also set `KALI_MCP_DOCKER_PULL=never`.
+
+#### Persistent Docker
+
+Start one background server container. The launcher can prepare and print the verified seccomp profile path for the direct Docker command:
+
+```bash
+seccomp_profile="$(/absolute/path/to/kali-mcp-docker --print-seccomp-profile)"
 docker run -d \
   --name kali-mcp \
   --restart unless-stopped \
+  --init \
+  --ipc=host \
+  --security-opt "seccomp=$seccomp_profile" \
   --entrypoint kali-server \
   -e KALI_MCP_API_TOKEN="$(openssl rand -hex 32)" \
   ghcr.io/found-cake/kali-mcp-go:latest \
   --ip 127.0.0.1 --port 5000
 ```
 
-The token is generated once and stored in the container configuration so `docker exec` processes receive the same value. It does not need to be copied into the MCP host configuration.
-
-##### Claude Code
+Register this launcher with the MCP host:
 
 ```bash
-claude mcp add kali-mcp -- \
-  docker exec -i kali-mcp mcp-client \
-  --server http://127.0.0.1:5000 --timeout 3600
+docker exec -i kali-mcp mcp-client \
+  --server http://127.0.0.1:5000 \
+  --timeout 3600
 ```
 
-##### OpenAI Codex
-
-```bash
-codex mcp add kali-mcp -- \
-  docker exec -i kali-mcp mcp-client \
-  --server http://127.0.0.1:5000 --timeout 3600
-```
-
-Run `codex mcp list` to verify the registration, or `/mcp` inside Codex to inspect the connected server.
-
-For longer scans, the equivalent `~/.codex/config.toml` configuration is:
-
-```toml
-[mcp_servers.kali-mcp]
-command = "docker"
-args = ["exec", "-i", "kali-mcp", "mcp-client", "--server", "http://127.0.0.1:5000", "--timeout", "3600"]
-startup_timeout_sec = 30
-tool_timeout_sec = 3600
-```
-
-##### OpenCode v1
-
-Add the following local STDIO server to `opencode.jsonc`:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "kali-mcp": {
-      "type": "local",
-      "command": [
-        "docker", "exec", "-i", "kali-mcp", "mcp-client",
-        "--server", "http://127.0.0.1:5000",
-        "--timeout", "3600"
-      ],
-      "enabled": true,
-      "timeout": 3600000
-    }
-  }
-}
-```
-
-Check the persistent server independently at any time:
+The token stays in the container configuration and is inherited by `docker exec`; it does not need to be copied into the MCP host configuration. Check readiness with:
 
 ```bash
 docker exec kali-mcp curl -fsS http://127.0.0.1:5000/health
 ```
 
-This mode intentionally does not check for a new image whenever the MCP host starts. To upgrade, pull the desired tag and recreate the `kali-mcp` container. Add networking capabilities and mounts to the initial `docker run` command when needed.
+#### Separate server and client
 
-#### One-shot container
-
-The following setup is simpler and automatically removes the container when the MCP host exits, but Docker checks the image and initializes a new container each time.
-
-##### Claude Code
-
-```bash
-claude mcp add kali-mcp -- docker run --pull=always --rm -i ghcr.io/found-cake/kali-mcp-go:latest
-```
-
-##### OpenAI Codex
-
-Register the container as a local STDIO MCP server:
-
-```bash
-codex mcp add kali-mcp -- docker run --pull=always --rm -i ghcr.io/found-cake/kali-mcp-go:latest
-```
-
-Run `codex mcp list` to verify the registration, or `/mcp` inside Codex to inspect the connected server. Codex CLI, the IDE extension, and the ChatGPT desktop app share the same MCP configuration.
-
-For longer scans, configure the server directly in `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.kali-mcp]
-command = "docker"
-args = ["run", "--pull=always", "--rm", "-i", "ghcr.io/found-cake/kali-mcp-go:latest", "--timeout", "3600"]
-startup_timeout_sec = 300
-tool_timeout_sec = 3600
-```
-
-##### OpenCode v1
-
-Add the following local STDIO server to `opencode.jsonc`:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "kali-mcp": {
-      "type": "local",
-      "command": [
-        "docker", "run", "--pull=always", "--rm", "-i",
-        "ghcr.io/found-cake/kali-mcp-go:latest",
-        "--timeout", "3600"
-      ],
-      "enabled": true,
-      "timeout": 3600000
-    }
-  }
-}
-```
-
-OpenCode's `timeout` is milliseconds, while the container's `--timeout` value is seconds. The longer OpenCode timeout also gives Docker enough time to pull the image on its first run.
-
-The examples above use the stable `latest` channel. Replace `:latest` with `:rolling` in any command or configuration to use the biweekly Kali Rolling image.
-
-##### Other MCP hosts
-
-Use this as the local STDIO MCP server command:
-
-```bash
-docker run --pull=always --rm -i ghcr.io/found-cake/kali-mcp-go:latest
-```
-
-To build and run the image locally instead of pulling from GHCR:
-
-```bash
-docker build -t kali-mcp-go:local . && docker run --rm -i kali-mcp-go:local
-```
-
-To use a fixed token instead of the generated one, pass it explicitly with `-e KALI_MCP_API_TOKEN=your-secret-token`. This is optional in Docker mode but remains required when running `kali-server` and `mcp-client` as separate processes.
-
-The `latest` and versioned images are built from Kali's last release when a project release tag is published. The `rolling` image is rebuilt from Kali Rolling every two weeks and whenever a project release tag is published. `--pull=always` checks the registry whenever the MCP server starts, but Docker downloads image layers only when the published digest has changed. Use a version tag such as `:v1.2.3` and omit `--pull=always` if you prefer a fixed image.
-
-The container uses Docker's default network. For Linux host networking, localhost targets, or packet capture, add `--network host --cap-add NET_ADMIN --cap-add NET_RAW` when your Docker environment supports it. Mount host files explicitly when a tool needs them, for example `-v "$PWD:/workspace:ro"`, and use the resulting `/workspace/...` path in the tool request.
-
-> **Security:** The image intentionally includes `execute_command` and runs Kali tools inside the container. The generated token protects the container's internal API but does not restrict what the container can reach. Restrict its network access where practical, and only test systems you own or have explicit written permission to assess.
-
----
-
-## Usage
-
-### 1. Start kali-server
-
-Set a strong API token and start the server on the machine where your security tools are installed. The default port is **5000**.
+On the machine that has the security tools, start `kali-server` with a shared token:
 
 ```bash
 export KALI_MCP_API_TOKEN="your-secret-token"
-
-./kali-server                           # binds to 127.0.0.1:5000
-./kali-server --ip 0.0.0.0 --port 5000  # expose on all interfaces
-./kali-server --debug                   # verbose logging
-./kali-server --max-concurrent 30       # allow up to 30 concurrent execution requests
+./kali-server  # listens on 127.0.0.1:5000
 ```
 
-`kali-server` limits concurrent execution requests to protect server resources. When the limit is exceeded, the server returns `503 Service Unavailable`.
+On the MCP host, use the same token with this launcher:
 
-> **Tip:** Use an SSH tunnel instead of exposing `kali-server` directly on the network — it's simpler and more secure:
-> ```bash
-> # On your local machine: forward localhost:5000 → remote:5000
-> ssh -L 5000:127.0.0.1:5000 user@kali-host -N
-> ```
-> Then point `mcp-client` at `http://127.0.0.1:5000` as usual.
+```bash
+KALI_MCP_API_TOKEN="your-secret-token" \
+  /path/to/mcp-client \
+  --server http://127.0.0.1:5000 \
+  --timeout 3600
+```
 
-### 2. Connect your AI client
+For a remote server, keep it bound to loopback and forward the port over SSH:
 
-Set the same token in your local environment, then add `mcp-client` to your AI client's MCP configuration.
+```bash
+ssh -L 5000:127.0.0.1:5000 user@kali-host -N
+```
+
+The bearer token authenticates requests but does not encrypt them. Prefer an SSH tunnel or another encrypted private transport instead of exposing the HTTP server directly to an untrusted network.
+
+### 2. Register the launcher
+
+[Claude Code](#claude-code) · [Claude Desktop](#claude-desktop) · [Codex](#openai-codex) · [OpenCode](#opencode-v1)
+
+The following examples use one-shot Docker. To use persistent Docker, replace the command and arguments with the `docker exec` launcher above. For separate processes, register `/path/to/mcp-client` with its `--server` and `--timeout` arguments, then provide `KALI_MCP_API_TOKEN` through the host's MCP environment configuration.
+
+#### Claude Code
+
+```bash
+claude mcp add kali-mcp -- \
+  /absolute/path/to/kali-mcp-docker \
+  --timeout 3600
+```
 
 #### Claude Desktop
+
+Add a local STDIO server to the desktop configuration:
 
 ```json
 {
   "mcpServers": {
     "kali-mcp": {
-      "command": "/path/to/mcp-client",
-      "args": ["--server", "http://127.0.0.1:5000"],
-      "env": {
-        "KALI_MCP_API_TOKEN": "your-secret-token"
-      }
+      "command": "/absolute/path/to/kali-mcp-docker",
+      "args": [
+        "--timeout", "3600"
+      ]
     }
   }
 }
 ```
 
-#### Claude Code
-
-```bash
-claude mcp add kali-mcp \
-  -e KALI_MCP_API_TOKEN=your-secret-token \
-  -- /path/to/mcp-client --server http://127.0.0.1:5000
-```
-
 #### OpenAI Codex
 
 ```bash
-codex mcp add kali-mcp \
-  --env KALI_MCP_API_TOKEN=your-secret-token \
-  -- /path/to/mcp-client --server http://127.0.0.1:5000 --timeout 3600
+codex mcp add kali-mcp -- \
+  /absolute/path/to/kali-mcp-docker \
+  --timeout 3600
 ```
 
-Equivalent `~/.codex/config.toml` configuration:
+For explicit startup and tool timeouts, use `~/.codex/config.toml` instead:
 
 ```toml
 [mcp_servers.kali-mcp]
-command = "/path/to/mcp-client"
-args = ["--server", "http://127.0.0.1:5000", "--timeout", "3600"]
-env = { KALI_MCP_API_TOKEN = "your-secret-token" }
+command = "/absolute/path/to/kali-mcp-docker"
+args = ["--timeout", "3600"]
+startup_timeout_sec = 300
 tool_timeout_sec = 3600
 ```
 
-#### OpenCode
+Run `codex mcp list` or `/mcp` inside Codex to verify the connection.
 
-For long-running scans, raise both:
+#### OpenCode v1
 
-- the **host-side MCP execution timeout**
-- the **mcp-client base request timeout** via `--timeout`
-
-This is the recommended setup for long-running tools such as `dirb_scan`, `nikto_scan`, `sqlmap_scan`, and long `execute_command` sessions.
+Add a local STDIO server to `opencode.jsonc`:
 
 ```jsonc
 {
@@ -366,13 +253,9 @@ This is the recommended setup for long-running tools such as `dirb_scan`, `nikto
     "kali-mcp": {
       "type": "local",
       "command": [
-        "/path/to/mcp-client",
-        "--server", "http://127.0.0.1:5000",
+        "/absolute/path/to/kali-mcp-docker",
         "--timeout", "3600"
       ],
-      "environment": {
-        "KALI_MCP_API_TOKEN": "your-secret-token"
-      },
       "enabled": true,
       "timeout": 3600000
     }
@@ -380,18 +263,30 @@ This is the recommended setup for long-running tools such as `dirb_scan`, `nikto
 }
 ```
 
-Notes:
+OpenCode's `timeout` is milliseconds; `mcp-client --timeout` is seconds.
 
-- `mcp.kali-mcp.timeout` controls the OpenCode-side MCP request timeout in milliseconds.
-- `--timeout` controls the `mcp-client` base request timeout in seconds.
-- For long-running scans, set **both**. Raising only one layer may still leave the other layer timing out early.
+### 3. Start an assessment
+
+After registration:
+
+1. Call `server_health` to confirm that the server and expected tools are available.
+2. Call `resolve_target` before scanning `127.0.0.1`, `localhost`, or `[::1]`, including when the intended target runs inside the same environment as `kali-server`.
+3. Explicitly select a reachable candidate and pass its signed `target_context` to subsequent tools while it remains valid. Each candidate reports `context_expires_at`; the caller decides when another connectivity check and fresh context are needed.
+
+Loopback targets always refer to the runtime where `kali-server` is running. `resolve_target` reports the runtime address, `host.docker.internal` when available, and the Linux default gateway without silently changing the target. A user can request Kali tools or a black-box assessment without mentioning MCP; the server instructions route the request to the provisioned tools.
+
+For image updates, host networking, file mounts, Chromium sandbox settings, and Nmap capabilities, see [Docker operation](docs/reference.md#docker-operation).
+
+## Configuration
+
+For synchronous long scans, configure the MCP host timeout above `mcp-client --timeout`. When the host propagates its deadline, the client reserves five seconds to cancel the remote process and return accumulated output. A host that forcibly terminates the STDIO process cannot receive a final partial-result envelope. Individual tool requests can still set tighter limits. Use `run_tool_async` when the agent expects a tool to exceed that host deadline or wants to start a new run after a synchronous timeout.
 
 ### mcp-client flags
 
 | Flag | Default | Description |
 |---|---|---|
 | `--server` | `http://127.0.0.1:5000` | kali-server URL |
-| `--timeout` | `300` | Base request timeout in seconds; individual streaming tools can raise this per request with their `timeout` field |
+| `--timeout` | `300` | Base request timeout in seconds; individual tool calls that expose `timeout` can raise it for that request |
 | `--debug` | `false` | Verbose stderr logging |
 
 ### kali-server flags
@@ -409,91 +304,121 @@ Notes:
 |---|---|---|
 | `KALI_MCP_API_TOKEN` | both | Bearer token for API authentication; required for separate processes, optional in Docker mode because the entrypoint generates one when omitted |
 | `KALI_MCP_DIR_WORDLIST` | kali-server | Override default dir wordlist (default: `/usr/share/wordlists/dirb/common.txt`) |
+| `KALI_MCP_SMALL_DIR_WORDLIST` | kali-server | Override the selectable small dir wordlist (default: `/usr/share/wordlists/dirb/small.txt`) |
 | `KALI_MCP_JOHN_WORDLIST` | kali-server | Override default John wordlist (default: `/usr/share/wordlists/rockyou.txt`) |
+| `KALI_MCP_NUCLEI_TEMPLATES` | kali-server | Nuclei template directory checked by `server_health` (Docker default: `/root/.local/nuclei-templates`) |
+| `KALI_MCP_BROWSER_OUTPUT_DIR` | kali-server | Browser handoff directory for request context and screenshots; empty uses the OS temporary directory (Docker default: `/var/lib/kali-mcp/browser`) |
 
 > `ReadTimeout` is enforced for incoming request bodies, while streaming responses remain unrestricted by `WriteTimeout`.
 
----
-
 ## Available Tools
+
+All 31 registered MCP tools are listed below. **SSE** streams incremental output; **GET** and **POST** use ordinary request/response. Executable tools are synchronous by default; [background jobs](docs/reference.md#background-jobs) provide asynchronous execution.
+
+### Runtime and evidence
+
+| MCP tool | Description | Transport |
+|---|---|---|
+| `server_health` | Check server status and tool availability | GET |
+| `get_scan_capabilities` | Inspect profile compatibility, target formats, supported controls, exact registered input schemas, effective default wordlists, and runtime plugin inventories | GET |
+| `resolve_target` | Inspect runtime, resolvable Docker-host, and gateway candidates without rewriting the target | POST |
+| `result_artifact_read` | Read a retained artifact completely through bounded byte pages or UTF-8 line ranges, including extracted tool stdout/stderr sections | GET |
+| `execute_command` | Execute an arbitrary shell command | SSE |
+
+### Background jobs
+
+See [background job execution and lifecycle](docs/reference.md#background-jobs) for arguments, timeouts, and result expiry.
 
 | MCP tool | Description |
 |---|---|
-| `server_health` | Check server status and tool availability |
-| `execute_command` | Execute an arbitrary shell command (SSE streaming) |
-| `nmap_scan` | Nmap port and service scan (SSE streaming) |
-| `gobuster_scan` | Directory / DNS / vhost brute-force (POST result) |
-| `dirb_scan` | Web content scanner (SSE streaming) |
-| `nikto_scan` | Web server vulnerability scanner (SSE streaming) |
-| `tshark_capture` | Packet capture and analysis (SSE streaming) |
-| `sqlmap_scan` | SQL injection scanner (SSE streaming) |
-| `metasploit_run` | Execute a Metasploit module via msfconsole |
-| `hydra_attack` | Password brute-force for quick single-credential checks (POST result) |
-| `hydra_attack_stream` | Password brute-force for long-running or file-based jobs with streaming progress |
-| `john_crack` | Password hash cracker |
-| `wpscan_analyze` | WordPress vulnerability scanner (SSE streaming) |
-| `enum4linux_scan` | Windows / Samba enumeration (SSE streaming) |
+| `run_tool_async` | Start any executable MCP tool as a new background run using that tool's unchanged argument object |
+| `scan_job_status` | Read pending progress or terminal state for an asynchronous tool run |
+| `scan_job_result` | Read an asynchronous tool run's existing terminal result |
+| `scan_job_cancel` | Request cancellation of a pending asynchronous tool run |
 
-### SSE support summary
+### Network and service discovery
 
-These MCP tools now stream incremental output over SSE instead of waiting for a buffered final result:
+| MCP tool | Description | Transport |
+|---|---|---|
+| `nmap_scan` | Nmap port and service scan | SSE |
+| `tshark_capture` | Packet capture and analysis | SSE |
+| `enum4linux_scan` | Windows / Samba enumeration | SSE |
+| `whatweb_scan` | Web technology and framework fingerprinting | SSE |
 
-- `execute_command`
-- `nmap_scan`
-- `dirb_scan`
-- `nikto_scan`
-- `wpscan_analyze`
-- `enum4linux_scan`
-- `sqlmap_scan`
-- `tshark_capture`
+### Web assessment and browser verification
 
-Streaming requests support an optional `timeout` field (seconds) to override the default 300-second request limit for that specific run. For `tshark_capture`, this request `timeout` is distinct from the capture `duration` field.
+| MCP tool | Description | Transport |
+|---|---|---|
+| `http_request` | Send one bounded HTTP request with structured status, headers, optional target-bound virtual host, body preview, provenance, and artifact output | POST |
+| `gobuster_scan` | Directory / DNS / vhost brute-force | SSE |
+| `dirb_scan` | Quiet web content scan with structured discovered paths | SSE |
+| `nikto_scan` | Web server vulnerability scanner with caller-selected installed plugins | SSE |
+| `wpscan_analyze` | WordPress vulnerability scanner | SSE |
+| `ffuf_scan` | Web content discovery with automatic calibration, size filtering, and optional recursion | SSE |
+| `feroxbuster_scan` | Recursive web content discovery with automatic tuning | SSE |
+| `nuclei_scan` | Nuclei scan with local template-selection preview; DoS, fuzz, DAST, OAST, and interactsh behavior is excluded unless explicitly enabled | SSE |
+| `sqlmap_scan` | SQL injection scanner | SSE |
+| `dalfox_scan` | XSS candidate scanning with JSON findings | SSE |
+| `browser_check` | Headless Chromium verification with per-call headers, cookies, origin-scoped `local_storage`, dialogs, console output, page errors, and optional rendered DOM | SSE |
 
-When using OpenCode, the per-tool request `timeout` is not enough by itself for long scans. You should also raise OpenCode's MCP execution timeout and the local `mcp-client --timeout` value as shown above.
+### Authentication and exploitation tools
 
-For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout` value for long-running tools, but OpenCode's `mcp.<name>.timeout` setting does not apply there.
+| MCP tool | Description | Transport |
+|---|---|---|
+| `jwt_analyze` | JWT decoding and optional live playbook/forced-error/all-tests assessment | SSE |
+| `hydra_attack` | Password brute-force for quick single-credential checks | POST |
+| `hydra_attack_stream` | Password brute-force for long-running or file-based jobs with streaming progress | SSE |
+| `john_crack` | Password hash cracker | POST |
+| `metasploit_run` | Execute a Metasploit module via msfconsole | POST |
 
-Quiet streams may also emit lightweight heartbeat SSE events to keep the connection active until the final `done` event arrives.
+### Dependency analysis
 
-These tools still use a normal POST request/response flow:
+| MCP tool | Description | Transport |
+|---|---|---|
+| `retirejs_scan` | Vulnerable JavaScript dependency scan from a local path or public bundles downloaded from a page URL | SSE |
+| `osv_scan` | OSV dependency scan for mounted source trees and lockfiles | SSE |
 
-- `gobuster_scan`
-- `metasploit_run`
-- `john_crack`
-- `server_health`
+## Detailed reference
 
-### Choosing between `hydra_attack` and `hydra_attack_stream`
+The [reference guide](docs/reference.md) preserves the operational details and tool-specific behavior:
 
-- Use `hydra_attack` for quick checks such as a single username/password attempt or other short runs where a buffered final result is sufficient.
-- Use `hydra_attack_stream` for long-running Hydra jobs when you want progress as it happens, especially with `username_file` and/or `password_file` inputs.
-
----
+| Topic | Reference |
+|---|---|
+| Docker deployment | [Images, networking, files, Chromium sandbox, and Nmap capabilities](docs/reference.md#docker-operation) |
+| Execution lifecycle | [Streaming and timeouts](docs/reference.md#streaming-and-timeouts), [background jobs](docs/reference.md#background-jobs), and [cancellation](docs/reference.md#cancellation-and-heartbeats) |
+| Results and evidence | [Structured results](docs/reference.md#structured-results), [artifact paging](docs/reference.md#artifact-paging), and [retention and redaction](docs/reference.md#artifact-retention-and-redaction) |
+| Targets and controls | [Explicit target resolution](docs/reference.md#explicit-target-resolution), [safety profiles](docs/reference.md#safety-profiles-and-controls), and [credential management](docs/reference.md#credential-management) |
+| Tool behavior | [Natural-language routing](docs/reference.md#natural-language-tool-routing), [SQLmap inputs](docs/reference.md#sqlmap-json-and-raw-requests), [manual HTTP](docs/reference.md#bounded-manual-http-requests), and [discovery baselines](docs/reference.md#scan-load-and-spa-baselines) |
+| Browser and authentication | [Browser local storage](docs/reference.md#browser-local-storage), [John and JWT workspaces](docs/reference.md#john-and-jwt-workspaces), and [Hydra modes](docs/reference.md#choosing-between-hydra_attack-and-hydra_attack_stream) |
 
 ## Project Structure
 
 ```
 kali-mcp-go/
 ├── cmd/
-│   ├── kali-server/      # HTTP API server
-│   └── mcp-client/       # MCP stdio bridge
+│   ├── kali-server/            # HTTP/SSE execution server
+│   │   └── internal/
+│   │       ├── server/         # process lifecycle and composition
+│   │       ├── httpapi/        # Fiber transport adapters
+│   │       └── toolapi/        # tool routes, validation, and execution plans
+│   └── mcp-client/             # MCP stdio bridge and tool registration
 ├── internal/
-│   ├── executor/         # Command execution + SSE streaming
-│   ├── kaliclient/       # HTTP client for kali-server
-│   └── tools/            # Tool argument builders + validation
+│   ├── admission/              # global and per-target execution limits
+│   ├── artifacts/              # bounded evidence storage and paging
+│   ├── executor/               # command execution and process streaming
+│   ├── httpexec/               # bounded manual HTTP requests
+│   ├── jobs/                   # short-lived asynchronous process lifecycle
+│   ├── kaliclient/             # authenticated HTTP/SSE client
+│   ├── results/                # result normalization and evidence protection
+│   ├── streaming/              # progress, heartbeat, and terminal events
+│   ├── targeting/              # target contexts, receipts, and provenance
+│   └── tools/                  # registry, policies, and argument builders
 └── pkg/
-    └── dto/              # Shared request/response types
+    └── dto/                    # shared request and result contracts
 ```
-
----
 
 ## Security Notice
 
 > ⚠️ Only target systems you own or have explicit written permission to test.
 >
 > `execute_command` runs arbitrary shell commands as the server process user — restrict network access appropriately and prefer an SSH tunnel over direct exposure.
-
----
-
-## Acknowledgments
-
-This project exists because [MCP-Kali-Server](https://github.com/Wh0am123/MCP-Kali-Server) by [@Wh0am123](https://github.com/Wh0am123) proved the concept and shaped the two-tier architecture. Full credit to the original for pioneering AI-assisted pentesting over MCP.

@@ -3,7 +3,7 @@ package tools
 import (
 	"fmt"
 	"os"
-	"sort"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -13,8 +13,11 @@ import (
 const (
 	defaultDirWordlistEnv  = "KALI_MCP_DIR_WORDLIST"
 	defaultDirWordlist     = "/usr/share/wordlists/dirb/common.txt"
+	smallDirWordlistEnv    = "KALI_MCP_SMALL_DIR_WORDLIST"
+	smallDirWordlist       = "/usr/share/wordlists/dirb/small.txt"
 	defaultJohnWordlistEnv = "KALI_MCP_JOHN_WORDLIST"
 	defaultJohnWordlist    = "/usr/share/wordlists/rockyou.txt"
+	nucleiTemplatesEnv     = "KALI_MCP_NUCLEI_TEMPLATES"
 )
 
 func DefaultDirWordlistPath() string {
@@ -23,6 +26,26 @@ func DefaultDirWordlistPath() string {
 
 func DefaultJohnWordlistPath() string {
 	return defaultWordlistPath(defaultJohnWordlistEnv, defaultJohnWordlist)
+}
+
+func SmallDirWordlistPath() string {
+	return defaultWordlistPath(smallDirWordlistEnv, smallDirWordlist)
+}
+
+func NucleiTemplatesPath() string {
+	if path := strings.TrimSpace(os.Getenv(nucleiTemplatesEnv)); path != "" {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".local", "nuclei-templates")
+}
+
+func NucleiTemplatesReady() bool {
+	info, err := os.Stat(filepath.Join(NucleiTemplatesPath(), ".checksum"))
+	return err == nil && info.Mode().IsRegular() && info.Size() > 0
 }
 
 func WordlistExists(path string) bool {
@@ -44,6 +67,89 @@ func appendSplitArgs(args []string, extra string, fieldName string) ([]string, e
 		return nil, fmt.Errorf("invalid %s: %w", fieldName, err)
 	}
 	return append(args, parts...), nil
+}
+
+func appendTargetSafeArgs(args []string, extra, fieldName string, rejectPositionals bool, forbiddenFlags ...string) ([]string, error) {
+	parts, err := splitArgs(extra)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", fieldName, err)
+	}
+	if err := rejectTargetSourceArgs(parts, fieldName, rejectPositionals, forbiddenFlags...); err != nil {
+		return nil, err
+	}
+	return append(args, parts...), nil
+}
+
+func rejectTargetSourceArgs(parts []string, fieldName string, rejectPositionals bool, forbiddenFlags ...string) error {
+	for _, argument := range parts {
+		if rejectPositionals && !strings.HasPrefix(argument, "-") {
+			return fmt.Errorf("%s must not contain positional targets; use attached option values such as --flag=value", fieldName)
+		}
+		for _, forbidden := range forbiddenFlags {
+			if argumentMatchesFlag(argument, forbidden) {
+				return fmt.Errorf("%s must not override the selected target with %s", fieldName, forbidden)
+			}
+		}
+	}
+	return nil
+}
+
+func rejectArguments(parts []string, fieldName, reason string, forbiddenFlags ...string) error {
+	for _, argument := range parts {
+		for _, forbidden := range forbiddenFlags {
+			if argumentMatchesFlag(argument, forbidden) {
+				return fmt.Errorf("%s must not set %s under this safety profile: %s", fieldName, forbidden, reason)
+			}
+		}
+	}
+	return nil
+}
+
+func rejectContextHostHeaders(options dto.ScanOptions, extra, fieldName string, headerFlags ...string) error {
+	if (options.TargetContext == "" && options.ResolutionReceipt == "") || strings.TrimSpace(extra) == "" {
+		return nil
+	}
+	parts, err := splitArgs(extra)
+	if err != nil {
+		return fmt.Errorf("invalid %s: %w", fieldName, err)
+	}
+	for index, argument := range parts {
+		for _, flag := range headerFlags {
+			if !argumentMatchesFlag(argument, flag) {
+				continue
+			}
+			values := []string(nil)
+			if _, inline, found := strings.Cut(argument, "="); found {
+				values = append(values, inline)
+			} else if argument != flag && !strings.HasPrefix(flag, "--") {
+				values = append(values, strings.TrimPrefix(argument, flag))
+			} else {
+				for valueIndex := index + 1; valueIndex < len(parts) && !strings.HasPrefix(parts[valueIndex], "-"); valueIndex++ {
+					values = append(values, parts[valueIndex])
+				}
+			}
+			for _, value := range values {
+				for line := range strings.Lines(strings.ReplaceAll(value, "\\n", "\n")) {
+					name, _, found := strings.Cut(line, ":")
+					if found && strings.EqualFold(strings.TrimSpace(name), "Host") {
+						return fmt.Errorf("%s must not override the Host header when target_context is supplied", fieldName)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func argumentMatchesFlag(argument, flag string) bool {
+	name, _, _ := strings.Cut(argument, "=")
+	normalizedName := strings.TrimLeft(name, "-")
+	normalizedFlag := strings.TrimLeft(flag, "-")
+	if normalizedName == normalizedFlag {
+		return true
+	}
+	return strings.HasPrefix(flag, "-") && !strings.HasPrefix(flag, "--") &&
+		strings.HasPrefix(name, "-") && !strings.HasPrefix(name, "--") && strings.HasPrefix(name, flag)
 }
 
 func defaultWordlistPath(envKey, fallback string) string {
@@ -75,7 +181,6 @@ func shellSplit(s string) ([]string, error) {
 		escaped      bool
 		tokenStarted bool
 	)
-
 	flush := func() {
 		if !tokenStarted {
 			return
@@ -84,14 +189,12 @@ func shellSplit(s string) ([]string, error) {
 		current.Reset()
 		tokenStarted = false
 	}
-
 	for _, r := range s {
 		switch {
 		case escaped:
 			current.WriteRune(r)
 			escaped = false
 			tokenStarted = true
-
 		case quote == '\'':
 			if r == '\'' {
 				quote = 0
@@ -99,7 +202,6 @@ func shellSplit(s string) ([]string, error) {
 				current.WriteRune(r)
 				tokenStarted = true
 			}
-
 		case quote == '"':
 			switch r {
 			case '"':
@@ -110,7 +212,6 @@ func shellSplit(s string) ([]string, error) {
 				current.WriteRune(r)
 				tokenStarted = true
 			}
-
 		default:
 			switch {
 			case unicode.IsSpace(r):
@@ -127,7 +228,6 @@ func shellSplit(s string) ([]string, error) {
 			}
 		}
 	}
-
 	if escaped {
 		return nil, fmt.Errorf("unterminated escape")
 	}
@@ -135,193 +235,9 @@ func shellSplit(s string) ([]string, error) {
 		return nil, fmt.Errorf("unterminated quote")
 	}
 	flush()
-
 	return args, nil
 }
 
-func NmapArgs(r dto.NmapRequest) ([]string, error) {
-	scanType := r.ScanType
-	if scanType == "" {
-		scanType = "-sCV"
-	}
-	scanParts, err := splitArgs(scanType)
-	if err != nil {
-		return nil, fmt.Errorf("invalid scan_type: %w", err)
-	}
-	extra := r.AdditionalArgs
-	if extra == "" {
-		extra = "-T4 -Pn"
-	}
-
-	args := append([]string{"nmap"}, scanParts...)
-	if r.Ports != "" {
-		args = append(args, "-p", r.Ports)
-	}
-	args, err = appendSplitArgs(args, extra, "additional_args")
-	if err != nil {
-		return nil, err
-	}
-	args = append(args, r.Target)
-	return args, nil
-}
-
-func GobusterArgs(r dto.GobusterRequest) ([]string, error) {
-	mode := r.Mode
-	if mode == "" {
-		mode = "dir"
-	}
-	wordlist, err := resolveWordlist(r.Wordlist, defaultDirWordlistEnv, defaultDirWordlist)
-	if err != nil {
-		return nil, err
-	}
-
-	args := []string{"gobuster", mode, "-u", r.URL, "-w", wordlist}
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-}
-
-func DirbArgs(r dto.DirbRequest) ([]string, error) {
-	wordlist, err := resolveWordlist(r.Wordlist, defaultDirWordlistEnv, defaultDirWordlist)
-	if err != nil {
-		return nil, err
-	}
-	args := []string{"dirb", r.URL, wordlist}
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-}
-
-func NiktoArgs(r dto.NiktoRequest) ([]string, error) {
-	args := []string{"nikto", "-h", r.Target}
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-}
-
-func TsharkArgs(r dto.TsharkRequest) ([]string, error) {
-	readFile := strings.TrimSpace(r.ReadFile)
-	iface := strings.TrimSpace(r.Interface)
-	switch {
-	case readFile == "" && iface == "":
-		return nil, fmt.Errorf("read_file or interface is required")
-	case readFile != "" && iface != "":
-		return nil, fmt.Errorf("read_file and interface cannot be used together")
-	}
-
-	args := []string{"tshark"}
-
-	if readFile != "" {
-		args = append(args, "-r", readFile)
-	} else {
-		args = append(args, "-i", iface)
-	}
-	if r.CaptureFilter != "" {
-		args = append(args, "-f", r.CaptureFilter)
-	}
-	if r.DisplayFilter != "" {
-		args = append(args, "-Y", r.DisplayFilter)
-	}
-	if r.PacketCount != "" {
-		args = append(args, "-c", r.PacketCount)
-	}
-	if r.Duration != "" {
-		args = append(args, "-a", "duration:"+r.Duration)
-	}
-	if r.OutputFields != "" {
-		args = append(args, "-T", "fields")
-		for field := range strings.SplitSeq(r.OutputFields, ",") {
-			trimmed := strings.TrimSpace(field)
-			if trimmed != "" {
-				args = append(args, "-e", trimmed)
-			}
-		}
-	}
-
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-}
-
-func SQLMapArgs(r dto.SQLMapRequest) ([]string, error) {
-	args := []string{"sqlmap", "-u", r.URL, "--batch"}
-	if r.Data != "" {
-		args = append(args, "--data", r.Data)
-	}
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-}
-
-func MetasploitScript(r dto.MetasploitRequest) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "use %s\n", r.Module)
-	optionKeys := make([]string, 0, len(r.Options))
-	for k := range r.Options {
-		optionKeys = append(optionKeys, k)
-	}
-	sort.Strings(optionKeys)
-	for _, k := range optionKeys {
-		v := r.Options[k]
-		fmt.Fprintf(&sb, "set %s %s\n", k, v)
-	}
-	sb.WriteString(metasploitAction(r.Module))
-	sb.WriteString("\nexit -y\n")
-	return sb.String()
-}
-
-func metasploitAction(module string) string {
-	trimmed := strings.TrimSpace(module)
-	if strings.HasPrefix(trimmed, "auxiliary/") || strings.HasPrefix(trimmed, "post/") {
-		return "run"
-	}
-	return "exploit"
-}
-
-func MetasploitArgs(rcFile string) []string {
-	return []string{"msfconsole", "-q", "-r", rcFile}
-}
-
-func HydraArgs(r dto.HydraRequest) ([]string, error) {
-	args := []string{"hydra", "-t", "4"}
-	if r.Username != "" {
-		args = append(args, "-l", r.Username)
-	} else {
-		args = append(args, "-L", r.UsernameFile)
-	}
-	if r.Password != "" {
-		args = append(args, "-p", r.Password)
-	} else {
-		args = append(args, "-P", r.PasswordFile)
-	}
-	args = append(args, r.Target, r.Service)
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-}
-
-func JohnArgs(r dto.JohnRequest) ([]string, error) {
-	wordlist, err := resolveWordlist(r.Wordlist, defaultJohnWordlistEnv, defaultJohnWordlist)
-	if err != nil {
-		return nil, err
-	}
-	args := []string{"john"}
-	if r.Format != "" {
-		args = append(args, "--format="+r.Format)
-	}
-	args = append(args, "--wordlist="+wordlist)
-	args, err = appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-	if err != nil {
-		return nil, err
-	}
-	return append(args, r.HashFile), nil
-}
-
-func WPScanArgs(r dto.WPScanRequest) ([]string, error) {
-	args := []string{"wpscan", "--url", r.URL}
-	return appendSplitArgs(args, r.AdditionalArgs, "additional_args")
-}
-
-func Enum4linuxArgs(r dto.Enum4linuxRequest) ([]string, error) {
-	extra := r.AdditionalArgs
-	if extra == "" {
-		extra = "-a"
-	}
-	args := []string{"enum4linux"}
-	args, err := appendSplitArgs(args, extra, "additional_args")
-	if err != nil {
-		return nil, err
-	}
-	return append(args, r.Target), nil
-}
 func ValidGobusterMode(mode string) bool {
 	switch mode {
 	case "", "dir", "dns", "fuzz", "vhost":

@@ -5,38 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/found-cake/kali-mcp-go/pkg/dto"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
-
-type Result struct {
-	Stdout     string
-	Stderr     string
-	ReturnCode int
-	TimedOut   bool
-}
-
-func (r *Result) Success() bool {
-	if r.TimedOut {
-		return r.Stdout != "" || r.Stderr != ""
-	}
-	return r.ReturnCode == 0
-}
-
-type Line struct {
-	Stream string
-	Text   string
-}
-
-type commandSpec struct {
-	name string
-	args []string
-}
 
 func RunExec(ctx context.Context, timeout time.Duration, name string, args ...string) *Result {
 	return execute(ctx, timeout, commandSpec{name: name, args: args}, nil)
@@ -79,28 +56,61 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	if timeout <= 0 {
 		timeout = dto.DefaultTimeout
 	}
+	startedAt := time.Now().UTC()
+	progress := newOutputProgress()
+	tool := commandTool(cmdSpec.name, cmdSpec.args)
+	result := &Result{
+		ReturnCode:   -1,
+		StartedAt:    startedAt,
+		Tool:         tool,
+		ToolVersion:  toolVersion(ctx, tool),
+		ArgvRedacted: redactArgs(cmdSpec.name, cmdSpec.args),
+		Timeout:      timeout,
+	}
+	defer func() {
+		result.Duration = time.Since(startedAt)
+		result.Progress = progress.snapshot()
+		result.FinalizeProgress()
+	}()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cmdSpec.name, cmdSpec.args...)
+	configureCommandCancellation(cmd)
+	cmd.WaitDelay = gracefulStopTimeout
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return &Result{Stderr: fmt.Sprintf("stdout pipe: %v", err), ReturnCode: -1}
+		result.Stderr = fmt.Sprintf("stdout pipe: %v", err)
+		result.FailureCode = "process_setup_failed"
+		return result
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		_ = stdoutPipe.Close()
-		return &Result{Stderr: fmt.Sprintf("stderr pipe: %v", err), ReturnCode: -1}
+		result.Stderr = fmt.Sprintf("stderr pipe: %v", err)
+		result.FailureCode = "process_setup_failed"
+		return result
 	}
 
 	if err := cmd.Start(); err != nil {
 		_ = stdoutPipe.Close()
 		_ = stderrPipe.Close()
-		return &Result{Stderr: fmt.Sprintf("start: %v", err), ReturnCode: -1}
+		result.Stderr = fmt.Sprintf("start: %v", err)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			result.Cancelled = true
+			result.FailureCode = "cancelled"
+		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			result.TimedOut = true
+			result.FailureCode = "timed_out"
+		} else {
+			result.FailureCode = "process_start_failed"
+		}
+		return result
 	}
-
-	cancelPipeClose := closePipesOnCancel(ctx, stdoutPipe, stderrPipe)
+	result.ProcessStarted = true
+	result.GracefulStop = gracefulStopTimeout
+	cancelPipeClose := closePipesAfterGrace(ctx, gracefulStopTimeout, stdoutPipe, stderrPipe)
 	defer close(cancelPipeClose)
 
 	var (
@@ -114,13 +124,14 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 		sc := newScanner(r)
 		for sc.Scan() {
 			text := sc.Text()
+			sequence := progress.observe(text)
 			buf.WriteString(text)
 			buf.WriteByte('\n')
-			if emit != nil && !emit(ctx, Line{Stream: stream, Text: text}) {
+			if emit != nil && !emit(ctx, Line{Stream: stream, Text: text, Sequence: sequence}) {
 				return
 			}
 		}
-		if err := sc.Err(); err != nil {
+		if err := sc.Err(); err != nil && !(ctx.Err() != nil && errors.Is(err, os.ErrClosed)) {
 			scanErrCh <- fmt.Errorf("%s scan: %w", stream, err)
 		}
 	}
@@ -130,9 +141,10 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	go collect(stderrPipe, "stderr", &stderr)
 	wg.Wait()
 	close(scanErrCh)
-
 	waitErr := cmd.Wait()
+	cleanupErr := cleanupCommandProcesses(cmd)
 	timedOut := ctx.Err() == context.DeadlineExceeded
+	cancelled := ctx.Err() == context.Canceled
 
 	rc := 0
 	if cmd.ProcessState != nil {
@@ -140,6 +152,10 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	if timedOut {
 		rc = -1
+		result.FailureCode = "timed_out"
+	} else if cancelled {
+		rc = -1
+		result.FailureCode = "cancelled"
 	}
 	if waitErr != nil && !timedOut {
 		var exitErr *exec.ExitError
@@ -164,34 +180,31 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	if scanFailed && rc == 0 {
 		rc = -1
+		result.FailureCode = "output_read_failed"
 	}
-
-	return &Result{
-		Stdout:     stdout.String(),
-		Stderr:     stderr.String(),
-		ReturnCode: rc,
-		TimedOut:   timedOut,
+	if cleanupErr != nil {
+		if stderr.Len() > 0 {
+			stderr.WriteByte('\n')
+		}
+		fmt.Fprintf(&stderr, "cleanup process group: %v", cleanupErr)
+		result.FailureCode = "process_cleanup_failed"
+		rc = -1
 	}
+	if rc != 0 && result.FailureCode == "" {
+		result.FailureCode = "nonzero_exit"
+	}
+	result.Stdout = stdout.String()
+	result.Stderr = stderr.String()
+	result.ReturnCode = rc
+	result.TimedOut = timedOut
+	result.Cancelled = cancelled
+	return result
 }
 
 func newScanner(r io.Reader) *bufio.Scanner {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
 	return sc
-}
-
-func closePipesOnCancel(ctx context.Context, pipes ...io.ReadCloser) chan struct{} {
-	stop := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			for _, p := range pipes {
-				_ = p.Close()
-			}
-		case <-stop:
-		}
-	}()
-	return stop
 }
 
 func Which(name string) bool {

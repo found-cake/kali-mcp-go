@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -85,6 +86,9 @@ func TestStreamDeliversDoneAfterLineDrain(t *testing.T) {
 	if res.ReturnCode != 0 {
 		t.Fatalf("expected return code 0, got %d", res.ReturnCode)
 	}
+	if res.Progress == nil || res.Progress.Phase != "completed" || res.Progress.ObservedOutputItems != 1 || res.Progress.LastObservedOutput != "ok" {
+		t.Fatalf("unexpected final progress: %+v", res.Progress)
+	}
 }
 
 func TestStreamExecDeliversDoneAfterLineDrain(t *testing.T) {
@@ -127,8 +131,32 @@ func TestStreamShellStopsPromptlyAfterCancel(t *testing.T) {
 		if res == nil {
 			t.Fatal("expected non-nil result")
 		}
+		if !res.Cancelled || res.TimedOut {
+			t.Fatalf("expected cancellation without timeout, got %+v", res)
+		}
+		if res.Duration <= 0 || res.StartedAt.IsZero() {
+			t.Fatalf("expected execution timing metadata, got %+v", res)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected canceled stream to finish promptly")
+	}
+}
+
+func TestRunTimeoutDoesNotReportExpectedPipeClosureAsOutputFailure(t *testing.T) {
+	// Given: a quiet process that exceeds its execution budget.
+
+	// When: the executor terminates the process and closes its output pipes.
+	result := RunShell(context.Background(), 20*time.Millisecond, "sleep 1")
+
+	// Then: only the timeout is reported, without synthetic pipe read errors.
+	if !result.TimedOut {
+		t.Fatalf("expected timeout, got %+v", result)
+	}
+	if strings.Contains(result.Stderr, "scan:") {
+		t.Fatalf("unexpected pipe closure error: %q", result.Stderr)
+	}
+	if result.Progress == nil || result.Progress.Phase != "timed_out" || result.Progress.ResumeSupported {
+		t.Fatalf("unexpected timeout progress: %+v", result.Progress)
 	}
 }
 
@@ -171,6 +199,52 @@ func TestStreamExecDoneChannelIsBuffered(t *testing.T) {
 	_, done := StreamExec(context.Background(), 5*time.Second, "printf", "ok\n")
 	if cap(done) != 1 {
 		t.Fatalf("expected buffered done channel with capacity 1, got %d", cap(done))
+	}
+}
+
+func TestRedactArgsHidesBrowserEvidencePath(t *testing.T) {
+	// Given: a browser invocation containing its private screenshot handoff path.
+	args := []string{"--url", "https://example.com", "--screenshot-path", "/tmp/private-evidence.jpg"}
+
+	// When: reproducibility metadata is prepared for the MCP result.
+	redacted := redactArgs("browser-check", args)
+
+	// Then: the ephemeral host path is not exposed to callers.
+	if strings.Contains(strings.Join(redacted, " "), "/tmp/private-evidence.jpg") {
+		t.Fatalf("ephemeral path remains in argv metadata: %v", redacted)
+	}
+}
+
+func TestRedactArgsHidesBrowserInputPaths(t *testing.T) {
+	args := []string{
+		"--url", "https://example.com",
+		"--headers-file", "/tmp/private-headers.json",
+		"--local-storage-file", "/tmp/private-storage.json",
+	}
+
+	redacted := redactArgs("browser-check", args)
+
+	joined := strings.Join(redacted, " ")
+	if strings.Contains(joined, "/tmp/private-headers.json") || strings.Contains(joined, "/tmp/private-storage.json") {
+		t.Fatalf("ephemeral browser input path remains in argv metadata: %v", redacted)
+	}
+}
+
+func TestRedactArgsHidesInlineNucleiHeaders(t *testing.T) {
+	// Given: safe Nuclei arguments containing sensitive inline header values.
+	args := []string{
+		"-H=Authorization: Bearer private-token",
+		"--header=Cookie: session=private-cookie",
+		"-header=Authorization: Bearer alternate-token",
+	}
+
+	// When: reproducibility metadata is prepared for the MCP result.
+	redacted := redactArgs("nuclei", args)
+
+	// Then: flag names remain useful while their values are removed.
+	want := []string{"-H=[REDACTED]", "--header=[REDACTED]", "-header=[REDACTED]"}
+	if !slices.Equal(redacted, want) {
+		t.Fatalf("inline header values remain in argv metadata\nwant: %v\n got: %v", want, redacted)
 	}
 }
 

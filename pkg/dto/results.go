@@ -1,37 +1,232 @@
 package dto
 
-import "strings"
+import (
+	"net/http"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
 
-type ToolResult struct {
-	Stdout         string `json:"stdout"`
-	Stderr         string `json:"stderr"`
-	ReturnCode     int    `json:"return_code"`
-	Success        bool   `json:"success"`
-	TimedOut       bool   `json:"timed_out"`
-	PartialResults bool   `json:"partial_results,omitempty"`
+type ExecutionStatus string
+
+const (
+	ExecutionSucceeded ExecutionStatus = "succeeded"
+	ExecutionFailed    ExecutionStatus = "failed"
+	ExecutionTimedOut  ExecutionStatus = "timed_out"
+	ExecutionCancelled ExecutionStatus = "cancelled"
+)
+
+func ExecutionStatusFromResult(returnCode int, timedOut, cancelled bool) ExecutionStatus {
+	switch {
+	case timedOut:
+		return ExecutionTimedOut
+	case cancelled:
+		return ExecutionCancelled
+	case returnCode != 0:
+		return ExecutionFailed
+	default:
+		return ExecutionSucceeded
+	}
 }
 
-func (r *ToolResult) Format() string {
-	var sb strings.Builder
-	if r.Stdout != "" {
-		sb.WriteString(r.Stdout)
+type FindingStatus string
+
+const (
+	FindingsDetected     FindingStatus = "detected"
+	FindingsNotDetected  FindingStatus = "not_detected"
+	FindingsInconclusive FindingStatus = "inconclusive"
+	FindingsUnknown      FindingStatus = "unknown"
+)
+
+type RequestCountSource string
+
+const (
+	RequestCountMeasured RequestCountSource = "measured"
+	RequestCountParsed   RequestCountSource = "parsed"
+	RequestCountUnknown  RequestCountSource = "unknown"
+)
+
+type RunStatus string
+
+const (
+	RunCompleted RunStatus = "completed"
+	RunFailed    RunStatus = "failed"
+	RunTimeout   RunStatus = "timeout"
+	RunCancelled RunStatus = "cancelled"
+)
+
+type FailureInfo struct {
+	Code            string            `json:"code"`
+	Message         string            `json:"message"`
+	Retryable       bool              `json:"retryable"`
+	ResumeSupported bool              `json:"resume_supported"`
+	Capacity        *CapacityMetadata `json:"capacity,omitempty"`
+}
+
+type ExecutionMetadata struct {
+	Tool            string                 `json:"tool"`
+	ToolVersion     string                 `json:"tool_version"`
+	Plugins         []string               `json:"plugins,omitempty"`
+	ArgvRedacted    []string               `json:"argv_redacted"`
+	StartedAt       time.Time              `json:"started_at"`
+	EndedAt         time.Time              `json:"ended_at"`
+	TimeoutMS       int64                  `json:"timeout_ms"`
+	ProcessStarted  bool                   `json:"process_started"`
+	GracefulStopMS  int64                  `json:"graceful_stop_ms"`
+	DryRun          bool                   `json:"dry_run"`
+	Profile         SafetyProfile          `json:"profile"`
+	RateLimit       int                    `json:"rate_limit"`
+	Concurrency     int                    `json:"concurrency"`
+	HealthURL       string                 `json:"health_url"`
+	Max5xxResponses int                    `json:"max_5xx_responses"`
+	Controls        ScanControlApplication `json:"controls"`
+}
+
+type ScanControlApplication struct {
+	RequestedRateLimit   int                  `json:"requested_rate_limit"`
+	AppliedRateLimit     int                  `json:"applied_rate_limit"`
+	RequestedConcurrency int                  `json:"requested_concurrency"`
+	AppliedConcurrency   int                  `json:"applied_concurrency"`
+	Controls             []AppliedScanControl `json:"controls"`
+}
+
+type AppliedScanControl struct {
+	Control     ScanControl        `json:"control"`
+	Requested   int                `json:"requested"`
+	Effective   int                `json:"effective"`
+	Applied     bool               `json:"applied"`
+	Enforcement ControlEnforcement `json:"enforcement"`
+}
+
+type HTTPResponseMetadata struct {
+	StatusCode    int              `json:"status_code"`
+	Headers       http.Header      `json:"headers"`
+	FinalURL      string           `json:"final_url"`
+	ContentLength int64            `json:"content_length"`
+	BodyBytes     int              `json:"body_bytes"`
+	BodyEncoding  string           `json:"body_encoding"`
+	BodyTruncated bool             `json:"body_truncated"`
+	Summary       *HTTPBodySummary `json:"summary,omitempty"`
+}
+
+type HTTPBodySummary struct {
+	BodySHA256             string   `json:"body_sha256"`
+	BodyExcerpt            string   `json:"body_excerpt,omitempty"`
+	BodyExcerptTruncated   bool     `json:"body_excerpt_truncated"`
+	JSONKeys               []string `json:"json_keys,omitempty"`
+	Location               string   `json:"location,omitempty"`
+	StackTraceSuspected    bool     `json:"stack_trace_suspected"`
+	SensitiveDataSuspected bool     `json:"sensitive_data_suspected"`
+}
+
+type HTTPRequestMetadata struct {
+	Method          string      `json:"method"`
+	URL             string      `json:"url"`
+	Host            string      `json:"host,omitempty"`
+	Headers         http.Header `json:"headers"`
+	ContentType     string      `json:"content_type,omitempty"`
+	BodyBytes       int         `json:"body_bytes"`
+	BodySHA256      string      `json:"body_sha256,omitempty"`
+	FollowRedirects bool        `json:"follow_redirects"`
+}
+
+type ToolResult struct {
+	CallID                  string                   `json:"call_id"`
+	Stdout                  string                   `json:"stdout"`
+	Stderr                  string                   `json:"stderr"`
+	StdoutBytes             int                      `json:"stdout_bytes"`
+	StderrBytes             int                      `json:"stderr_bytes"`
+	OutputTruncated         bool                     `json:"output_truncated"`
+	StdoutTruncated         bool                     `json:"stdout_truncated"`
+	StderrTruncated         bool                     `json:"stderr_truncated"`
+	FindingOutputTruncated  bool                     `json:"finding_output_truncated"`
+	ArtifactComplete        bool                     `json:"artifact_complete"`
+	ReturnCode              int                      `json:"return_code"`
+	Success                 bool                     `json:"success" jsonschema:"true when tool execution succeeded; does not mean a security finding was detected"`
+	TimedOut                bool                     `json:"timed_out"`
+	Cancelled               bool                     `json:"cancelled"`
+	PartialResults          bool                     `json:"partial_results"`
+	Status                  RunStatus                `json:"status" jsonschema:"completed|failed|timeout|cancelled overall run status"`
+	ExecutionStatus         ExecutionStatus          `json:"execution_status" jsonschema:"succeeded|failed|timed_out|cancelled tool execution outcome"`
+	FindingStatus           FindingStatus            `json:"finding_status" jsonschema:"detected|not_detected|inconclusive|unknown security finding outcome independent of execution_status"`
+	FindingTypes            []FindingType            `json:"finding_types,omitempty" jsonschema:"categories of observations produced or evaluated by the tool"`
+	ClassificationReason    string                   `json:"classification_reason,omitempty" jsonschema:"machine-readable reason for the execution and finding classification"`
+	HTTPRequests            *int                     `json:"http_requests"`
+	RequestCountSource      RequestCountSource       `json:"request_count_source"`
+	DurationMS              int64                    `json:"duration_ms"`
+	Failure                 *FailureInfo             `json:"failure"`
+	Execution               ExecutionMetadata        `json:"execution"`
+	Target                  *TargetProvenance        `json:"target"`
+	SPABaseline             *SPABaseline             `json:"spa_baseline"`
+	FalsePositiveRisk       string                   `json:"false_positive_risk"`
+	Warnings                []string                 `json:"warnings,omitempty"`
+	Artifacts               []ArtifactRef            `json:"artifacts"`
+	HTTPRequest             *HTTPRequestMetadata     `json:"http_request,omitempty"`
+	HTTPResponse            *HTTPResponseMetadata    `json:"http_response,omitempty"`
+	JWTAnalysis             *JWTAnalysisMetadata     `json:"jwt_analysis,omitempty"`
+	JWTLiveAnalysis         *JWTLiveAnalysisMetadata `json:"jwt_live_analysis,omitempty"`
+	SQLMapAnalysis          *SQLMapAnalysis          `json:"sqlmap_analysis,omitempty"`
+	NucleiPreview           *NucleiPreviewMetadata   `json:"nuclei_preview,omitempty"`
+	NucleiRuntime           *NucleiRuntimeMetadata   `json:"nuclei_runtime,omitempty"`
+	NucleiFindings          []NucleiFinding          `json:"nuclei_findings,omitempty"`
+	NucleiFindingsTotal     int                      `json:"nuclei_findings_total,omitempty"`
+	NucleiFindingsTruncated bool                     `json:"nuclei_findings_truncated,omitempty"`
+	DiscoveredPaths         []DiscoveredPath         `json:"discovered_paths,omitempty"`
+	Evidence                *EvidenceManifest        `json:"evidence,omitempty"`
+	Progress                *ProgressMetadata        `json:"progress,omitempty"`
+}
+
+func (r ToolResult) Compact(maximumBytes int) ToolResult {
+	r.StdoutBytes = len(r.Stdout)
+	r.StderrBytes = len(r.Stderr)
+	stdout, stdoutTruncated := compactUTF8(r.Stdout, maximumBytes)
+	stderr, stderrTruncated := compactUTF8(r.Stderr, maximumBytes)
+	r.Stdout = stdout
+	r.Stderr = stderr
+	r.StdoutTruncated = r.StdoutTruncated || stdoutTruncated
+	r.StderrTruncated = r.StderrTruncated || stderrTruncated
+	r.OutputTruncated = r.OutputTruncated || r.StdoutTruncated || r.StderrTruncated
+	return r
+}
+
+func compactUTF8(value string, maximumBytes int) (string, bool) {
+	if maximumBytes < 0 || len(value) <= maximumBytes {
+		return value, false
 	}
-	if r.Stderr != "" {
-		if sb.Len() > 0 {
-			sb.WriteString("\n[stderr]\n")
-		}
-		sb.WriteString(r.Stderr)
+	end := maximumBytes
+	for end > 0 && !utf8.RuneStart(value[end]) {
+		end--
 	}
-	if r.TimedOut {
-		sb.WriteString("\n\n[WARNING: timed out — partial results above]")
+	return strings.Clone(value[:end]), true
+}
+
+func (r *ToolResult) Finalize() {
+	r.Success = r.ExecutionStatus == ExecutionSucceeded
+	r.TimedOut = r.ExecutionStatus == ExecutionTimedOut
+	r.Cancelled = r.ExecutionStatus == ExecutionCancelled
+	switch r.ExecutionStatus {
+	case ExecutionSucceeded:
+		r.Status = RunCompleted
+	case ExecutionTimedOut:
+		r.Status = RunTimeout
+	case ExecutionCancelled:
+		r.Status = RunCancelled
+	default:
+		r.Status = RunFailed
 	}
-	if sb.Len() == 0 {
-		sb.WriteString("(no output)")
+	if r.Success {
+		r.Failure = nil
 	}
-	return sb.String()
+	if r.RequestCountSource == "" {
+		r.RequestCountSource = RequestCountUnknown
+	}
+	if !r.Success && !r.PartialResults {
+		r.PartialResults = r.Stdout != "" || r.HTTPRequests != nil || r.Progress != nil && r.Progress.ObservedOutputItems > 0
+	}
 }
 
 type HealthResult struct {
+	CallID                     string          `json:"call_id"`
 	Status                     string          `json:"status"`
 	Message                    string          `json:"message"`
 	ToolsStatus                map[string]bool `json:"tools_status"`
