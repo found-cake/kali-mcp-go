@@ -130,6 +130,28 @@ curl -fsSL \
   | sh
 ```
 
+The installer reads these variables from the `sh` process on the right side of the pipe:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `KALI_MCP_DOCKER_IMAGE` | `ghcr.io/found-cake/kali-mcp-go:latest` | Image tag or digest to install |
+| `KALI_MCP_DOCKER_PULL` | `always` | Docker pull policy: `always`, `missing`, or `never` |
+| `KALI_MCP_CONTAINER_NAME` | `kali-mcp` | Persistent container name used by subsequent `docker exec` commands |
+| `XDG_CACHE_HOME` | `$HOME/.cache` | Parent directory for the verified Chromium seccomp profile |
+
+For example, install a locally built image under a separate container name without pulling:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/found-cake/kali-mcp-go/refs/heads/master/scripts/run-docker.sh \
+  | KALI_MCP_DOCKER_IMAGE=kali-mcp-go:local \
+    KALI_MCP_DOCKER_PULL=never \
+    KALI_MCP_CONTAINER_NAME=kali-mcp-dev \
+    sh
+```
+
+Re-running the installer reuses a healthy managed container with the selected name. Remove that container before rerunning when changing its image or Docker options.
+
 Each MCP session starts only the lightweight client process inside that container:
 
 ```bash
