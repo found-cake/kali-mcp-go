@@ -51,42 +51,42 @@ jobs:
             runs_on: ubuntu-latest
             artifact_name: mcp-client_linux_amd64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: linux
             goarch: amd64
           - id: mcp-client-linux-arm64
             runs_on: ubuntu-latest
             artifact_name: mcp-client_linux_arm64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: linux
             goarch: arm64
           - id: mcp-client-windows-amd64
             runs_on: windows-latest
             artifact_name: mcp-client_windows_amd64.exe
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: windows
             goarch: amd64
           - id: mcp-client-windows-arm64
             runs_on: windows-latest
             artifact_name: mcp-client_windows_arm64.exe
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: windows
             goarch: arm64
           - id: mcp-client-darwin-arm64
             runs_on: macos-latest
             artifact_name: mcp-client_darwin_arm64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: darwin
             goarch: arm64
           - id: mcp-client-darwin-amd64
             runs_on: macos-latest
             artifact_name: mcp-client_darwin_amd64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: darwin
             goarch: amd64
 
@@ -115,8 +115,19 @@ jobs:
           path: dist/${{ matrix.artifact_name }}
           if-no-files-found: error
 
+  docker_image:
+    needs:
+      - validate_tag
+      - build
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-image.yml
+
   release:
-    needs: build
+    needs:
+      - build
+      - docker_image
     runs-on: ubuntu-latest
 
     steps:
@@ -136,9 +147,17 @@ jobs:
           sha256sum * > checksums.txt
 
       - name: Generate download notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
-          cat > release_notes.md << EOF
+          PR_BODY="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '.[0].body // ""')"
+          if [[ -n "${PR_BODY}" ]]; then
+            printf '%s\n\n' "${PR_BODY}" > release_notes.md
+          else
+            : > release_notes.md
+          fi
+          cat >> release_notes.md << EOF
           ## kali-server (Only Linux)
           - [Ubuntu x64](${BASE_URL}/kali-server_linux_amd64)
           - [Ubuntu arm64](${BASE_URL}/kali-server_linux_arm64)
@@ -160,17 +179,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" dist/* \
+            --generate-notes \
             --notes-file release_notes.md \
             --title "${GITHUB_REF_NAME}"
 
   cleanup_failed_release:
     needs:
       - build
+      - docker_image
       - release
     # Run cleanup if build or release fails
     if: |
       always() && (
         needs.build.result == 'failure' ||
+        needs.docker_image.result == 'failure' ||
         needs.release.result == 'failure'
       )
     runs-on: ubuntu-latest

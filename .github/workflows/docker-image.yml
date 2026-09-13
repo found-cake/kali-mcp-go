@@ -5,9 +5,7 @@ permissions:
   packages: write
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_call:
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
@@ -96,7 +94,9 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.target.platform }}
-          build-args: KALI_BASE_IMAGE=${{ matrix.channel.base_image }}
+          build-args: |
+            KALI_BASE_IMAGE=${{ matrix.channel.base_image }}
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export image digest
