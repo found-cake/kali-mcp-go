@@ -7,8 +7,8 @@ type StreamEvent struct {
 	Stream             string                 `json:"stream,omitempty"`
 	Line               string                 `json:"line,omitempty"`
 	ObservedBytes      int                    `json:"observed_bytes,omitempty"`
-	StdoutBytes        int                    `json:"stdout_bytes,omitempty"`
-	StderrBytes        int                    `json:"stderr_bytes,omitempty"`
+	StdoutBytes        *int                   `json:"stdout_bytes,omitempty"`
+	StderrBytes        *int                   `json:"stderr_bytes,omitempty"`
 	StdoutTruncated    bool                   `json:"stdout_truncated,omitempty"`
 	StderrTruncated    bool                   `json:"stderr_truncated,omitempty"`
 	Heartbeat          bool                   `json:"heartbeat,omitempty"`

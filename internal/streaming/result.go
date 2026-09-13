@@ -28,12 +28,14 @@ func writeStreamDoneEvent(w Writer, result *executor.Result, streamedStderr, cal
 		return
 	}
 	returnCode := result.ReturnCode
+	stdoutBytes := result.StdoutBytes
+	stderrBytes := result.StderrBytes
 	doneEvent := dto.StreamEvent{
 		CallID:             result.CallID,
 		Done:               true,
 		ReturnCode:         &returnCode,
-		StdoutBytes:        result.StdoutBytes,
-		StderrBytes:        result.StderrBytes,
+		StdoutBytes:        &stdoutBytes,
+		StderrBytes:        &stderrBytes,
 		StdoutTruncated:    result.StdoutTruncated,
 		StderrTruncated:    result.StderrTruncated,
 		TimedOut:           result.TimedOut,

@@ -42,7 +42,7 @@ func (a *streamAccumulator) baseResult() *dto.ToolResult {
 	}
 	stderrTruncated := a.stderr.truncated
 	if a.finalError != "" {
-		stderr, stderrBytes, stderrTruncated = appendFinalError(stderr, stderrBytes, stderrTruncated, a.finalError, a.retentionLimit())
+		stderr, stderrBytes, stderrTruncated = appendFinalError(stderr, stderrBytes, stderrTruncated, a.finalError, !a.stderr.authoritative, a.retentionLimit())
 	}
 	return &dto.ToolResult{
 		CallID: a.callID, Stdout: stdout, Stderr: stderr,
@@ -62,9 +62,11 @@ func (a *streamAccumulator) baseResult() *dto.ToolResult {
 	}
 }
 
-func appendFinalError(stderr string, stderrBytes int, truncated bool, finalError string, limit int) (string, int, bool) {
+func appendFinalError(stderr string, stderrBytes int, truncated bool, finalError string, countBytes bool, limit int) (string, int, bool) {
 	lineBytes := len(finalError) + 1
-	stderrBytes += lineBytes
+	if countBytes {
+		stderrBytes += lineBytes
+	}
 	if truncated || len(stderr)+lineBytes > limit {
 		return stderr, stderrBytes, true
 	}

@@ -97,3 +97,15 @@ func TestTerminalStreamMetadataPreservesDroppedOutput(t *testing.T) {
 		t.Fatalf("terminal output metadata was lost: %+v", result)
 	}
 }
+
+func TestTerminalErrorDoesNotDoubleCountAuthoritativeStderrBytes(t *testing.T) {
+	stream := "data: {\"done\":true,\"return_code\":-1,\"error\":\"oops\",\"stderr_bytes\":5}\n\n"
+
+	result, err := parseToolStream(strings.NewReader(stream), "call_failed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Stderr != "oops\n" || result.StderrBytes != 5 {
+		t.Fatalf("terminal error bytes were double counted: %+v", result)
+	}
+}
