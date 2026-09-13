@@ -50,9 +50,10 @@ type Result struct {
 const gracefulStopTimeout = time.Second
 
 type Line struct {
-	Stream   string
-	Text     string
-	Sequence int
+	Stream        string
+	Text          string
+	Sequence      int
+	ObservedBytes int
 }
 
 type commandSpec struct {

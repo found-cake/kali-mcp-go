@@ -30,26 +30,27 @@ func (a *streamAccumulator) partialResult() *dto.ToolResult {
 }
 
 func (a *streamAccumulator) baseResult() *dto.ToolResult {
-	stdoutBytes := a.stdoutBytes
+	stdout := a.stdout.builder.String()
+	stdoutBytes := a.stdout.observedBytes
 	if stdoutBytes == 0 {
-		stdoutBytes = streamLinesBytes(a.stdout)
+		stdoutBytes = len(stdout)
 	}
-	stderrBytes := a.stderrBytes
+	stderr := a.stderr.builder.String()
+	stderrBytes := a.stderr.observedBytes
 	if stderrBytes == 0 {
-		stderrBytes = streamLinesBytes(a.stderr)
+		stderrBytes = len(stderr)
 	}
-	stderrTruncated := a.stderrTruncated
-	stderr := append([]string(nil), a.stderr...)
+	stderrTruncated := a.stderr.truncated
 	if a.finalError != "" {
-		retainStreamLine(&stderr, &stderrBytes, &stderrTruncated, a.finalError, a.retentionLimit())
+		stderr, stderrBytes, stderrTruncated = appendFinalError(stderr, stderrBytes, stderrTruncated, a.finalError, a.retentionLimit())
 	}
 	return &dto.ToolResult{
-		CallID: a.callID, Stdout: joinStreamLines(a.stdout), Stderr: joinStreamLines(stderr),
+		CallID: a.callID, Stdout: stdout, Stderr: stderr,
 		StdoutBytes: stdoutBytes, StderrBytes: stderrBytes,
-		OutputTruncated: a.stdoutTruncated || stderrTruncated,
-		StdoutTruncated: a.stdoutTruncated, StderrTruncated: stderrTruncated,
+		OutputTruncated: a.stdout.truncated || stderrTruncated,
+		StdoutTruncated: a.stdout.truncated, StderrTruncated: stderrTruncated,
 		ReturnCode: a.returnCode, TimedOut: a.timedOut, Cancelled: a.cancelled,
-		PartialResults: (a.timedOut || a.cancelled) && (len(a.stdout) > 0 || len(a.stderr) > 0),
+		PartialResults: (a.timedOut || a.cancelled) && (a.stdout.builder.Len() > 0 || a.stderr.builder.Len() > 0),
 		HTTPRequests:   a.httpRequests, RequestCountSource: a.requestCountSource,
 		DurationMS: a.durationMS, Failure: a.failure, Execution: a.execution,
 		Target: a.target, SPABaseline: a.spaBaseline, FalsePositiveRisk: a.falsePositiveRisk,
@@ -61,30 +62,16 @@ func (a *streamAccumulator) baseResult() *dto.ToolResult {
 	}
 }
 
-func streamLinesBytes(lines []string) int {
-	size := len(lines)
-	for _, line := range lines {
-		size += len(line)
+func appendFinalError(stderr string, stderrBytes int, truncated bool, finalError string, limit int) (string, int, bool) {
+	lineBytes := len(finalError) + 1
+	stderrBytes += lineBytes
+	if truncated || len(stderr)+lineBytes > limit {
+		return stderr, stderrBytes, true
 	}
-	return size
-}
-
-func joinStreamLines(lines []string) string {
-	switch len(lines) {
-	case 0:
-		return ""
-	case 1:
-		return lines[0] + "\n"
-	}
-	size := len(lines)
-	for _, line := range lines {
-		size += len(line)
-	}
-	var joined strings.Builder
-	joined.Grow(size)
-	for _, line := range lines {
-		joined.WriteString(line)
-		joined.WriteByte('\n')
-	}
-	return joined.String()
+	var output strings.Builder
+	output.Grow(len(stderr) + lineBytes)
+	output.WriteString(stderr)
+	output.WriteString(finalError)
+	output.WriteByte('\n')
+	return output.String(), stderrBytes, false
 }

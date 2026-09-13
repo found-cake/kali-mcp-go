@@ -54,6 +54,19 @@ func TestRunShellBoundsRetainedOutput(t *testing.T) {
 	}
 }
 
+func TestRunShellCountsUnterminatedOutputBytes(t *testing.T) {
+	// Given: a command whose final output line has no newline terminator.
+	command := "printf x"
+
+	// When: the command runs through the production executor.
+	result := RunShell(context.Background(), 10*time.Second, command)
+
+	// Then: byte metadata reports the byte emitted by the process, not a normalized separator.
+	if result.ReturnCode != 0 || result.Stdout != "x\n" || result.StdoutBytes != 1 {
+		t.Fatalf("unterminated output metadata is inaccurate: %+v", result)
+	}
+}
+
 func TestStreamReportsScannerError(t *testing.T) {
 	t.Parallel()
 

@@ -1,14 +1,13 @@
 package kaliclient
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-func TestJoinStreamLinesPreservesExactNewlines(t *testing.T) {
+func TestStreamCapturePreservesNormalizedLines(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		lines []string
@@ -22,23 +21,27 @@ func TestJoinStreamLinesPreservesExactNewlines(t *testing.T) {
 		{name: "embedded newlines", lines: []string{"a\nb", "c\n", "\r"}, want: "a\nb\nc\n\n\r\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			original := slices.Clone(test.lines)
-			if got := joinStreamLines(test.lines); got != test.want {
-				t.Fatalf("joined=%q want=%q", got, test.want)
+			var capture streamCapture
+			for _, line := range test.lines {
+				capture.retainLine(line, 0, dto.MaximumRetainedOutputBytes)
 			}
-			if !slices.Equal(test.lines, original) {
-				t.Fatal("input lines changed")
+			if got := capture.builder.String(); got != test.want {
+				t.Fatalf("joined=%q want=%q", got, test.want)
 			}
 		})
 	}
 }
 
-func TestBaseResultPreservesStderrBackingArray(t *testing.T) {
-	backing := []string{"first", "second", "sentinel"}
-	accumulator := streamAccumulator{stderr: backing[:2], finalError: "final"}
+func TestBaseResultDoesNotMutateRetainedStderr(t *testing.T) {
+	accumulator := streamAccumulator{finalError: "final"}
+	for _, line := range []string{"first", "second"} {
+		if err := accumulator.consume(dto.StreamEvent{Stream: "stderr", Line: line}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	result := accumulator.baseResult()
-	if result.Stderr != "first\nsecond\nfinal\n" || backing[2] != "sentinel" || len(accumulator.stderr) != 2 {
-		t.Fatalf("stderr=%q backing=%q", result.Stderr, backing)
+	if result.Stderr != "first\nsecond\nfinal\n" || accumulator.stderr.builder.String() != "first\nsecond\n" {
+		t.Fatalf("stderr=%q retained=%q", result.Stderr, accumulator.stderr.builder.String())
 	}
 	if again := accumulator.baseResult(); again.Stderr != result.Stderr {
 		t.Fatal("repeated formatting changed stderr")
@@ -50,20 +53,24 @@ func TestStreamAccumulatorBoundsOutputBeforeCompaction(t *testing.T) {
 	accumulator := streamAccumulator{outputLimit: 10}
 
 	// When: a third line exceeds the retention boundary.
-	for _, line := range []string{"1234", "5678", "x"} {
-		if err := accumulator.consume(dto.StreamEvent{Stream: "stdout", Line: line}); err != nil {
+	for _, event := range []dto.StreamEvent{
+		{Stream: "stdout", Line: "1234"},
+		{Stream: "stdout", Line: "5678"},
+		{Stream: "stdout", Line: "x", ObservedBytes: 1},
+	} {
+		if err := accumulator.consume(event); err != nil {
 			t.Fatal(err)
 		}
 	}
 	result := accumulator.partialResult()
 
 	// Then: the prefix remains available with accurate truncation and observed-byte metadata.
-	if result.Stdout != "1234\n5678\n" || result.StdoutBytes != 12 || !result.StdoutTruncated || !result.OutputTruncated {
+	if result.Stdout != "1234\n5678\n" || result.StdoutBytes != 11 || !result.StdoutTruncated || !result.OutputTruncated {
 		t.Fatalf("unexpected bounded stream result: %+v", result)
 	}
 }
 
-func BenchmarkJoinStreamLines(b *testing.B) {
+func BenchmarkStreamCapture(b *testing.B) {
 	for _, test := range []struct {
 		name  string
 		count int
@@ -73,14 +80,15 @@ func BenchmarkJoinStreamLines(b *testing.B) {
 		{name: "1000", count: 1000},
 	} {
 		b.Run(test.name, func(b *testing.B) {
-			lines := make([]string, test.count)
-			for i := range lines {
-				lines[i] = strings.Repeat("x", 120)
-			}
+			line := strings.Repeat("x", 120)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				if got := joinStreamLines(lines); len(got) != test.count*121 {
+				var capture streamCapture
+				for range test.count {
+					capture.retainLine(line, 0, dto.MaximumRetainedOutputBytes)
+				}
+				if got := capture.builder.Len(); got != test.count*121 {
 					b.Fatal("unexpected joined length")
 				}
 			}

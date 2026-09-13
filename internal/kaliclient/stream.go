@@ -15,12 +15,8 @@ import (
 )
 
 type streamAccumulator struct {
-	stdout             []string
-	stderr             []string
-	stdoutBytes        int
-	stderrBytes        int
-	stdoutTruncated    bool
-	stderrTruncated    bool
+	stdout             streamCapture
+	stderr             streamCapture
 	outputLimit        int
 	returnCode         int
 	timedOut           bool
@@ -176,9 +172,9 @@ func (a *streamAccumulator) consume(event dto.StreamEvent) error {
 	}
 	switch event.Stream {
 	case "stdout":
-		retainStreamLine(&a.stdout, &a.stdoutBytes, &a.stdoutTruncated, event.Line, a.retentionLimit())
+		a.stdout.retainLine(event.Line, event.ObservedBytes, a.retentionLimit())
 	case "stderr":
-		retainStreamLine(&a.stderr, &a.stderrBytes, &a.stderrTruncated, event.Line, a.retentionLimit())
+		a.stderr.retainLine(event.Line, event.ObservedBytes, a.retentionLimit())
 	}
 	return nil
 }
@@ -190,12 +186,22 @@ func (a *streamAccumulator) retentionLimit() int {
 	return dto.MaximumRetainedOutputBytes
 }
 
-func retainStreamLine(lines *[]string, totalBytes *int, truncated *bool, line string, limit int) {
+type streamCapture struct {
+	builder       strings.Builder
+	observedBytes int
+	truncated     bool
+}
+
+func (capture *streamCapture) retainLine(line string, observedBytes, limit int) {
 	lineBytes := len(line) + 1
-	*totalBytes += lineBytes
-	if *truncated || *totalBytes > limit {
-		*truncated = true
+	if observedBytes <= 0 {
+		observedBytes = lineBytes
+	}
+	capture.observedBytes += observedBytes
+	if capture.truncated || capture.builder.Len()+lineBytes > limit {
+		capture.truncated = true
 		return
 	}
-	*lines = append(*lines, line)
+	capture.builder.WriteString(line)
+	capture.builder.WriteByte('\n')
 }

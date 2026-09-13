@@ -14,8 +14,12 @@ func compactToolResult(toolName string, result dto.ToolResult) dto.ToolResult {
 		result = result.Compact(defaultInlineOutputBytes)
 		return annotateOutputCompleteness(result)
 	}
-	result.StdoutBytes = max(result.StdoutBytes, len(result.Stdout))
-	result.StderrBytes = max(result.StderrBytes, len(result.Stderr))
+	if result.StdoutBytes == 0 {
+		result.StdoutBytes = len(result.Stdout)
+	}
+	if result.StderrBytes == 0 {
+		result.StderrBytes = len(result.Stderr)
+	}
 	stdout, stdoutTruncated := completeLinePreview(result.Stdout, nucleiInlineOutputBytes)
 	stderr, stderrTruncated := completeLinePreview(result.Stderr, nucleiInlineOutputBytes)
 	result.Stdout = stdout

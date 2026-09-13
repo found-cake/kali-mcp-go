@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -123,10 +124,18 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 		defer wg.Done()
 		sc := newScanner(r)
 		for sc.Scan() {
-			text := sc.Text()
+			raw := sc.Bytes()
+			observedBytes := len(raw)
+			if bytes.HasSuffix(raw, []byte{'\n'}) {
+				raw = raw[:len(raw)-1]
+			}
+			if bytes.HasSuffix(raw, []byte{'\r'}) {
+				raw = raw[:len(raw)-1]
+			}
+			text := string(raw)
 			sequence := progress.observe(text)
-			capture.WriteLine(text)
-			if emit != nil && !emit(ctx, Line{Stream: stream, Text: text, Sequence: sequence}) {
+			capture.WriteLine(text, observedBytes)
+			if emit != nil && !emit(ctx, Line{Stream: stream, Text: text, Sequence: sequence, ObservedBytes: observedBytes}) {
 				return
 			}
 		}
@@ -207,7 +216,18 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 func newScanner(r io.Reader) *bufio.Scanner {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
+	sc.Split(scanOutputLines)
 	return sc
+}
+
+func scanOutputLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if index := bytes.IndexByte(data, '\n'); index >= 0 {
+		return index + 1, data[:index+1], nil
+	}
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }
 
 func Which(name string) bool {

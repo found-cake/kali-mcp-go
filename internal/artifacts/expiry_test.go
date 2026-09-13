@@ -68,6 +68,28 @@ func TestStoreRemovesExpiredFileWithoutFollowupRequest(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsSaveAfterClose(t *testing.T) {
+	// Given: an artifact store whose backing directory has been closed.
+	store, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// When: a caller attempts to save after shutdown.
+	_, err = store.Save(Content{Payload: []byte("late")}, time.Now().UTC())
+
+	// Then: the lifecycle error is explicit and the backing directory stays removed.
+	if !errors.Is(err, ErrClosed) {
+		t.Fatalf("save after close error=%v want=%v", err, ErrClosed)
+	}
+	if _, statErr := os.Stat(store.directory); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("closed artifact directory was recreated: %v", statErr)
+	}
+}
+
 func TestStoreExpiryPreservesOutOfOrderTimestamps(t *testing.T) {
 	store := newExpiryTestStore(t)
 	now := time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC)

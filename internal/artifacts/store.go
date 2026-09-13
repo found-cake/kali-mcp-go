@@ -21,6 +21,7 @@ const (
 var (
 	ErrNotFound    = errors.New("artifact not found or expired")
 	ErrInvalidPage = errors.New("invalid artifact page")
+	ErrClosed      = errors.New("artifact store closed")
 )
 
 type Content struct {
@@ -54,6 +55,8 @@ type storedArtifact struct {
 }
 
 type Store struct {
+	lifecycle  sync.RWMutex
+	closed     bool
 	mu         sync.RWMutex
 	directory  string
 	items      map[string]storedArtifact
@@ -78,6 +81,11 @@ func newStore(clock clock) (*Store, error) {
 }
 
 func (s *Store) Save(content Content, now time.Time) (dto.ArtifactRef, error) {
+	s.lifecycle.RLock()
+	defer s.lifecycle.RUnlock()
+	if s.closed {
+		return dto.ArtifactRef{}, ErrClosed
+	}
 	id, err := randomID()
 	if err != nil {
 		return dto.ArtifactRef{}, err
@@ -104,6 +112,15 @@ func (s *Store) Save(content Content, now time.Time) (dto.ArtifactRef, error) {
 }
 
 func (s *Store) Read(id string, now time.Time) (dto.ArtifactRef, []byte, error) {
+	s.lifecycle.RLock()
+	defer s.lifecycle.RUnlock()
+	if s.closed {
+		return dto.ArtifactRef{}, nil, ErrNotFound
+	}
+	return s.read(id, now)
+}
+
+func (s *Store) read(id string, now time.Time) (dto.ArtifactRef, []byte, error) {
 	artifact, err := s.lookup(id, now)
 	if err != nil {
 		return dto.ArtifactRef{}, nil, ErrNotFound
@@ -142,6 +159,12 @@ func (s *Store) forget(id string) {
 }
 
 func (s *Store) Close() error {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
 	s.mu.Lock()
 	timers := make([]timer, 0, len(s.items))
 	for _, artifact := range s.items {
@@ -159,6 +182,11 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) expire(id string) {
+	s.lifecycle.RLock()
+	defer s.lifecycle.RUnlock()
+	if s.closed {
+		return
+	}
 	s.mu.Lock()
 	artifact, found := s.items[id]
 	if found {

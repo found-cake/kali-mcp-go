@@ -6,6 +6,7 @@ type StreamEvent struct {
 	CallID             string                 `json:"call_id,omitempty"`
 	Stream             string                 `json:"stream,omitempty"`
 	Line               string                 `json:"line,omitempty"`
+	ObservedBytes      int                    `json:"observed_bytes,omitempty"`
 	Heartbeat          bool                   `json:"heartbeat,omitempty"`
 	Done               bool                   `json:"done,omitempty"`
 	ReturnCode         *int                   `json:"return_code,omitempty"`

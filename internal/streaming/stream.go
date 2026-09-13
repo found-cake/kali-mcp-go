@@ -120,7 +120,7 @@ func (s streamRun) run(w Writer) {
 			}
 			progress.Checkpoint = fmt.Sprintf("output-item-%d", progress.ObservedOutputItems)
 			eventProgress := progress
-			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Stream: line.Stream, Line: line.Text, Progress: &eventProgress})
+			payload, err := json.Marshal(dto.StreamEvent{CallID: s.callID, Stream: line.Stream, Line: line.Text, ObservedBytes: line.ObservedBytes, Progress: &eventProgress})
 			if err != nil {
 				if s.cancel != nil {
 					s.cancel()

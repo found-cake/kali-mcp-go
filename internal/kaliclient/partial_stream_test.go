@@ -62,7 +62,10 @@ func TestBoundedRequestTimeoutLeavesResponseMargin(t *testing.T) {
 }
 
 func TestPartialStreamResultStartsAsFailed(t *testing.T) {
-	accumulator := streamAccumulator{callID: "call_partial", stdout: []string{"finding"}}
+	accumulator := streamAccumulator{callID: "call_partial"}
+	if err := accumulator.consume(dto.StreamEvent{Stream: "stdout", Line: "finding"}); err != nil {
+		t.Fatal(err)
+	}
 
 	result := accumulator.partialResult()
 

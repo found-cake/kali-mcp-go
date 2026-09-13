@@ -28,9 +28,9 @@ func (capture *outputCapture) Write(value []byte) (int, error) {
 	return capture.builder.Write(value)
 }
 
-func (capture *outputCapture) WriteLine(value string) {
+func (capture *outputCapture) WriteLine(value string, observedBytes int) {
 	lineBytes := len(value) + 1
-	capture.total += lineBytes
+	capture.total += observedBytes
 	if capture.truncated || capture.builder.Len()+lineBytes > capture.limit {
 		capture.truncated = true
 		return

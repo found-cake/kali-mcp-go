@@ -177,8 +177,12 @@ type ToolResult struct {
 }
 
 func (r ToolResult) Compact(maximumBytes int) ToolResult {
-	r.StdoutBytes = max(r.StdoutBytes, len(r.Stdout))
-	r.StderrBytes = max(r.StderrBytes, len(r.Stderr))
+	if r.StdoutBytes == 0 {
+		r.StdoutBytes = len(r.Stdout)
+	}
+	if r.StderrBytes == 0 {
+		r.StderrBytes = len(r.Stderr)
+	}
 	stdout, stdoutTruncated := compactUTF8(r.Stdout, maximumBytes)
 	stderr, stderrTruncated := compactUTF8(r.Stderr, maximumBytes)
 	r.Stdout = stdout
