@@ -1,6 +1,6 @@
 name: Release
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
@@ -122,6 +122,8 @@ jobs:
     outputs:
       latest_digest: ${{ steps.capture.outputs.latest_digest }}
       rolling_digest: ${{ steps.capture.outputs.rolling_digest }}
+      release_digest: ${{ steps.capture.outputs.release_digest }}
+      rolling_release_digest: ${{ steps.capture.outputs.rolling_release_digest }}
 
     steps:
       - name: Set up Docker Buildx
@@ -133,11 +135,12 @@ jobs:
           IMAGE: ghcr.io/${{ github.repository }}
         run: |
           image_digest() {
-            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null \
-              | jq -r '.digest // empty' || true
+            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null || true
           }
           echo "latest_digest=$(image_digest "${IMAGE}:latest")" >> "${GITHUB_OUTPUT}"
           echo "rolling_digest=$(image_digest "${IMAGE}:rolling")" >> "${GITHUB_OUTPUT}"
+          echo "release_digest=$(image_digest "${IMAGE}:${GITHUB_REF_NAME}")" >> "${GITHUB_OUTPUT}"
+          echo "rolling_release_digest=$(image_digest "${IMAGE}:${GITHUB_REF_NAME}-rolling")" >> "${GITHUB_OUTPUT}"
 
   docker_image:
     needs:
@@ -154,6 +157,8 @@ jobs:
       - build
       - docker_image
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v7
@@ -264,10 +269,11 @@ jobs:
           IMAGE: ghcr.io/${{ github.repository }}
           PREVIOUS_LATEST: ${{ needs.registry_state.outputs.latest_digest }}
           PREVIOUS_ROLLING: ${{ needs.registry_state.outputs.rolling_digest }}
+          PREVIOUS_RELEASE: ${{ needs.registry_state.outputs.release_digest }}
+          PREVIOUS_ROLLING_RELEASE: ${{ needs.registry_state.outputs.rolling_release_digest }}
         run: |
           image_digest() {
-            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null \
-              | jq -r '.digest // empty' || true
+            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null || true
           }
 
           owner="${GITHUB_REPOSITORY_OWNER}"
@@ -282,7 +288,7 @@ jobs:
           deleted_digests=''
           delete_new_digest() {
             digest="$1"
-            if [[ -z "${digest}" || "${digest}" == "${PREVIOUS_LATEST}" || "${digest}" == "${PREVIOUS_ROLLING}" || " ${deleted_digests} " == *" ${digest} "* ]]; then
+            if [[ -z "${digest}" || "${digest}" == "${PREVIOUS_LATEST}" || "${digest}" == "${PREVIOUS_ROLLING}" || "${digest}" == "${PREVIOUS_RELEASE}" || "${digest}" == "${PREVIOUS_ROLLING_RELEASE}" || " ${deleted_digests} " == *" ${digest} "* ]]; then
               return
             fi
             version_id="$(gh api "${versions_api}?per_page=100" --jq ".[] | select(.name == \"${digest}\") | .id")"
@@ -295,19 +301,19 @@ jobs:
           }
 
           release_digest="$(image_digest "${IMAGE}:${GITHUB_REF_NAME}")"
+          rolling_release_digest="$(image_digest "${IMAGE}:${GITHUB_REF_NAME}-rolling")"
           latest_digest="$(image_digest "${IMAGE}:latest")"
           rolling_digest="$(image_digest "${IMAGE}:rolling")"
-          delete_new_digest "${release_digest}"
-          if [[ "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
-            delete_new_digest "${latest_digest}"
+          if [[ "${release_digest}" != "${PREVIOUS_RELEASE}" ]]; then
+            delete_new_digest "${release_digest}"
           fi
-          if [[ "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
-            delete_new_digest "${rolling_digest}"
+          if [[ "${rolling_release_digest}" != "${PREVIOUS_ROLLING_RELEASE}" ]]; then
+            delete_new_digest "${rolling_release_digest}"
           fi
-          if [[ -n "${PREVIOUS_LATEST}" && "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
+          if [[ -n "${PREVIOUS_LATEST}" && "${latest_digest}" == "${release_digest}" && "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
             docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${PREVIOUS_LATEST}"
           fi
-          if [[ -n "${PREVIOUS_ROLLING}" && "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
+          if [[ -n "${PREVIOUS_ROLLING}" && "${rolling_digest}" == "${rolling_release_digest}" && "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
             docker buildx imagetools create --tag "${IMAGE}:rolling" "${IMAGE}@${PREVIOUS_ROLLING}"
           fi
 

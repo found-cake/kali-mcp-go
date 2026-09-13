@@ -19,7 +19,7 @@ Detailed Docker operation, execution contracts, evidence handling, and tool-spec
 ### Images and updates
 
 - `latest` and version tags use Kali's last release and are published with project releases.
-- `rolling` uses Kali Rolling and is rebuilt every two weeks and with project releases.
+- `rolling` uses Kali Rolling and is rebuilt every two weeks and with project releases; release builds also retain a matching `vX.Y.Z-rolling` tag for traceability and safe rollback.
 - `--pull=always` checks the registry at startup but downloads layers only when the digest changes.
 - With the default `always` pull policy, rerunning a Raw installer replaces its managed container when the selected image tag resolves to a new digest. Other Docker option changes require a different container name or manual removal of the existing managed container.
 
