@@ -26,7 +26,7 @@ func registerAsyncJobs(server *mcp.Server, kali *kaliclient.Client, schemas tool
 	}
 	registrations := []jobToolRegistration{
 		{name: "scan_job_status", description: "Inspect pending progress or terminal status for an asynchronous tool job.", operation: kali.JobStatus},
-		{name: "scan_job_result", description: "Read the existing ToolResult from an asynchronous tool job; terminal results remain available for 30 seconds after process exit.", operation: kali.JobResult},
+		{name: "scan_job_result", description: "Read the existing ToolResult from an asynchronous tool job; after process exit, terminal results remain available for the requested execution timeout plus a three-minute grace period.", operation: kali.JobResult},
 		{name: "scan_job_cancel", description: "Request cancellation of a running asynchronous tool job.", operation: kali.JobCancel},
 	}
 	for _, registration := range registrations {

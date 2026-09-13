@@ -13,7 +13,7 @@ import (
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
-const DefaultRetention = 30 * time.Second
+const defaultRetentionGrace = 3 * time.Minute
 
 var (
 	ErrNotFound = errors.New("job not found or expired")
@@ -68,24 +68,24 @@ type record struct {
 }
 
 type Store struct {
-	mu        sync.Mutex
-	root      context.Context
-	stop      context.CancelFunc
-	retention time.Duration
-	clock     clock
-	jobs      map[string]*record
-	wg        sync.WaitGroup
-	closed    bool
+	mu             sync.Mutex
+	root           context.Context
+	stop           context.CancelFunc
+	retentionGrace time.Duration
+	clock          clock
+	jobs           map[string]*record
+	wg             sync.WaitGroup
+	closed         bool
 }
 
 func New(parent context.Context) *Store {
-	return newStore(parent, DefaultRetention, realClock{})
+	return newStore(parent, defaultRetentionGrace, realClock{})
 }
 
-func newStore(parent context.Context, retention time.Duration, clock clock) *Store {
+func newStore(parent context.Context, retentionGrace time.Duration, clock clock) *Store {
 	root, stop := context.WithCancel(parent)
 	return &Store{
-		root: root, stop: stop, retention: retention, clock: clock,
+		root: root, stop: stop, retentionGrace: retentionGrace, clock: clock,
 		jobs: make(map[string]*record),
 	}
 }
@@ -151,8 +151,9 @@ func (s *Store) complete(id string, result dto.ToolResult) {
 	}
 	entry.snapshot.Result = &result
 	entry.snapshot.Progress = result.Progress
-	entry.snapshot.ExpiresAt = s.clock.Now().Add(s.retention)
-	entry.timer = s.clock.AfterFunc(s.retention, func() { s.expire(id) })
+	retention := entry.snapshot.Timeout + s.retentionGrace
+	entry.snapshot.ExpiresAt = s.clock.Now().Add(retention)
+	entry.timer = s.clock.AfterFunc(retention, func() { s.expire(id) })
 }
 
 func (s *Store) expire(id string) {

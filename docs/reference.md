@@ -82,7 +82,7 @@ For Codex and other MCP hosts, you may still want a larger `mcp-client --timeout
 
 Executable tools remain synchronous by default and do not expose per-tool `async` fields. To run one in the background, call `run_tool_async` with its MCP `tool_name` and the exact `arguments` object accepted by the dedicated tool. Async avoids the MCP host deadline but preserves `arguments.timeout`; after a process timeout, start a new run with a longer timeout or narrower scope. It does not reattach to or resume the abandoned call. The response contains `{job_id,status,data}` with `status: pending`; use `scan_job_status`, `scan_job_result`, or `scan_job_cancel` with that ID.
 
-Terminal jobs use `completed` when execution succeeded and `error` for failed, timed-out, or cancelled execution, while `data` contains the same tool result contract used synchronously. Terminal lookup expires 30 seconds after the process exits, so retrieve the result promptly. Result artifacts retain their independent one-hour lifetime. Jobs are in-memory process-control state, not durable workflow or credential sessions, and server shutdown cancels pending processes.
+Terminal jobs use `completed` when execution succeeded and `error` for failed, timed-out, or cancelled execution, while `data` contains the same tool result contract used synchronously. After the process exits, terminal lookup remains available for the caller's requested execution timeout, or the normalized 300-second default when it is omitted, plus a three-minute grace period. This lets a caller defer one result lookup until its declared execution window has passed instead of polling continuously. Result artifacts retain their independent one-hour lifetime. Jobs are in-memory process-control state, not durable workflow or credential sessions, and server shutdown cancels pending processes.
 
 ## Cancellation and heartbeats
 
@@ -134,7 +134,7 @@ The authenticated raw HTTP endpoint `GET /api/artifacts/:id` also remains availa
 
 Executable tools share one compact top-level MCP output contract. Detailed nested evidence remains in structured content and artifacts, while the common schema keeps status, classification, request-count provenance, target provenance, and artifact fields discoverable without repeating the full nested schema for every tool.
 
-Progress checkpoints describe already observed output. Asynchronous jobs preserve process state only while running and expose their terminal result for 30 seconds; they do not add scanner-native checkpoints or continuation. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without durable shared MCP session memory.
+Progress checkpoints describe already observed output. Asynchronous jobs preserve process state only while running and expose their terminal result after completion for the caller's requested timeout, or the normalized 300-second default when omitted, plus a three-minute grace period; they do not add scanner-native checkpoints or continuation. `resume_supported` remains false unless a tool can guarantee native continuation, so the orchestrator decides whether to retry and how to exclude previously observed work without durable shared MCP session memory.
 
 ## Explicit target resolution
 

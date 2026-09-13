@@ -14,6 +14,7 @@ import (
 type fakeTimer struct {
 	mu      sync.Mutex
 	stopped bool
+	delay   time.Duration
 	fire    func()
 }
 
@@ -46,16 +47,16 @@ type fakeClock struct {
 
 func (c *fakeClock) Now() time.Time { return c.now }
 
-func (c *fakeClock) AfterFunc(_ time.Duration, fire func()) timer {
-	t := &fakeTimer{fire: fire}
+func (c *fakeClock) AfterFunc(delay time.Duration, fire func()) timer {
+	t := &fakeTimer{delay: delay, fire: fire}
 	c.scheduled <- t
 	return t
 }
 
-func TestStoreRetainsCompletedResultForConfiguredTTL(t *testing.T) {
+func TestStoreRetainsCompletedResultForRequestedTimeoutPlusGrace(t *testing.T) {
 	// Given: an asynchronous task held until the test releases it.
 	clock := &fakeClock{now: time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC), scheduled: make(chan *fakeTimer, 1)}
-	store := newStore(t.Context(), 30*time.Second, clock)
+	store := newStore(t.Context(), defaultRetentionGrace, clock)
 	release := make(chan struct{})
 	started := make(chan struct{})
 	created, err := store.Start(StartSpec{
@@ -85,7 +86,7 @@ func TestStoreRetainsCompletedResultForConfiguredTTL(t *testing.T) {
 		t.Fatalf("get completed job: %v", err)
 	}
 
-	// Then: pending progress and the direct terminal ToolResult data remain available until expiry.
+	// Then: pending progress and the direct terminal ToolResult data remain available for the requested timeout plus the configured grace period.
 	if pending.Status != dto.JobPending || pending.Progress == nil || pending.Progress.ObservedOutputItems != 3 {
 		t.Fatalf("unexpected pending snapshot: %+v", pending)
 	}
@@ -102,6 +103,9 @@ func TestStoreRetainsCompletedResultForConfiguredTTL(t *testing.T) {
 	}
 	if result.CallID != "call_test" || result.ReturnCode != 0 {
 		t.Fatalf("unexpected completed data: %+v", result)
+	}
+	if expiry.delay != 4*time.Minute {
+		t.Fatalf("expiry delay=%s, want 4m", expiry.delay)
 	}
 	expiry.Fire()
 	if _, err := store.Get(created.ID); !errors.Is(err, ErrNotFound) {
