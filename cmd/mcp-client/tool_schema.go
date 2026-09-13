@@ -1,0 +1,107 @@
+package main
+
+import (
+	"fmt"
+
+	toolmeta "github.com/found-cake/kali-mcp-go/internal/tools"
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+const (
+	outerTimeoutDescription    = "Outer tool-process deadline in seconds (0 = 300), separate from rate and concurrency. Increase it for broad low-rate scans or reduce scope; use run_tool_async to avoid an MCP host deadline, which does not override this value. A timeout means incomplete coverage."
+	nucleiRateLimitDescription = "Requests per second passed to Nuclei's average native limiter; short rolling-window bursts may exceed this value; 0 means unset, not unlimited."
+)
+
+func executableMCPTool[T any](definition dto.ScanToolCapability) (*mcp.Tool, error) {
+	schema, err := jsonschema.For[T](nil)
+	if err != nil {
+		return nil, fmt.Errorf("infer %s input schema: %w", definition.Tool, err)
+	}
+	if definition.Tool == "sqlmap_scan" {
+		minimumStatus := float64(100)
+		maximumStatus := float64(599)
+		statusSchema := schema.Properties["true_status_code"]
+		statusSchema.Minimum = &minimumStatus
+		statusSchema.Maximum = &maximumStatus
+	}
+	if definition.Tool == "nikto_scan" {
+		minimumPlugins := 1
+		pluginsSchema := schema.Properties["plugins"]
+		pluginsSchema.MinItems = &minimumPlugins
+		pluginsSchema.UniqueItems = true
+		schema.Required = append(schema.Required, "plugins")
+	}
+	if timeoutSchema, ok := schema.Properties[string(dto.ScanControlTimeout)]; ok {
+		timeoutSchema.Description = outerTimeoutDescription
+	}
+	if rateLimitSchema, ok := schema.Properties[string(dto.ScanControlRateLimit)]; ok && definition.Tool == "nuclei_scan" {
+		rateLimitSchema.Description = nucleiRateLimitDescription
+	}
+	supported := make(map[dto.ScanControl]bool, len(definition.Controls))
+	for _, control := range definition.Controls {
+		supported[control.Control] = true
+	}
+	for _, control := range []dto.ScanControl{
+		dto.ScanControlTimeout,
+		dto.ScanControlRateLimit,
+		dto.ScanControlConcurrency,
+		dto.ScanControlMax5xx,
+		dto.ScanControlDryRun,
+	} {
+		if !supported[control] {
+			delete(schema.Properties, string(control))
+		}
+	}
+	if profileSchema, ok := schema.Properties["profile"]; ok {
+		profiles := make([]any, 0, len(definition.Profiles)+1)
+		for _, profile := range definition.Profiles {
+			profiles = append(profiles, string(profile))
+		}
+		profiles = append(profiles, string(dto.ProfileExplicitCustom))
+		profileSchema.Description = "safety profile accepted by this tool"
+		profileSchema.Enum = profiles
+	}
+	for _, control := range []dto.ScanControl{
+		dto.ScanControlRateLimit,
+		dto.ScanControlConcurrency,
+		dto.ScanControlMax5xx,
+	} {
+		controlSchema, ok := schema.Properties[string(control)]
+		if !ok {
+			continue
+		}
+		maximum := float64(toolmeta.ScanControlMaximum(dto.ProfileExplicitCustom, control))
+		controlSchema.Maximum = &maximum
+	}
+	for _, profile := range definition.Profiles {
+		profileProperties := make(map[string]*jsonschema.Schema)
+		for _, control := range definition.Controls {
+			maximum := toolmeta.ScanControlMaximum(profile, control.Control)
+			if maximum == 0 {
+				continue
+			}
+			maximumValue := float64(maximum)
+			profileProperties[string(control.Control)] = &jsonschema.Schema{Maximum: &maximumValue}
+		}
+		if len(profileProperties) == 0 {
+			continue
+		}
+		profileValue := any(string(profile))
+		schema.AllOf = append(schema.AllOf, &jsonschema.Schema{
+			If: &jsonschema.Schema{
+				Required: []string{"profile"},
+				Properties: map[string]*jsonschema.Schema{
+					"profile": {Const: &profileValue},
+				},
+			},
+			Then: &jsonschema.Schema{Properties: profileProperties},
+		})
+	}
+	description := applyToolInputExample(definition.Tool, definition.Description, schema)
+	return &mcp.Tool{
+		Name: definition.Tool, Description: description,
+		InputSchema: schema, OutputSchema: toolResultOutputSchema(),
+	}, nil
+}

@@ -2,12 +2,9 @@ name: Docker Image
 
 permissions:
   contents: read
-  packages: write
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_call:
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
@@ -65,6 +62,9 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.should_build == 'true'
     runs-on: ${{ matrix.target.runner }}
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +96,9 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.target.platform }}
-          build-args: KALI_BASE_IMAGE=${{ matrix.channel.base_image }}
+          build-args: |
+            KALI_BASE_IMAGE=${{ matrix.channel.base_image }}
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export image digest
@@ -120,6 +122,12 @@ jobs:
       - build_image
     if: needs.prepare.outputs.should_build == 'true'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: kali-mcp-ghcr-publication
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -143,6 +151,44 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Capture previous image state
+        env:
+          CHANNEL: ${{ matrix.channel.name }}
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          image_digest() {
+            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null || true
+          }
+          channel_tag="${CHANNEL}"
+          if [[ "${CHANNEL}" == "stable" ]]; then
+            channel_tag=latest
+          fi
+          previous_channel="$(image_digest "${IMAGE}:${channel_tag}")"
+          if [[ -z "${previous_channel}" ]]; then
+            echo "Unable to resolve existing ${channel_tag} image" >&2
+            exit 1
+          fi
+          previous_proof=''
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            proof_tag="${GITHUB_REF_NAME}"
+            if [[ "${CHANNEL}" == "rolling" ]]; then
+              proof_tag="${GITHUB_REF_NAME}-rolling"
+            fi
+            previous_proof="$(image_digest "${IMAGE}:${proof_tag}")"
+          fi
+          state_dir="${RUNNER_TEMP}/previous-image-state"
+          mkdir -p "${state_dir}"
+          printf '%s\n' "${previous_channel}" > "${state_dir}/${CHANNEL}-channel"
+          printf '%s\n' "${previous_proof}" > "${state_dir}/${CHANNEL}-proof"
+
+      - name: Upload previous image state
+        uses: actions/upload-artifact@v7
+        with:
+          name: previous-image-state-${{ matrix.channel.name }}
+          path: ${{ runner.temp }}/previous-image-state/*
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Create multi-platform image
         env:
           CHANNEL: ${{ matrix.channel.name }}
@@ -152,10 +198,13 @@ jobs:
 
           if [[ "${CHANNEL}" == "rolling" ]]; then
             tags=(--tag "${IMAGE}:rolling")
+            if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+              tags=(--tag "${IMAGE}:${GITHUB_REF_NAME}-rolling" "${tags[@]}")
+            fi
           else
             tags=(--tag "${IMAGE}:latest")
             if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-              tags+=(--tag "${IMAGE}:${GITHUB_REF_NAME}")
+              tags=(--tag "${IMAGE}:${GITHUB_REF_NAME}" "${tags[@]}")
             fi
           fi
 

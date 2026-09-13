@@ -2,12 +2,37 @@ package tools
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func TestNucleiTemplatesReadyAcceptsVerifiedArchiveTree(t *testing.T) {
+	// Given: a verified template archive extracted without Nuclei's optional checksum index.
+	directory := t.TempDir()
+	t.Setenv(nucleiTemplatesEnv, directory)
+	templatePath := filepath.Join(directory, "http", "technologies", "tech-detect.yaml")
+	if err := os.MkdirAll(filepath.Dir(templatePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(templatePath, []byte("id: tech-detect\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, nucleiVerifiedMarker), []byte("sha256:test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// When: server health checks the extracted template directory.
+	ready := NucleiTemplatesReady()
+
+	// Then: the real non-empty template is sufficient readiness evidence.
+	if !ready {
+		t.Fatal("verified extracted Nuclei template tree reported unavailable")
+	}
+}
 
 func TestTsharkArgsRejectsConflictingReadFileAndInterface(t *testing.T) {
 	t.Parallel()
@@ -171,7 +196,7 @@ func TestNmapArgsRejectsMalformedAdditionalArgs(t *testing.T) {
 func TestMetasploitScriptUsesRunForAuxiliaryAndExit(t *testing.T) {
 	t.Parallel()
 
-	script := MetasploitScript(dto.MetasploitRequest{Module: "auxiliary/scanner/http/title"})
+	script := MetasploitScript(dto.MetasploitRequest{Module: "auxiliary/scanner/http/title", Target: "192.0.2.10"})
 	if !strings.Contains(script, "\nrun\nexit -y\n") {
 		t.Fatalf("expected run + exit in script, got %q", script)
 	}
@@ -180,7 +205,7 @@ func TestMetasploitScriptUsesRunForAuxiliaryAndExit(t *testing.T) {
 func TestMetasploitScriptUsesExploitForExploitModules(t *testing.T) {
 	t.Parallel()
 
-	script := MetasploitScript(dto.MetasploitRequest{Module: "exploit/multi/handler"})
+	script := MetasploitScript(dto.MetasploitRequest{Module: "exploit/multi/handler", Target: "192.0.2.10"})
 	if !strings.Contains(script, "\nexploit\nexit -y\n") {
 		t.Fatalf("expected exploit + exit in script, got %q", script)
 	}
@@ -191,10 +216,10 @@ func TestMetasploitScriptSortsOptionsDeterministically(t *testing.T) {
 
 	script := MetasploitScript(dto.MetasploitRequest{
 		Module: "auxiliary/scanner/http/title",
+		Target: "10.0.0.1",
 		Options: map[string]string{
-			"RPORT":  "8080",
-			"RHOSTS": "10.0.0.1",
-			"SSL":    "true",
+			"RPORT": "8080",
+			"SSL":   "true",
 		},
 	})
 
@@ -217,8 +242,24 @@ func TestGobusterArgsUsesEnvWordlistOverride(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	want := []string{"gobuster", "dir", "-u", "https://example.com", "-w", wordlist.Name()}
+	want := []string{"gobuster", "dir", "-u", "https://example.com", "-w", wordlist.Name(), "--quiet", "--no-progress", "--no-color"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args mismatch\nwant: %v\n got: %v", want, args)
+	}
+}
+
+func TestGobusterDNSUsesDomainTargetFlag(t *testing.T) {
+	wordlist, err := os.CreateTemp(t.TempDir(), "wordlist-*.txt")
+	if err != nil {
+		t.Fatalf("create temp wordlist: %v", err)
+	}
+	defer wordlist.Close()
+
+	args, err := GobusterArgs(dto.GobusterRequest{Mode: "dns", URL: "example.com", Wordlist: wordlist.Name()})
+	if err != nil {
+		t.Fatalf("build Gobuster DNS args: %v", err)
+	}
+	if !reflect.DeepEqual(args[:4], []string{"gobuster", "dns", "--domain", "example.com"}) {
+		t.Fatalf("Gobuster DNS target args=%v", args)
 	}
 }

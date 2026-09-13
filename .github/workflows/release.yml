@@ -1,6 +1,6 @@
 name: Release
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
@@ -51,42 +51,42 @@ jobs:
             runs_on: ubuntu-latest
             artifact_name: mcp-client_linux_amd64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: linux
             goarch: amd64
           - id: mcp-client-linux-arm64
             runs_on: ubuntu-latest
             artifact_name: mcp-client_linux_arm64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: linux
             goarch: arm64
           - id: mcp-client-windows-amd64
             runs_on: windows-latest
             artifact_name: mcp-client_windows_amd64.exe
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: windows
             goarch: amd64
           - id: mcp-client-windows-arm64
             runs_on: windows-latest
             artifact_name: mcp-client_windows_arm64.exe
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: windows
             goarch: arm64
           - id: mcp-client-darwin-arm64
             runs_on: macos-latest
             artifact_name: mcp-client_darwin_arm64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: darwin
             goarch: arm64
           - id: mcp-client-darwin-amd64
             runs_on: macos-latest
             artifact_name: mcp-client_darwin_amd64
             main: ./cmd/mcp-client
-            ldflags: -s -w -X github.com/found-cake/kali-mcp-go/cmd/mcp-client.version=${{ github.ref_name }}
+            ldflags: -s -w -X main.version=${{ github.ref_name }}
             goos: darwin
             goarch: amd64
 
@@ -115,18 +115,38 @@ jobs:
           path: dist/${{ matrix.artifact_name }}
           if-no-files-found: error
 
+  docker_image:
+    needs:
+      - validate_tag
+      - build
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-image.yml
+
   release:
-    needs: build
+    needs:
+      - build
+      - docker_image
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download release artifacts
+      - name: Download kali-server artifacts
         uses: actions/download-artifact@v8
         with:
           path: dist
-          pattern: '*'
+          pattern: 'kali-server-*'
+          merge-multiple: true
+
+      - name: Download mcp-client artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: 'mcp-client-*'
           merge-multiple: true
 
       # Generate SHA256 checksums to verify binary integrity
@@ -138,7 +158,14 @@ jobs:
       - name: Generate download notes
         run: |
           BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
-          cat > release_notes.md << EOF
+          VERSION_NOTES="docs/releases/${GITHUB_REF_NAME}.md"
+          if [[ -f "${VERSION_NOTES}" ]]; then
+            cat "${VERSION_NOTES}" > release_notes.md
+            printf '\n' >> release_notes.md
+          else
+            : > release_notes.md
+          fi
+          cat >> release_notes.md << EOF
           ## kali-server (Only Linux)
           - [Ubuntu x64](${BASE_URL}/kali-server_linux_amd64)
           - [Ubuntu arm64](${BASE_URL}/kali-server_linux_arm64)
@@ -160,20 +187,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" dist/* \
+            --generate-notes \
             --notes-file release_notes.md \
             --title "${GITHUB_REF_NAME}"
 
   cleanup_failed_release:
     needs:
+      - validate_tag
       - build
+      - docker_image
       - release
-    # Run cleanup if build or release fails
     if: |
       always() && (
-        needs.build.result == 'failure' ||
-        needs.release.result == 'failure'
+        needs.validate_tag.result != 'success' ||
+        needs.build.result != 'success' ||
+        needs.docker_image.result != 'success' ||
+        needs.release.result != 'success'
       )
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    concurrency:
+      group: kali-mcp-ghcr-publication
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v7
@@ -185,6 +222,111 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 && gh release delete "${GITHUB_REF_NAME}" --yes || true
+
+      - name: Download previous image state
+        id: previous_image_state
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/previous-image-state
+          pattern: previous-image-state-*
+          merge-multiple: true
+
+      - name: Log in to GitHub Container Registry
+        if: steps.previous_image_state.outcome == 'success'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: steps.previous_image_state.outcome == 'success'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Restore image channels
+        if: steps.previous_image_state.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          required_image_digest() {
+            if ! digest="$(docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}')"; then
+              return 1
+            fi
+            if [[ -z "${digest}" ]]; then
+              return 1
+            fi
+            printf '%s\n' "${digest}"
+          }
+          optional_image_digest() {
+            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null || true
+          }
+
+          state_dir="${RUNNER_TEMP}/previous-image-state"
+          stable_state=false
+          rolling_state=false
+          PREVIOUS_LATEST=''
+          PREVIOUS_ROLLING=''
+          PREVIOUS_RELEASE=''
+          PREVIOUS_ROLLING_RELEASE=''
+          if [[ -s "${state_dir}/stable-channel" && -f "${state_dir}/stable-proof" ]]; then
+            read -r PREVIOUS_LATEST < "${state_dir}/stable-channel"
+            read -r PREVIOUS_RELEASE < "${state_dir}/stable-proof"
+            stable_state=true
+          fi
+          if [[ -s "${state_dir}/rolling-channel" && -f "${state_dir}/rolling-proof" ]]; then
+            read -r PREVIOUS_ROLLING < "${state_dir}/rolling-channel"
+            read -r PREVIOUS_ROLLING_RELEASE < "${state_dir}/rolling-proof"
+            rolling_state=true
+          fi
+
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          package="${GITHUB_REPOSITORY#*/}"
+          owner_type="$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.owner.type')"
+          if [[ "${owner_type}" == "Organization" ]]; then
+            versions_api="orgs/${owner}/packages/container/${package}/versions"
+          else
+            versions_api="users/${owner}/packages/container/${package}/versions"
+          fi
+
+          deleted_digests=''
+          delete_new_digest() {
+            digest="$1"
+            if [[ -z "${digest}" || "${digest}" == "${PREVIOUS_LATEST}" || "${digest}" == "${PREVIOUS_ROLLING}" || "${digest}" == "${PREVIOUS_RELEASE}" || "${digest}" == "${PREVIOUS_ROLLING_RELEASE}" || " ${deleted_digests} " == *" ${digest} "* ]]; then
+              return
+            fi
+            version_id="$(gh api "${versions_api}?per_page=100" --jq ".[] | select(.name == \"${digest}\") | .id")"
+            if [[ -z "${version_id}" ]]; then
+              echo "Unable to find GHCR package version for ${digest}" >&2
+              return 1
+            fi
+            gh api --method DELETE "${versions_api}/${version_id}"
+            deleted_digests="${deleted_digests} ${digest}"
+          }
+
+          if [[ "${stable_state}" == "true" ]]; then
+            release_digest="$(optional_image_digest "${IMAGE}:${GITHUB_REF_NAME}")"
+            latest_digest="$(required_image_digest "${IMAGE}:latest")"
+            if [[ "${latest_digest}" == "${release_digest}" && "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
+              docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${PREVIOUS_LATEST}"
+              test "$(required_image_digest "${IMAGE}:latest")" == "${PREVIOUS_LATEST}"
+            fi
+            if [[ "${release_digest}" != "${PREVIOUS_RELEASE}" ]]; then
+              delete_new_digest "${release_digest}"
+            fi
+          fi
+          if [[ "${rolling_state}" == "true" ]]; then
+            rolling_release_digest="$(optional_image_digest "${IMAGE}:${GITHUB_REF_NAME}-rolling")"
+            rolling_digest="$(required_image_digest "${IMAGE}:rolling")"
+            if [[ "${rolling_digest}" == "${rolling_release_digest}" && "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
+              docker buildx imagetools create --tag "${IMAGE}:rolling" "${IMAGE}@${PREVIOUS_ROLLING}"
+              test "$(required_image_digest "${IMAGE}:rolling")" == "${PREVIOUS_ROLLING}"
+            fi
+            if [[ "${rolling_release_digest}" != "${PREVIOUS_ROLLING_RELEASE}" ]]; then
+              delete_new_digest "${rolling_release_digest}"
+            fi
+          fi
 
       - name: Delete failed tag from remote
         env:

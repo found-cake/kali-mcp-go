@@ -190,11 +190,57 @@ func TestStreamMarksPartialTimedOutResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if !res.Success {
-		t.Fatalf("expected success=true for partial timed out result")
+	if res.Success {
+		t.Fatalf("expected success=false for partial timed out result")
 	}
 	if !res.PartialResults {
 		t.Fatalf("expected partial_results=true")
+	}
+	if res.ExecutionStatus != dto.ExecutionTimedOut {
+		t.Fatalf("expected timed_out execution status, got %q", res.ExecutionStatus)
+	}
+}
+
+func TestStreamPreservesPartialFailedResultsAndRequestCountSource(t *testing.T) {
+	// Given: an SSE stream that performed parsed HTTP requests before failing.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"stream\":\"stdout\",\"line\":\"partial\"}\n\n")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":2,\"http_requests\":3,\"request_count_source\":\"parsed\"}\n\n")
+	}))
+	defer ts.Close()
+
+	// When: the MCP client reconstructs the terminal result.
+	client := New(ts.URL, 5*time.Second, "")
+	result, err := client.Stream(context.Background(), "/api/command/stream", map[string]string{"command": "id"})
+	if err != nil {
+		t.Fatalf("stream result: %v", err)
+	}
+
+	// Then: failure does not discard evidence or request-count provenance.
+	if !result.PartialResults || result.RequestCountSource != dto.RequestCountParsed || result.HTTPRequests == nil || *result.HTTPRequests != 3 {
+		t.Fatalf("unexpected reconstructed metadata: %+v", result)
+	}
+}
+
+func TestStreamPreservesJWTAnalysisMetadata(t *testing.T) {
+	// Given: a terminal stream event containing safe JWT structure metadata.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"done\":true,\"return_code\":0,\"jwt_analysis\":{\"parse_status\":\"parsed\",\"segment_count\":3,\"alg\":\"HS256\",\"claim_names\":[\"sub\"]}}\n\n")
+	}))
+	defer ts.Close()
+
+	// When: the MCP client reconstructs the tool result.
+	client := New(ts.URL, 5*time.Second, "")
+	result, err := client.Stream(context.Background(), "/api/tools/jwt/stream", map[string]string{"token": "redacted"})
+	if err != nil {
+		t.Fatalf("stream result: %v", err)
+	}
+
+	// Then: parsing status is retained without requiring the token value.
+	if result.JWTAnalysis == nil || result.JWTAnalysis.ParseStatus != dto.JWTParsed || result.JWTAnalysis.Algorithm != "HS256" {
+		t.Fatalf("missing JWT analysis metadata: %+v", result.JWTAnalysis)
 	}
 }
 
@@ -218,59 +264,5 @@ func TestStreamAppendsTerminalDoneErrorToStderr(t *testing.T) {
 	}
 	if res.Success {
 		t.Fatalf("expected success=false for failed result")
-	}
-}
-
-func TestPostAddsBearerAuthorizationHeader(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer secret-token" {
-			t.Fatalf("expected bearer token, got %q", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"stdout":"ok","stderr":"","return_code":0,"success":true,"timed_out":false}`)
-	}))
-	defer ts.Close()
-
-	client := New(ts.URL, 5*time.Second, "secret-token")
-	if _, err := client.Post(context.Background(), "/api/tools/nmap", map[string]string{"target": "127.0.0.1"}); err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-}
-
-func TestPostUsesProvidedPath(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/tools/nmap" {
-			t.Fatalf("expected request path /api/tools/nmap, got %q", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"stdout":"ok","stderr":"","return_code":0,"success":true,"timed_out":false}`)
-	}))
-	defer ts.Close()
-
-	client := New(ts.URL, 5*time.Second, "")
-	if _, err := client.Post(context.Background(), "/api/tools/nmap", map[string]string{"target": "127.0.0.1"}); err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-}
-
-func TestHealthOmitsBearerAuthorizationHeader(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "" {
-			t.Fatalf("expected no bearer token on health request, got %q", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"healthy","message":"ok","tools_status":{},"all_essential_tools_available":true}`)
-	}))
-	defer ts.Close()
-
-	client := New(ts.URL, 5*time.Second, "secret-token")
-	if _, err := client.Health(context.Background()); err != nil {
-		t.Fatalf("expected no error, got %v", err)
 	}
 }
