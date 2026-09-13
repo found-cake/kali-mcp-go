@@ -125,6 +125,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    concurrency:
+      group: kali-mcp-ghcr-publication
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -147,6 +150,44 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      - name: Capture previous image state
+        env:
+          CHANNEL: ${{ matrix.channel.name }}
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          image_digest() {
+            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null || true
+          }
+          channel_tag="${CHANNEL}"
+          if [[ "${CHANNEL}" == "stable" ]]; then
+            channel_tag=latest
+          fi
+          previous_channel="$(image_digest "${IMAGE}:${channel_tag}")"
+          if [[ -z "${previous_channel}" ]]; then
+            echo "Unable to resolve existing ${channel_tag} image" >&2
+            exit 1
+          fi
+          previous_proof=''
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            proof_tag="${GITHUB_REF_NAME}"
+            if [[ "${CHANNEL}" == "rolling" ]]; then
+              proof_tag="${GITHUB_REF_NAME}-rolling"
+            fi
+            previous_proof="$(image_digest "${IMAGE}:${proof_tag}")"
+          fi
+          state_dir="${RUNNER_TEMP}/previous-image-state"
+          mkdir -p "${state_dir}"
+          printf '%s\n' "${previous_channel}" > "${state_dir}/${CHANNEL}-channel"
+          printf '%s\n' "${previous_proof}" > "${state_dir}/${CHANNEL}-proof"
+
+      - name: Upload previous image state
+        uses: actions/upload-artifact@v7
+        with:
+          name: previous-image-state-${{ matrix.channel.name }}
+          path: ${{ runner.temp }}/previous-image-state/*
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Create multi-platform image
         env:

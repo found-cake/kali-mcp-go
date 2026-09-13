@@ -115,38 +115,10 @@ jobs:
           path: dist/${{ matrix.artifact_name }}
           if-no-files-found: error
 
-  registry_state:
-    needs:
-      - validate_tag
-    runs-on: ubuntu-latest
-    outputs:
-      latest_digest: ${{ steps.capture.outputs.latest_digest }}
-      rolling_digest: ${{ steps.capture.outputs.rolling_digest }}
-      release_digest: ${{ steps.capture.outputs.release_digest }}
-      rolling_release_digest: ${{ steps.capture.outputs.rolling_release_digest }}
-
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Capture current image channels
-        id: capture
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}
-        run: |
-          image_digest() {
-            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null || true
-          }
-          echo "latest_digest=$(image_digest "${IMAGE}:latest")" >> "${GITHUB_OUTPUT}"
-          echo "rolling_digest=$(image_digest "${IMAGE}:rolling")" >> "${GITHUB_OUTPUT}"
-          echo "release_digest=$(image_digest "${IMAGE}:${GITHUB_REF_NAME}")" >> "${GITHUB_OUTPUT}"
-          echo "rolling_release_digest=$(image_digest "${IMAGE}:${GITHUB_REF_NAME}-rolling")" >> "${GITHUB_OUTPUT}"
-
   docker_image:
     needs:
       - validate_tag
       - build
-      - registry_state
     permissions:
       contents: read
       packages: write
@@ -223,14 +195,12 @@ jobs:
     needs:
       - validate_tag
       - build
-      - registry_state
       - docker_image
       - release
     if: |
       always() && (
         needs.validate_tag.result != 'success' ||
         needs.build.result != 'success' ||
-        needs.registry_state.result != 'success' ||
         needs.docker_image.result != 'success' ||
         needs.release.result != 'success'
       )
@@ -238,6 +208,9 @@ jobs:
     permissions:
       contents: write
       packages: write
+    concurrency:
+      group: kali-mcp-ghcr-publication
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v7
@@ -250,8 +223,17 @@ jobs:
         run: |
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 && gh release delete "${GITHUB_REF_NAME}" --yes || true
 
+      - name: Download previous image state
+        id: previous_image_state
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/previous-image-state
+          pattern: previous-image-state-*
+          merge-multiple: true
+
       - name: Log in to GitHub Container Registry
-        if: needs.registry_state.result == 'success'
+        if: steps.previous_image_state.outcome == 'success'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -259,22 +241,45 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        if: needs.registry_state.result == 'success'
+        if: steps.previous_image_state.outcome == 'success'
         uses: docker/setup-buildx-action@v4
 
       - name: Restore image channels
-        if: needs.registry_state.result == 'success'
+        if: steps.previous_image_state.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ghcr.io/${{ github.repository }}
-          PREVIOUS_LATEST: ${{ needs.registry_state.outputs.latest_digest }}
-          PREVIOUS_ROLLING: ${{ needs.registry_state.outputs.rolling_digest }}
-          PREVIOUS_RELEASE: ${{ needs.registry_state.outputs.release_digest }}
-          PREVIOUS_ROLLING_RELEASE: ${{ needs.registry_state.outputs.rolling_release_digest }}
         run: |
-          image_digest() {
+          required_image_digest() {
+            if ! digest="$(docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}')"; then
+              return 1
+            fi
+            if [[ -z "${digest}" ]]; then
+              return 1
+            fi
+            printf '%s\n' "${digest}"
+          }
+          optional_image_digest() {
             docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null || true
           }
+
+          state_dir="${RUNNER_TEMP}/previous-image-state"
+          stable_state=false
+          rolling_state=false
+          PREVIOUS_LATEST=''
+          PREVIOUS_ROLLING=''
+          PREVIOUS_RELEASE=''
+          PREVIOUS_ROLLING_RELEASE=''
+          if [[ -s "${state_dir}/stable-channel" && -f "${state_dir}/stable-proof" ]]; then
+            read -r PREVIOUS_LATEST < "${state_dir}/stable-channel"
+            read -r PREVIOUS_RELEASE < "${state_dir}/stable-proof"
+            stable_state=true
+          fi
+          if [[ -s "${state_dir}/rolling-channel" && -f "${state_dir}/rolling-proof" ]]; then
+            read -r PREVIOUS_ROLLING < "${state_dir}/rolling-channel"
+            read -r PREVIOUS_ROLLING_RELEASE < "${state_dir}/rolling-proof"
+            rolling_state=true
+          fi
 
           owner="${GITHUB_REPOSITORY_OWNER}"
           package="${GITHUB_REPOSITORY#*/}"
@@ -300,21 +305,27 @@ jobs:
             deleted_digests="${deleted_digests} ${digest}"
           }
 
-          release_digest="$(image_digest "${IMAGE}:${GITHUB_REF_NAME}")"
-          rolling_release_digest="$(image_digest "${IMAGE}:${GITHUB_REF_NAME}-rolling")"
-          latest_digest="$(image_digest "${IMAGE}:latest")"
-          rolling_digest="$(image_digest "${IMAGE}:rolling")"
-          if [[ "${release_digest}" != "${PREVIOUS_RELEASE}" ]]; then
-            delete_new_digest "${release_digest}"
+          if [[ "${stable_state}" == "true" ]]; then
+            release_digest="$(optional_image_digest "${IMAGE}:${GITHUB_REF_NAME}")"
+            latest_digest="$(required_image_digest "${IMAGE}:latest")"
+            if [[ "${latest_digest}" == "${release_digest}" && "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
+              docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${PREVIOUS_LATEST}"
+              test "$(required_image_digest "${IMAGE}:latest")" == "${PREVIOUS_LATEST}"
+            fi
+            if [[ "${release_digest}" != "${PREVIOUS_RELEASE}" ]]; then
+              delete_new_digest "${release_digest}"
+            fi
           fi
-          if [[ "${rolling_release_digest}" != "${PREVIOUS_ROLLING_RELEASE}" ]]; then
-            delete_new_digest "${rolling_release_digest}"
-          fi
-          if [[ -n "${PREVIOUS_LATEST}" && "${latest_digest}" == "${release_digest}" && "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
-            docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${PREVIOUS_LATEST}"
-          fi
-          if [[ -n "${PREVIOUS_ROLLING}" && "${rolling_digest}" == "${rolling_release_digest}" && "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
-            docker buildx imagetools create --tag "${IMAGE}:rolling" "${IMAGE}@${PREVIOUS_ROLLING}"
+          if [[ "${rolling_state}" == "true" ]]; then
+            rolling_release_digest="$(optional_image_digest "${IMAGE}:${GITHUB_REF_NAME}-rolling")"
+            rolling_digest="$(required_image_digest "${IMAGE}:rolling")"
+            if [[ "${rolling_digest}" == "${rolling_release_digest}" && "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
+              docker buildx imagetools create --tag "${IMAGE}:rolling" "${IMAGE}@${PREVIOUS_ROLLING}"
+              test "$(required_image_digest "${IMAGE}:rolling")" == "${PREVIOUS_ROLLING}"
+            fi
+            if [[ "${rolling_release_digest}" != "${PREVIOUS_ROLLING_RELEASE}" ]]; then
+              delete_new_digest "${rolling_release_digest}"
+            fi
           fi
 
       - name: Delete failed tag from remote
