@@ -21,19 +21,11 @@ Detailed Docker operation, execution contracts, evidence handling, and tool-spec
 - `latest` and version tags use Kali's last release and are published with project releases.
 - `rolling` uses Kali Rolling and is rebuilt every two weeks and with project releases.
 - `--pull=always` checks the registry at startup but downloads layers only when the digest changes.
-- Persistent containers do not update automatically. Pull the desired tag and recreate the container.
+- Persistent containers do not update automatically. Remove the existing managed container and rerun the Raw installer to recreate it from the desired tag.
 
 ### Networking and files
 
-On Linux, add `--add-host host.docker.internal:host-gateway` to the initial `docker run` command when the Docker host alias is unavailable. Mount host files explicitly, for example:
-
-```bash
-docker run --rm -i \
-  -v "$PWD:/workspace:ro" \
-  ghcr.io/found-cake/kali-mcp-go:latest
-```
-
-Use `/workspace/...` in tool requests. Add the same host mapping, mount, or network options when creating a persistent container.
+The Raw installer adds `host.docker.internal:host-gateway` when it creates the persistent container. For a manual deployment, add the same host mapping when Docker does not provide that alias. Mount host files explicitly and use their container paths in tool requests.
 
 ### Chromium sandbox
 
@@ -43,24 +35,14 @@ The Docker image sets `KALI_MCP_BROWSER_OUTPUT_DIR=/var/lib/kali-mcp/browser` fo
 
 The image entrypoint already uses `tini` to reap browser subprocesses. Persistent mode keeps Docker's `--init` because its `--entrypoint` option replaces the image entrypoint.
 
-The one-shot launcher applies the profile and shared IPC option automatically. For direct `docker run` commands, add them explicitly:
-
-```bash
-docker run --pull=always --rm -i \
-  --ipc=host \
-  --security-opt "seccomp=$PWD/chromium-seccomp.json" \
-  ghcr.io/found-cake/kali-mcp-go:latest \
-  --timeout 3600
-```
-
-If you use the published image without the launcher or a repository checkout, download the matching profile first:
+The Raw installer verifies and caches the profile, then applies it with shared IPC when creating the persistent container. For a manual deployment or repository checkout, download the matching profile first:
 
 ```bash
 curl -fsSLo chromium-seccomp.json \
-  https://raw.githubusercontent.com/found-cake/kali-mcp-go/8184dde5d042919d42da7fb2204624d4984f6321/chromium-seccomp.json
+  https://raw.githubusercontent.com/found-cake/kali-mcp-go/refs/heads/master/chromium-seccomp.json
 ```
 
-Use an absolute profile path in JSON/TOML MCP host configurations because shell variables such as `$PWD` are not expanded there. Without the namespace-enabled profile, `browser_check` fails closed instead of disabling the Chromium sandbox. Other tools remain available.
+Docker requires an absolute host path when applying the profile through `--security-opt`. Without the namespace-enabled profile, `browser_check` fails closed instead of disabling the Chromium sandbox. Other tools remain available.
 
 ### Nmap capabilities
 

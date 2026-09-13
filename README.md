@@ -28,7 +28,7 @@ Concurrent, policy-aware MCP runtime for authorized security testing with Kali t
 | Evidence | Structured findings, request counts, execution metadata, browser evidence, and paged result artifacts |
 | Authentication | Bearer-token authentication with constant-time comparison between `mcp-client` and `kali-server` |
 | Agent safety | Tool output is treated as untrusted data, and MCP instructions prohibit replacing the provisioned runtime during an assessment |
-| Deployment | One-shot or persistent Docker operation, standalone binaries, VMs, and directly installed Linux hosts |
+| Deployment | One persistent Docker runtime shared by MCP sessions, standalone binaries, VMs, and directly installed Linux hosts |
 | Orchestration boundary | Short-lived scan jobs prevent abandoned processes; the MCP host still owns workflow state and credential management |
 
 ## Architecture
@@ -38,7 +38,7 @@ Concurrent, policy-aware MCP runtime for authorized security testing with Kali t
   (Claude / Claude Code / Codex / OpenCode / ...)
         │  MCP stdio
         ▼
-  [mcp-client]  ← runs on your local machine
+  [mcp-client]  ← runs through docker exec or as a local binary
         │  HTTP + Bearer token
         ▼
   [kali-server]  ← runs where security tools are installed
@@ -51,6 +51,7 @@ Concurrent, policy-aware MCP runtime for authorized security testing with Kali t
 
 | Component | Requirement |
 |---|---|
+| Persistent Docker | Docker with support for `--pull` and `host-gateway` |
 | `kali-server` host | Linux with the required security tools installed (Kali Linux recommended; other Linux distributions are supported when dependencies are available) |
 | `mcp-client` host | Linux, Windows, or macOS |
 | Build from source | Go 1.27+ |
@@ -96,7 +97,7 @@ CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o mcp-client ./cmd/mcp-client
 
 ### Docker image (recommended)
 
-The published image contains both binaries and the provisioned security tools. Pull the stable image once; the usage section explains one-shot and persistent launch modes.
+The published image contains both binaries and the provisioned security tools. The Raw installer in the usage section pulls it automatically and creates one persistent runtime shared by MCP sessions. Pull it directly only when preparing a manual deployment.
 
 ```bash
 docker pull ghcr.io/found-cake/kali-mcp-go:latest
@@ -114,44 +115,22 @@ docker build -t kali-mcp-go:local .
 
 | Mode | Best for | MCP launcher |
 |---|---|---|
-| One-shot Docker | Fastest setup and automatic image updates | `/path/to/kali-mcp-docker ...` |
-| Persistent Docker | Repeated use without container startup time | `docker exec ...` |
+| Persistent Docker | Local Docker with one runtime shared by MCP sessions | `docker exec ...` |
 | Separate processes | A VM, remote Kali host, or existing Linux installation | `mcp-client --server ...` |
 
 The **MCP launcher** is the local STDIO command registered with your AI client. Choose one mode below, then use its launcher in the host-specific examples.
 
-#### One-shot Docker
-
-This is the simplest setup. Download the launcher once; it verifies and caches the Chromium seccomp profile, applies the required Docker isolation options, starts both services, and removes the container when the MCP session closes. No host port is exposed.
-
-```bash
-curl -fsSLo kali-mcp-docker \
-  https://raw.githubusercontent.com/found-cake/kali-mcp-go/b6349f79b52e7359e94a56b1566fb3a8c87cc442/scripts/run-docker.sh
-chmod +x kali-mcp-docker
-./kali-mcp-docker --timeout 3600
-```
-
-When running from a repository checkout, use `./scripts/run-docker.sh` instead. Set `KALI_MCP_DOCKER_IMAGE` to select a different image tag. For a locally built image, also set `KALI_MCP_DOCKER_PULL=never`.
-
 #### Persistent Docker
 
-Start one background server container. The launcher can prepare and print the verified seccomp profile path for the direct Docker command:
+Run the installer directly from the repository's `master` branch. It verifies and caches the Chromium seccomp profile, generates the API token, creates the background `kali-mcp` container with the required runtime options, and checks its health. The script is not saved or used as the MCP launcher.
 
 ```bash
-seccomp_profile="$(/absolute/path/to/kali-mcp-docker --print-seccomp-profile)"
-docker run -d \
-  --name kali-mcp \
-  --restart unless-stopped \
-  --init \
-  --ipc=host \
-  --security-opt "seccomp=$seccomp_profile" \
-  --entrypoint kali-server \
-  -e KALI_MCP_API_TOKEN="$(openssl rand -hex 32)" \
-  ghcr.io/found-cake/kali-mcp-go:latest \
-  --ip 127.0.0.1 --port 5000
+curl -fsSL \
+  https://raw.githubusercontent.com/found-cake/kali-mcp-go/refs/heads/master/scripts/run-docker.sh \
+  | sh
 ```
 
-Register this launcher with the MCP host:
+Each MCP session starts only the lightweight client process inside that container:
 
 ```bash
 docker exec -i kali-mcp mcp-client \
@@ -195,14 +174,14 @@ The bearer token authenticates requests but does not encrypt them. Prefer an SSH
 
 [Claude Code](#claude-code) · [Claude Desktop](#claude-desktop) · [Codex](#openai-codex) · [OpenCode](#opencode-v1)
 
-The following examples use one-shot Docker. To use persistent Docker, replace the command and arguments with the `docker exec` launcher above. For separate processes, register `/path/to/mcp-client` with its `--server` and `--timeout` arguments, then provide `KALI_MCP_API_TOKEN` through the host's MCP environment configuration.
+The following examples use the persistent Docker runtime. For separate processes, register `/path/to/mcp-client` with its `--server` and `--timeout` arguments, then provide `KALI_MCP_API_TOKEN` through the host's MCP environment configuration.
 
 #### Claude Code
 
 ```bash
 claude mcp add kali-mcp -- \
-  /absolute/path/to/kali-mcp-docker \
-  --timeout 3600
+  docker exec -i kali-mcp mcp-client \
+  --server http://127.0.0.1:5000 --timeout 3600
 ```
 
 #### Claude Desktop
@@ -213,8 +192,10 @@ Add a local STDIO server to the desktop configuration:
 {
   "mcpServers": {
     "kali-mcp": {
-      "command": "/absolute/path/to/kali-mcp-docker",
+      "command": "docker",
       "args": [
+        "exec", "-i", "kali-mcp", "mcp-client",
+        "--server", "http://127.0.0.1:5000",
         "--timeout", "3600"
       ]
     }
@@ -226,16 +207,16 @@ Add a local STDIO server to the desktop configuration:
 
 ```bash
 codex mcp add kali-mcp -- \
-  /absolute/path/to/kali-mcp-docker \
-  --timeout 3600
+  docker exec -i kali-mcp mcp-client \
+  --server http://127.0.0.1:5000 --timeout 3600
 ```
 
 For explicit startup and tool timeouts, use `~/.codex/config.toml` instead:
 
 ```toml
 [mcp_servers.kali-mcp]
-command = "/absolute/path/to/kali-mcp-docker"
-args = ["--timeout", "3600"]
+command = "docker"
+args = ["exec", "-i", "kali-mcp", "mcp-client", "--server", "http://127.0.0.1:5000", "--timeout", "3600"]
 startup_timeout_sec = 300
 tool_timeout_sec = 3600
 ```
@@ -253,7 +234,8 @@ Add a local STDIO server to `opencode.jsonc`:
     "kali-mcp": {
       "type": "local",
       "command": [
-        "/absolute/path/to/kali-mcp-docker",
+        "docker", "exec", "-i", "kali-mcp", "mcp-client",
+        "--server", "http://127.0.0.1:5000",
         "--timeout", "3600"
       ],
       "enabled": true,
