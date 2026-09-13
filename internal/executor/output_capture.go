@@ -54,3 +54,8 @@ func (capture *outputCapture) TotalBytes() int {
 func (capture *outputCapture) Truncated() bool {
 	return capture.truncated
 }
+
+func (capture *outputCapture) Finish(observedBytes int, incomplete bool) {
+	capture.total = observedBytes
+	capture.truncated = capture.truncated || incomplete
+}

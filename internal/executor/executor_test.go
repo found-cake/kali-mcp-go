@@ -36,6 +36,9 @@ func TestRunReportsScannerError(t *testing.T) {
 	if !strings.Contains(res.Stderr, "stdout scan:") {
 		t.Fatalf("expected stdout scan error in stderr, got %q", res.Stderr)
 	}
+	if res.StdoutBytes != 1_100_000 || !res.StdoutTruncated {
+		t.Fatalf("scanner failure lost output accounting: bytes=%d truncated=%t", res.StdoutBytes, res.StdoutTruncated)
+	}
 }
 
 func TestRunShellBoundsRetainedOutput(t *testing.T) {
@@ -89,6 +92,9 @@ func TestStreamReportsScannerError(t *testing.T) {
 	}
 	if !strings.Contains(res.Stderr, "stdout scan:") {
 		t.Fatalf("expected stdout scan error in stderr, got %q", res.Stderr)
+	}
+	if res.StdoutBytes != 1_100_000 || !res.StdoutTruncated {
+		t.Fatalf("stream scanner failure lost output accounting: bytes=%d truncated=%t", res.StdoutBytes, res.StdoutTruncated)
 	}
 }
 

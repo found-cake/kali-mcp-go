@@ -122,7 +122,8 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 
 	collect := func(r io.Reader, stream string, capture *outputCapture) {
 		defer wg.Done()
-		sc := newScanner(r)
+		counted := &countingReader{reader: r}
+		sc := newScanner(counted)
 		for sc.Scan() {
 			raw := sc.Bytes()
 			observedBytes := len(raw)
@@ -139,9 +140,13 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 				return
 			}
 		}
-		if err := sc.Err(); err != nil && !(ctx.Err() != nil && errors.Is(err, os.ErrClosed)) {
-			scanErrCh <- fmt.Errorf("%s scan: %w", stream, err)
+		scanErr := sc.Err()
+		scanFailed := scanErr != nil && !(ctx.Err() != nil && errors.Is(scanErr, os.ErrClosed))
+		if scanFailed {
+			_, _ = io.Copy(io.Discard, counted)
+			scanErrCh <- fmt.Errorf("%s scan: %w", stream, scanErr)
 		}
+		capture.Finish(counted.total, scanFailed)
 	}
 
 	wg.Add(2)
@@ -228,6 +233,17 @@ func scanOutputLines(data []byte, atEOF bool) (advance int, token []byte, err er
 		return len(data), data, nil
 	}
 	return 0, nil, nil
+}
+
+type countingReader struct {
+	reader io.Reader
+	total  int
+}
+
+func (reader *countingReader) Read(destination []byte) (int, error) {
+	readBytes, err := reader.reader.Read(destination)
+	reader.total += readBytes
+	return readBytes, err
 }
 
 func Which(name string) bool {

@@ -146,6 +146,8 @@ func (a *streamAccumulator) consume(event dto.StreamEvent) error {
 			return fmt.Errorf("stream done event missing return_code")
 		}
 		a.returnCode = *event.ReturnCode
+		a.stdout.finish(event.StdoutBytes, event.StdoutTruncated)
+		a.stderr.finish(event.StderrBytes, event.StderrTruncated)
 		if event.CallID != "" {
 			a.callID = event.CallID
 		}
@@ -204,4 +206,11 @@ func (capture *streamCapture) retainLine(line string, observedBytes, limit int) 
 	}
 	capture.builder.WriteString(line)
 	capture.builder.WriteByte('\n')
+}
+
+func (capture *streamCapture) finish(observedBytes int, truncated bool) {
+	if observedBytes > capture.observedBytes {
+		capture.observedBytes = observedBytes
+	}
+	capture.truncated = capture.truncated || truncated
 }

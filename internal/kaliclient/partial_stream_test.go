@@ -85,3 +85,15 @@ func TestTerminalFailureOverridesZeroExitCode(t *testing.T) {
 		t.Fatalf("terminal failure was classified as success: %+v", result)
 	}
 }
+
+func TestTerminalStreamMetadataPreservesDroppedOutput(t *testing.T) {
+	stream := "data: {\"done\":true,\"return_code\":-1,\"stdout_bytes\":1100000,\"stdout_truncated\":true}\n\n"
+
+	result, err := parseToolStream(strings.NewReader(stream), "call_truncated")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.StdoutBytes != 1_100_000 || !result.StdoutTruncated || !result.OutputTruncated {
+		t.Fatalf("terminal output metadata was lost: %+v", result)
+	}
+}
