@@ -1,6 +1,9 @@
 ARG KALI_BASE_IMAGE=kalilinux/kali-last-release
+ARG VERSION=dev
 
 FROM golang:bookworm AS build
+
+ARG VERSION
 
 WORKDIR /src
 
@@ -12,7 +15,7 @@ COPY . .
 RUN CGO_ENABLED=0 \
     go build -trimpath -ldflags="-s -w" -o /out/kali-server ./cmd/kali-server \
     && CGO_ENABLED=0 \
-    go build -trimpath -ldflags="-s -w" -o /out/mcp-client ./cmd/mcp-client
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/mcp-client ./cmd/mcp-client
 
 FROM ${KALI_BASE_IMAGE}
 
@@ -85,8 +88,26 @@ RUN set -eux; \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
-    nuclei -update-templates; \
-    test -s /root/.local/nuclei-templates/.checksum
+    templates_path=/root/.local/nuclei-templates; \
+    nuclei -update-templates || true; \
+    if ! find "$templates_path" -type f -name '*.yaml' -print -quit 2>/dev/null | grep -q .; then \
+        templates_release_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/projectdiscovery/nuclei-templates/releases/latest)"; \
+        templates_tag="$(basename "$templates_release_url")"; \
+        templates_version="${templates_tag#v}"; \
+        templates_archive="nuclei-templates-${templates_version}.tar.gz"; \
+        templates_checksums="nuclei-templates-${templates_version}_checksums.txt"; \
+        curl -fsSL "https://github.com/projectdiscovery/nuclei-templates/archive/refs/tags/${templates_tag}.tar.gz" -o "/tmp/${templates_archive}"; \
+        curl -fsSL "https://github.com/projectdiscovery/nuclei-templates/releases/download/${templates_tag}/${templates_checksums}" -o "/tmp/${templates_checksums}"; \
+        templates_sha256="$(awk -v archive="$templates_archive" '$2 == archive { print $1 }' "/tmp/${templates_checksums}")"; \
+        test -n "$templates_sha256"; \
+        echo "${templates_sha256}  /tmp/${templates_archive}" | sha256sum -c -; \
+        rm -rf "$templates_path"; \
+        install -d -m 0700 "$templates_path"; \
+        tar -xzf "/tmp/${templates_archive}" --strip-components=1 -C "$templates_path"; \
+        printf '%s\n' "$templates_sha256" > "$templates_path/.kali-mcp-verified"; \
+        rm -f "/tmp/${templates_archive}" "/tmp/${templates_checksums}"; \
+    fi; \
+    find "$templates_path" -type f -name '*.yaml' -print -quit | grep -q .
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends chromium-sandbox \

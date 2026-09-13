@@ -142,7 +142,7 @@ The installer reads these variables from the `sh` or PowerShell process that exe
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `KALI_MCP_DOCKER_IMAGE` | `ghcr.io/found-cake/kali-mcp-go:latest` | Image tag or digest to install |
+| `KALI_MCP_DOCKER_IMAGE` | `ghcr.io/found-cake/kali-mcp-go:latest` | Stable image tag or digest to install |
 | `KALI_MCP_DOCKER_PULL` | `always` | Docker pull policy: `always`, `missing`, or `never` |
 | `KALI_MCP_CONTAINER_NAME` | `kali-mcp` | Persistent container name used by subsequent `docker exec` commands |
 | `XDG_CACHE_HOME` | `$HOME/.cache` on Linux/macOS; `%LOCALAPPDATA%` on Windows | Parent directory for the verified Chromium seccomp profile |
@@ -167,7 +167,7 @@ $env:KALI_MCP_CONTAINER_NAME = "kali-mcp-dev"
 irm https://raw.githubusercontent.com/found-cake/kali-mcp-go/refs/heads/master/scripts/run-docker.ps1 | iex
 ```
 
-Re-running the installer reuses a healthy managed container with the selected name. Remove that container before rerunning when changing its image or Docker options.
+With the default `always` pull policy, re-running the installer reuses a healthy managed container when its image is current and replaces it when the selected tag resolves to a newer image. Set a different container name when changing Docker options that are not part of the image.
 
 Each MCP session starts only the lightweight client process inside that container:
 

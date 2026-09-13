@@ -14,6 +14,7 @@ trap cleanup 0
 
 fake_bin="$test_root/bin"
 capture_file="$test_root/docker-args"
+docker_log="$test_root/docker-log"
 cache_root="$test_root/cache"
 installer_output="$test_root/output"
 mkdir -p "$fake_bin"
@@ -21,16 +22,25 @@ mkdir -p "$fake_bin"
 cat > "$fake_bin/docker" <<'EOF'
 #!/bin/sh
 set -eu
+printf '%s\n' "$*" >> "$KALI_MCP_DOCKER_LOG"
 if [ "${1:-}" = "container" ] && [ "${2:-}" = "inspect" ]; then
   if [ "${KALI_MCP_TEST_CONTAINER_EXISTS:-}" = "true" ]; then
     exit 0
   fi
   exit 1
 fi
+if [ "${1:-}" = "pull" ]; then
+  exit 0
+fi
+if [ "${1:-}" = "image" ] && [ "${2:-}" = "inspect" ]; then
+  printf '%s\n' "${KALI_MCP_TEST_DESIRED_IMAGE_ID:-sha256:current}"
+  exit 0
+fi
 if [ "${1:-}" = "inspect" ]; then
   case "${3:-}" in
     *Config.Labels*) printf '%s\n' true ;;
     *State.Running*) printf '%s\n' true ;;
+    *'.Image'*) printf '%s\n' "${KALI_MCP_TEST_EXISTING_IMAGE_ID:-sha256:current}" ;;
     *) exit 1 ;;
   esac
   exit 0
@@ -41,6 +51,9 @@ if [ "${1:-}" = "run" ]; then
   exit 0
 fi
 if [ "${1:-}" = "exec" ]; then
+  exit 0
+fi
+if [ "${1:-}" = "rm" ]; then
   exit 0
 fi
 printf '%s\n' "unexpected docker command: $*" >&2
@@ -74,6 +87,7 @@ chmod +x "$fake_bin/docker" "$fake_bin/curl" "$fake_bin/openssl"
 PATH="$fake_bin:$PATH" \
   XDG_CACHE_HOME="$cache_root" \
   KALI_MCP_DOCKER_CAPTURE="$capture_file" \
+  KALI_MCP_DOCKER_LOG="$docker_log" \
   KALI_MCP_TEST_PROFILE_SOURCE="$repo_root/chromium-seccomp.json" \
   KALI_MCP_DOCKER_IMAGE="example.invalid/kali-mcp:test" \
   sh < "$repo_root/scripts/run-docker.sh" > "$installer_output"
@@ -93,7 +107,7 @@ unless-stopped
 --init
 --add-host
 host.docker.internal:host-gateway
---ipc=host
+--shm-size=512m
 --security-opt
 seccomp=$profile_path
 --label
@@ -120,7 +134,24 @@ cp "$capture_file" "$test_root/first-docker-args"
 PATH="$fake_bin:$PATH" \
   XDG_CACHE_HOME="$cache_root" \
   KALI_MCP_DOCKER_CAPTURE="$capture_file" \
+  KALI_MCP_DOCKER_LOG="$docker_log" \
   KALI_MCP_TEST_CONTAINER_EXISTS=true \
+  KALI_MCP_TEST_EXISTING_IMAGE_ID=sha256:current \
+  KALI_MCP_TEST_DESIRED_IMAGE_ID=sha256:current \
+  KALI_MCP_DOCKER_IMAGE="example.invalid/kali-mcp:test" \
   sh < "$repo_root/scripts/run-docker.sh" > "$test_root/existing-output"
 diff -u "$test_root/first-docker-args" "$capture_file"
 grep -F 'docker exec -i kali-mcp mcp-client' "$test_root/existing-output" >/dev/null
+
+PATH="$fake_bin:$PATH" \
+  XDG_CACHE_HOME="$cache_root" \
+  KALI_MCP_DOCKER_CAPTURE="$capture_file" \
+  KALI_MCP_DOCKER_LOG="$docker_log" \
+  KALI_MCP_TEST_CONTAINER_EXISTS=true \
+  KALI_MCP_TEST_EXISTING_IMAGE_ID=sha256:old \
+  KALI_MCP_TEST_DESIRED_IMAGE_ID=sha256:current \
+  KALI_MCP_DOCKER_IMAGE="example.invalid/kali-mcp:test" \
+  sh < "$repo_root/scripts/run-docker.sh" > "$test_root/update-output"
+grep -F 'rm -f kali-mcp' "$docker_log" >/dev/null
+test "$(sed -n '2p' "$capture_file")" = "--pull=never"
+grep -F 'docker exec -i kali-mcp mcp-client' "$test_root/update-output" >/dev/null

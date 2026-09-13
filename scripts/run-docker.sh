@@ -13,6 +13,7 @@ readonly container_name="${KALI_MCP_CONTAINER_NAME:-kali-mcp}"
 readonly managed_label="io.github.found-cake.kali-mcp.managed=true"
 
 temporary_profile=""
+run_pull_policy="$pull_policy"
 
 cleanup() {
   status=$?
@@ -94,15 +95,28 @@ if docker container inspect "$container_name" >/dev/null 2>&1; then
     printf '%s\n' "kali-mcp installer: container '$container_name' already exists and is not managed by this installer" >&2
     exit 1
   fi
-  if test "$(docker inspect --format '{{ .State.Running }}' "$container_name")" != "true"; then
-    docker start "$container_name" >/dev/null
+  reuse_existing=true
+  if test "$pull_policy" = "always"; then
+    docker pull "$image_name" >/dev/null
+    existing_image_id=$(docker inspect --format '{{ .Image }}' "$container_name")
+    desired_image_id=$(docker image inspect --format '{{ .Id }}' "$image_name")
+    if test "$existing_image_id" != "$desired_image_id"; then
+      docker rm -f "$container_name" >/dev/null
+      reuse_existing=false
+      run_pull_policy=never
+    fi
   fi
-  if ! wait_for_health; then
-    printf '%s\n' "kali-mcp installer: existing container '$container_name' failed its health check" >&2
-    exit 1
+  if test "$reuse_existing" = "true"; then
+    if test "$(docker inspect --format '{{ .State.Running }}' "$container_name")" != "true"; then
+      docker start "$container_name" >/dev/null
+    fi
+    if ! wait_for_health; then
+      printf '%s\n' "kali-mcp installer: existing container '$container_name' failed its health check" >&2
+      exit 1
+    fi
+    print_registration
+    exit 0
   fi
-  print_registration
-  exit 0
 fi
 
 command -v curl >/dev/null 2>&1 || {
@@ -122,13 +136,13 @@ api_token=$(openssl rand -hex 32)
 test -n "$api_token"
 
 docker run \
-  --pull="$pull_policy" \
+  --pull="$run_pull_policy" \
   -d \
   --name "$container_name" \
   --restart unless-stopped \
   --init \
   --add-host host.docker.internal:host-gateway \
-  --ipc=host \
+  --shm-size=512m \
   --security-opt "seccomp=$profile_path" \
   --label "$managed_label" \
   -e "KALI_MCP_API_TOKEN=$api_token" \

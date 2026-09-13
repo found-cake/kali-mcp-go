@@ -100,6 +100,7 @@ The MCP launcher command for other clients is:
     }
     $profileDirectory = Join-Path $cacheRoot "kali-mcp"
     $profilePath = Join-Path $profileDirectory "chromium-seccomp.json"
+    $runPullPolicy = $pullPolicy
 
     & docker container inspect $containerName *> $null
     if ($LASTEXITCODE -eq 0) {
@@ -107,18 +108,40 @@ The MCP launcher command for other clients is:
         if ($existingLabel -ne "true") {
             throw "kali-mcp installer: container '$containerName' already exists and is not managed by this installer"
         }
-        $running = (& docker inspect --format '{{ .State.Running }}' $containerName | Out-String).Trim()
-        if ($running -ne "true") {
-            & docker start $containerName | Out-Null
+        $reuseExisting = $true
+        if ($pullPolicy -eq "always") {
+            & docker pull $imageName | Out-Null
             if ($LASTEXITCODE -ne 0) {
-                throw "kali-mcp installer: failed to start existing container '$containerName'"
+                throw "kali-mcp installer: failed to pull image '$imageName'"
+            }
+            $existingImageID = (& docker inspect --format '{{ .Image }}' $containerName | Out-String).Trim()
+            $desiredImageID = (& docker image inspect --format '{{ .Id }}' $imageName | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($desiredImageID)) {
+                throw "kali-mcp installer: failed to inspect image '$imageName'"
+            }
+            if ($existingImageID -ne $desiredImageID) {
+                & docker rm -f $containerName | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw "kali-mcp installer: failed to replace existing container '$containerName'"
+                }
+                $reuseExisting = $false
+                $runPullPolicy = "never"
             }
         }
-        if (-not (Wait-KaliHealth -ContainerName $containerName)) {
-            throw "kali-mcp installer: existing container '$containerName' failed its health check"
+        if ($reuseExisting) {
+            $running = (& docker inspect --format '{{ .State.Running }}' $containerName | Out-String).Trim()
+            if ($running -ne "true") {
+                & docker start $containerName | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw "kali-mcp installer: failed to start existing container '$containerName'"
+                }
+            }
+            if (-not (Wait-KaliHealth -ContainerName $containerName)) {
+                throw "kali-mcp installer: existing container '$containerName' failed its health check"
+            }
+            Write-Registration -ContainerName $containerName
+            return
         }
-        Write-Registration -ContainerName $containerName
-        return
     }
 
     if (-not (Test-SeccompProfile -Path $profilePath)) {
@@ -127,9 +150,9 @@ The MCP launcher command for other clients is:
 
     $apiToken = New-ApiToken
     $dockerArguments = @(
-        "run", "--pull=$pullPolicy", "-d", "--name", $containerName,
+        "run", "--pull=$runPullPolicy", "-d", "--name", $containerName,
         "--restart", "unless-stopped", "--init",
-        "--add-host", "host.docker.internal:host-gateway", "--ipc=host",
+        "--add-host", "host.docker.internal:host-gateway", "--shm-size=512m",
         "--security-opt", "seccomp=$profilePath",
         "--label", "$managedLabelName=true",
         "-e", "KALI_MCP_API_TOKEN=$apiToken", "--entrypoint", "kali-server",

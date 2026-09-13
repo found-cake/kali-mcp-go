@@ -2,12 +2,37 @@ package tools
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+func TestNucleiTemplatesReadyAcceptsVerifiedArchiveTree(t *testing.T) {
+	// Given: a verified template archive extracted without Nuclei's optional checksum index.
+	directory := t.TempDir()
+	t.Setenv(nucleiTemplatesEnv, directory)
+	templatePath := filepath.Join(directory, "http", "technologies", "tech-detect.yaml")
+	if err := os.MkdirAll(filepath.Dir(templatePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(templatePath, []byte("id: tech-detect\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, nucleiVerifiedMarker), []byte("sha256:test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// When: server health checks the extracted template directory.
+	ready := NucleiTemplatesReady()
+
+	// Then: the real non-empty template is sufficient readiness evidence.
+	if !ready {
+		t.Fatal("verified extracted Nuclei template tree reported unavailable")
+	}
+}
 
 func TestTsharkArgsRejectsConflictingReadFileAndInterface(t *testing.T) {
 	t.Parallel()

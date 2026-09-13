@@ -21,6 +21,10 @@ $profilePath = Join-Path $profileDirectory "chromium-seccomp.json"
 $global:KaliMCPTestContainerExists = $false
 $global:KaliMCPTestDockerRunCount = 0
 $global:KaliMCPTestDockerRunArguments = @()
+$global:KaliMCPTestDockerPullCount = 0
+$global:KaliMCPTestDockerRemoveCount = 0
+$global:KaliMCPTestExistingImageID = "sha256:current"
+$global:KaliMCPTestDesiredImageID = "sha256:current"
 
 function global:docker {
     $received = @($args | ForEach-Object { [string]$_ })
@@ -37,6 +41,8 @@ function global:docker {
             "true"
         } elseif ($received[2] -match "State.Running") {
             "true"
+        } elseif ($received[2] -match "\.Image") {
+            $global:KaliMCPTestExistingImageID
         } else {
             $global:LASTEXITCODE = 1
             return
@@ -44,15 +50,32 @@ function global:docker {
         $global:LASTEXITCODE = 0
         return
     }
+    if ($received.Count -ge 1 -and $received[0] -eq "pull") {
+        $global:KaliMCPTestDockerPullCount++
+        $global:LASTEXITCODE = 0
+        return
+    }
+    if ($received.Count -ge 2 -and $received[0] -eq "image" -and $received[1] -eq "inspect") {
+        $global:KaliMCPTestDesiredImageID
+        $global:LASTEXITCODE = 0
+        return
+    }
     if ($received.Count -ge 1 -and $received[0] -eq "run") {
         $global:KaliMCPTestDockerRunCount++
         $global:KaliMCPTestDockerRunArguments = $received
         $global:KaliMCPTestContainerExists = $true
+        $global:KaliMCPTestExistingImageID = $global:KaliMCPTestDesiredImageID
         $global:LASTEXITCODE = 0
         "fake-container-id"
         return
     }
     if ($received.Count -ge 1 -and $received[0] -eq "exec") {
+        $global:LASTEXITCODE = 0
+        return
+    }
+    if ($received.Count -ge 1 -and $received[0] -eq "rm") {
+        $global:KaliMCPTestDockerRemoveCount++
+        $global:KaliMCPTestContainerExists = $false
         $global:LASTEXITCODE = 0
         return
     }
@@ -88,7 +111,7 @@ try {
     $expectedArguments = @(
         "run", "--pull=never", "-d", "--name", "kali-mcp-windows-test",
         "--restart", "unless-stopped", "--init",
-        "--add-host", "host.docker.internal:host-gateway", "--ipc=host",
+        "--add-host", "host.docker.internal:host-gateway", "--shm-size=512m",
         "--security-opt", "seccomp=$profilePath",
         "--label", "io.github.found-cake.kali-mcp.managed=true",
         "-e", "KALI_MCP_API_TOKEN=<generated>", "--entrypoint", "kali-server",
@@ -96,12 +119,28 @@ try {
     )
     Assert-Equal ($normalizedArguments -join "`n") ($expectedArguments -join "`n") "docker arguments"
 
+    $env:KALI_MCP_DOCKER_PULL = "always"
     $secondOutput = (& $installer | Out-String)
     if ($secondOutput -notmatch "docker exec -i kali-mcp-windows-test mcp-client") {
         throw "existing-container output omitted the docker exec launcher"
     }
     if ($global:KaliMCPTestDockerRunCount -ne 1) {
         throw "re-running the installer created another container"
+    }
+    if ($global:KaliMCPTestDockerPullCount -ne 1) {
+        throw "re-running the installer did not check for a newer image"
+    }
+
+    $global:KaliMCPTestDesiredImageID = "sha256:updated"
+    $thirdOutput = (& $installer | Out-String)
+    if ($thirdOutput -notmatch "docker exec -i kali-mcp-windows-test mcp-client") {
+        throw "updated-container output omitted the docker exec launcher"
+    }
+    if ($global:KaliMCPTestDockerRunCount -ne 2 -or $global:KaliMCPTestDockerRemoveCount -ne 1) {
+        throw "new image did not replace the managed container"
+    }
+    if ($global:KaliMCPTestDockerRunArguments[1] -ne "--pull=never") {
+        throw "pre-pulled image was pulled again during replacement"
     }
 } finally {
     Remove-Item Function:\docker -ErrorAction SilentlyContinue
@@ -112,5 +151,9 @@ try {
     Remove-Variable -Name KaliMCPTestContainerExists -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name KaliMCPTestDockerRunCount -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name KaliMCPTestDockerRunArguments -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name KaliMCPTestDockerPullCount -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name KaliMCPTestDockerRemoveCount -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name KaliMCPTestExistingImageID -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name KaliMCPTestDesiredImageID -Scope Global -ErrorAction SilentlyContinue
     Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

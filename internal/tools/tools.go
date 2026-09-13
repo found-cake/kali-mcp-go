@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,7 @@ const (
 	defaultJohnWordlistEnv = "KALI_MCP_JOHN_WORDLIST"
 	defaultJohnWordlist    = "/usr/share/wordlists/rockyou.txt"
 	nucleiTemplatesEnv     = "KALI_MCP_NUCLEI_TEMPLATES"
+	nucleiVerifiedMarker   = ".kali-mcp-verified"
 )
 
 func DefaultDirWordlistPath() string {
@@ -44,8 +46,29 @@ func NucleiTemplatesPath() string {
 }
 
 func NucleiTemplatesReady() bool {
-	info, err := os.Stat(filepath.Join(NucleiTemplatesPath(), ".checksum"))
-	return err == nil && info.Mode().IsRegular() && info.Size() > 0
+	root := NucleiTemplatesPath()
+	if info, err := os.Stat(filepath.Join(root, ".checksum")); err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+		return true
+	}
+	if info, err := os.Stat(filepath.Join(root, nucleiVerifiedMarker)); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+		return false
+	}
+	ready := false
+	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".yaml" {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil || info.Size() == 0 {
+			return err
+		}
+		ready = true
+		return fs.SkipAll
+	})
+	return ready
 }
 
 func WordlistExists(path string) bool {
