@@ -112,6 +112,13 @@ func TestScanCapabilitiesExposeMCPToolProfileCompatibility(t *testing.T) {
 	if !slices.Equal(browser.Profiles, []dto.SafetyProfile{dto.ProfileBrowserXSSConfirm, dto.ProfileExplicitCustom}) {
 		t.Fatalf("unexpected browser_check profiles: %+v", browser.Profiles)
 	}
+	dirb := findToolCapability(t, capabilities.Tools, "dirb_scan")
+	if !slices.Equal(dirb.Profiles, []dto.SafetyProfile{dto.ProfileSafeRecon, dto.ProfileExplicitCustom}) {
+		t.Fatalf("unexpected dirb_scan profiles: %+v", dirb.Profiles)
+	}
+	if err := ValidateScanProfile("dirb", dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate}); err == nil {
+		t.Fatal("dirb accepted a low-rate profile it cannot enforce")
+	}
 }
 
 func TestScanControlApplicationSeparatesRequestedAndAppliedValues(t *testing.T) {

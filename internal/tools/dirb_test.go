@@ -18,7 +18,7 @@ func TestDirbArgsUseSilentTerminalMode(t *testing.T) {
 
 	// Given: a bounded directory discovery request.
 	request := dto.DirbRequest{
-		ScanOptions: dto.ScanOptions{Profile: dto.ProfileWebDiscoveryLowRate},
+		ScanOptions: dto.ScanOptions{Profile: dto.ProfileSafeRecon},
 		URL:         "https://example.test",
 	}
 

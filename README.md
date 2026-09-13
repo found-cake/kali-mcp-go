@@ -351,7 +351,7 @@ See [background job execution and lifecycle](docs/reference.md#background-jobs) 
 |---|---|---|
 | `http_request` | Send one bounded HTTP request with structured status, headers, optional target-bound virtual host, body preview, provenance, and artifact output | POST |
 | `gobuster_scan` | Directory / DNS / vhost brute-force | SSE |
-| `dirb_scan` | Quiet web content scan with structured discovered paths | SSE |
+| `dirb_scan` | Quiet web content scan without request-rate control; use FFUF or Feroxbuster for low-rate discovery | SSE |
 | `nikto_scan` | Web server vulnerability scanner with caller-selected installed plugins | SSE |
 | `wpscan_analyze` | WordPress vulnerability scanner | SSE |
 | `ffuf_scan` | Web content discovery with automatic calibration, size filtering, and optional recursion | SSE |
