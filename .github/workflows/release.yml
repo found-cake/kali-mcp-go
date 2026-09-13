@@ -115,10 +115,35 @@ jobs:
           path: dist/${{ matrix.artifact_name }}
           if-no-files-found: error
 
+  registry_state:
+    needs:
+      - validate_tag
+    runs-on: ubuntu-latest
+    outputs:
+      latest_digest: ${{ steps.capture.outputs.latest_digest }}
+      rolling_digest: ${{ steps.capture.outputs.rolling_digest }}
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Capture current image channels
+        id: capture
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          image_digest() {
+            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null \
+              | jq -r '.digest // empty' || true
+          }
+          echo "latest_digest=$(image_digest "${IMAGE}:latest")" >> "${GITHUB_OUTPUT}"
+          echo "rolling_digest=$(image_digest "${IMAGE}:rolling")" >> "${GITHUB_OUTPUT}"
+
   docker_image:
     needs:
       - validate_tag
       - build
+      - registry_state
     permissions:
       contents: read
       packages: write
@@ -133,11 +158,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download release artifacts
+      - name: Download kali-server artifacts
         uses: actions/download-artifact@v8
         with:
           path: dist
-          pattern: '*'
+          pattern: 'kali-server-*'
+          merge-multiple: true
+
+      - name: Download mcp-client artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: 'mcp-client-*'
           merge-multiple: true
 
       # Generate SHA256 checksums to verify binary integrity
@@ -147,13 +179,12 @@ jobs:
           sha256sum * > checksums.txt
 
       - name: Generate download notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
-          PR_BODY="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '.[0].body // ""')"
-          if [[ -n "${PR_BODY}" ]]; then
-            printf '%s\n\n' "${PR_BODY}" > release_notes.md
+          VERSION_NOTES="docs/releases/${GITHUB_REF_NAME}.md"
+          if [[ -f "${VERSION_NOTES}" ]]; then
+            cat "${VERSION_NOTES}" > release_notes.md
+            printf '\n' >> release_notes.md
           else
             : > release_notes.md
           fi
@@ -185,17 +216,23 @@ jobs:
 
   cleanup_failed_release:
     needs:
+      - validate_tag
       - build
+      - registry_state
       - docker_image
       - release
-    # Run cleanup if build or release fails
     if: |
       always() && (
-        needs.build.result == 'failure' ||
-        needs.docker_image.result == 'failure' ||
-        needs.release.result == 'failure'
+        needs.validate_tag.result != 'success' ||
+        needs.build.result != 'success' ||
+        needs.registry_state.result != 'success' ||
+        needs.docker_image.result != 'success' ||
+        needs.release.result != 'success'
       )
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - uses: actions/checkout@v7
@@ -207,6 +244,72 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 && gh release delete "${GITHUB_REF_NAME}" --yes || true
+
+      - name: Log in to GitHub Container Registry
+        if: needs.registry_state.result == 'success'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: needs.registry_state.result == 'success'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Restore image channels
+        if: needs.registry_state.result == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          PREVIOUS_LATEST: ${{ needs.registry_state.outputs.latest_digest }}
+          PREVIOUS_ROLLING: ${{ needs.registry_state.outputs.rolling_digest }}
+        run: |
+          image_digest() {
+            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null \
+              | jq -r '.digest // empty' || true
+          }
+
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          package="${GITHUB_REPOSITORY#*/}"
+          owner_type="$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.owner.type')"
+          if [[ "${owner_type}" == "Organization" ]]; then
+            versions_api="orgs/${owner}/packages/container/${package}/versions"
+          else
+            versions_api="users/${owner}/packages/container/${package}/versions"
+          fi
+
+          deleted_digests=''
+          delete_new_digest() {
+            digest="$1"
+            if [[ -z "${digest}" || "${digest}" == "${PREVIOUS_LATEST}" || "${digest}" == "${PREVIOUS_ROLLING}" || " ${deleted_digests} " == *" ${digest} "* ]]; then
+              return
+            fi
+            version_id="$(gh api "${versions_api}?per_page=100" --jq ".[] | select(.name == \"${digest}\") | .id")"
+            if [[ -z "${version_id}" ]]; then
+              echo "Unable to find GHCR package version for ${digest}" >&2
+              return 1
+            fi
+            gh api --method DELETE "${versions_api}/${version_id}"
+            deleted_digests="${deleted_digests} ${digest}"
+          }
+
+          release_digest="$(image_digest "${IMAGE}:${GITHUB_REF_NAME}")"
+          latest_digest="$(image_digest "${IMAGE}:latest")"
+          rolling_digest="$(image_digest "${IMAGE}:rolling")"
+          delete_new_digest "${release_digest}"
+          if [[ "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
+            delete_new_digest "${latest_digest}"
+          fi
+          if [[ "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
+            delete_new_digest "${rolling_digest}"
+          fi
+          if [[ -n "${PREVIOUS_LATEST}" && "${latest_digest}" != "${PREVIOUS_LATEST}" ]]; then
+            docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${PREVIOUS_LATEST}"
+          fi
+          if [[ -n "${PREVIOUS_ROLLING}" && "${rolling_digest}" != "${PREVIOUS_ROLLING}" ]]; then
+            docker buildx imagetools create --tag "${IMAGE}:rolling" "${IMAGE}@${PREVIOUS_ROLLING}"
+          fi
 
       - name: Delete failed tag from remote
         env:

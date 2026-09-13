@@ -21,7 +21,7 @@ Detailed Docker operation, execution contracts, evidence handling, and tool-spec
 - `latest` and version tags use Kali's last release and are published with project releases.
 - `rolling` uses Kali Rolling and is rebuilt every two weeks and with project releases.
 - `--pull=always` checks the registry at startup but downloads layers only when the digest changes.
-- Persistent containers do not update automatically. Remove the existing managed container and rerun the Raw shell or PowerShell installer to recreate it from the desired tag.
+- With the default `always` pull policy, rerunning a Raw installer replaces its managed container when the selected image tag resolves to a new digest. Other Docker option changes require a different container name or manual removal of the existing managed container.
 
 ### Networking and files
 
@@ -35,7 +35,7 @@ The Docker image sets `KALI_MCP_BROWSER_OUTPUT_DIR=/var/lib/kali-mcp/browser` fo
 
 The image entrypoint already uses `tini` to reap browser subprocesses. Persistent mode keeps Docker's `--init` because its `--entrypoint` option replaces the image entrypoint.
 
-The Raw installers verify and cache the profile, then apply it with shared IPC when creating the persistent container. The shell installer defaults to `$HOME/.cache`, while the PowerShell installer defaults to `%LOCALAPPDATA%`. For a manual deployment or repository checkout, download the matching profile first:
+The Raw installers verify and cache the profile, then create the persistent container with a private 512 MiB shared-memory allocation. The shell installer defaults to `$HOME/.cache`, while the PowerShell installer defaults to `%LOCALAPPDATA%`. For a manual deployment or repository checkout, download the matching profile first:
 
 ```bash
 curl -fsSLo chromium-seccomp.json \
