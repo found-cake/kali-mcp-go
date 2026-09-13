@@ -61,7 +61,9 @@ function global:docker {
 
 try {
     New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
-    Copy-Item (Join-Path $repoRoot "chromium-seccomp.json") $profilePath
+    $profileContent = [System.IO.File]::ReadAllText((Join-Path $repoRoot "chromium-seccomp.json"))
+    $profileContent = $profileContent.Replace("`r`n", "`n")
+    [System.IO.File]::WriteAllText($profilePath, $profileContent, [System.Text.UTF8Encoding]::new($false))
     $env:XDG_CACHE_HOME = $cacheRoot
     $env:KALI_MCP_DOCKER_IMAGE = "example.invalid/kali-mcp:test"
     $env:KALI_MCP_DOCKER_PULL = "never"
