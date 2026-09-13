@@ -105,8 +105,11 @@ func (s streamRun) run(w Writer) {
 				continue
 			}
 			if line.Stream == "stderr" {
-				streamedStderr.WriteString(line.Text)
-				streamedStderr.WriteByte('\n')
+				lineBytes := len(line.Text) + 1
+				if streamedStderr.Len()+lineBytes <= dto.MaximumRetainedOutputBytes {
+					streamedStderr.WriteString(line.Text)
+					streamedStderr.WriteByte('\n')
+				}
 			}
 			if line.Sequence == 0 {
 				progress.ObservedOutputItems++

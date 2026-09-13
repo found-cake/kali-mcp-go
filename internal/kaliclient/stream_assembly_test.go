@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
 
 func TestJoinStreamLinesPreservesExactNewlines(t *testing.T) {
@@ -40,6 +42,24 @@ func TestBaseResultPreservesStderrBackingArray(t *testing.T) {
 	}
 	if again := accumulator.baseResult(); again.Stderr != result.Stderr {
 		t.Fatal("repeated formatting changed stderr")
+	}
+}
+
+func TestStreamAccumulatorBoundsOutputBeforeCompaction(t *testing.T) {
+	// Given: a stream accumulator with room for two five-byte lines.
+	accumulator := streamAccumulator{outputLimit: 10}
+
+	// When: a third line exceeds the retention boundary.
+	for _, line := range []string{"1234", "5678", "x"} {
+		if err := accumulator.consume(dto.StreamEvent{Stream: "stdout", Line: line}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result := accumulator.partialResult()
+
+	// Then: the prefix remains available with accurate truncation and observed-byte metadata.
+	if result.Stdout != "1234\n5678\n" || result.StdoutBytes != 12 || !result.StdoutTruncated || !result.OutputTruncated {
+		t.Fatalf("unexpected bounded stream result: %+v", result)
 	}
 }
 

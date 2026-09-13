@@ -30,12 +30,24 @@ func (a *streamAccumulator) partialResult() *dto.ToolResult {
 }
 
 func (a *streamAccumulator) baseResult() *dto.ToolResult {
-	stderr := a.stderr
+	stdoutBytes := a.stdoutBytes
+	if stdoutBytes == 0 {
+		stdoutBytes = streamLinesBytes(a.stdout)
+	}
+	stderrBytes := a.stderrBytes
+	if stderrBytes == 0 {
+		stderrBytes = streamLinesBytes(a.stderr)
+	}
+	stderrTruncated := a.stderrTruncated
+	stderr := append([]string(nil), a.stderr...)
 	if a.finalError != "" {
-		stderr = append(append([]string(nil), stderr...), a.finalError)
+		retainStreamLine(&stderr, &stderrBytes, &stderrTruncated, a.finalError, a.retentionLimit())
 	}
 	return &dto.ToolResult{
 		CallID: a.callID, Stdout: joinStreamLines(a.stdout), Stderr: joinStreamLines(stderr),
+		StdoutBytes: stdoutBytes, StderrBytes: stderrBytes,
+		OutputTruncated: a.stdoutTruncated || stderrTruncated,
+		StdoutTruncated: a.stdoutTruncated, StderrTruncated: stderrTruncated,
 		ReturnCode: a.returnCode, TimedOut: a.timedOut, Cancelled: a.cancelled,
 		PartialResults: (a.timedOut || a.cancelled) && (len(a.stdout) > 0 || len(a.stderr) > 0),
 		HTTPRequests:   a.httpRequests, RequestCountSource: a.requestCountSource,
@@ -47,6 +59,14 @@ func (a *streamAccumulator) baseResult() *dto.ToolResult {
 		NucleiPreview:  a.nucleiPreview,
 		Evidence:       a.evidence,
 	}
+}
+
+func streamLinesBytes(lines []string) int {
+	size := len(lines)
+	for _, line := range lines {
+		size += len(line)
+	}
+	return size
 }
 
 func joinStreamLines(lines []string) string {

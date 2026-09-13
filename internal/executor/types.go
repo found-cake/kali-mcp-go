@@ -10,6 +10,10 @@ type Result struct {
 	CallID                string
 	Stdout                string
 	Stderr                string
+	StdoutBytes           int
+	StderrBytes           int
+	StdoutTruncated       bool
+	StderrTruncated       bool
 	ReturnCode            int
 	TimedOut              bool
 	Cancelled             bool

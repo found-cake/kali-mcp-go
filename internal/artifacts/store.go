@@ -33,9 +33,24 @@ type Content struct {
 	Payload        []byte
 }
 
+type timer interface {
+	Stop() bool
+}
+
+type clock interface {
+	AfterFunc(time.Duration, func()) timer
+}
+
+type realClock struct{}
+
+func (realClock) AfterFunc(delay time.Duration, fire func()) timer {
+	return time.AfterFunc(delay, fire)
+}
+
 type storedArtifact struct {
-	path      string
-	reference dto.ArtifactRef
+	path        string
+	reference   dto.ArtifactRef
+	expiryTimer timer
 }
 
 type Store struct {
@@ -43,9 +58,14 @@ type Store struct {
 	directory  string
 	items      map[string]storedArtifact
 	nextExpiry time.Time
+	clock      clock
 }
 
 func New() (*Store, error) {
+	return newStore(realClock{})
+}
+
+func newStore(clock clock) (*Store, error) {
 	directory, err := os.MkdirTemp("", "kali-mcp-artifacts-*")
 	if err != nil {
 		return nil, fmt.Errorf("create artifact directory: %w", err)
@@ -54,7 +74,7 @@ func New() (*Store, error) {
 		_ = os.RemoveAll(directory)
 		return nil, fmt.Errorf("secure artifact directory: %w", err)
 	}
-	return &Store{directory: directory, items: make(map[string]storedArtifact)}, nil
+	return &Store{directory: directory, items: make(map[string]storedArtifact), clock: clock}, nil
 }
 
 func (s *Store) Save(content Content, now time.Time) (dto.ArtifactRef, error) {
@@ -73,7 +93,9 @@ func (s *Store) Save(content Content, now time.Time) (dto.ArtifactRef, error) {
 	}
 	s.prune(now)
 	s.mu.Lock()
-	s.items[id] = storedArtifact{path: path, reference: reference}
+	artifact := storedArtifact{path: path, reference: reference}
+	artifact.expiryTimer = s.clock.AfterFunc(artifactTTL, func() { s.expire(id) })
+	s.items[id] = artifact
 	if s.nextExpiry.IsZero() || reference.ExpiresAt.Before(s.nextExpiry) {
 		s.nextExpiry = reference.ExpiresAt
 	}
@@ -111,16 +133,44 @@ func (s *Store) lookup(id string, now time.Time) (storedArtifact, error) {
 
 func (s *Store) forget(id string) {
 	s.mu.Lock()
+	artifact, found := s.items[id]
 	delete(s.items, id)
 	s.mu.Unlock()
+	if found && artifact.expiryTimer != nil {
+		artifact.expiryTimer.Stop()
+	}
 }
 
 func (s *Store) Close() error {
 	s.mu.Lock()
+	timers := make([]timer, 0, len(s.items))
+	for _, artifact := range s.items {
+		if artifact.expiryTimer != nil {
+			timers = append(timers, artifact.expiryTimer)
+		}
+	}
 	s.items = make(map[string]storedArtifact)
 	s.nextExpiry = time.Time{}
 	s.mu.Unlock()
+	for _, timer := range timers {
+		timer.Stop()
+	}
 	return os.RemoveAll(s.directory)
+}
+
+func (s *Store) expire(id string) {
+	s.mu.Lock()
+	artifact, found := s.items[id]
+	if found {
+		delete(s.items, id)
+		if !s.nextExpiry.Before(artifact.reference.ExpiresAt) {
+			s.recomputeNextExpiryLocked()
+		}
+	}
+	s.mu.Unlock()
+	if found {
+		_ = os.Remove(artifact.path)
+	}
 }
 
 func (s *Store) prune(now time.Time) {
@@ -130,7 +180,7 @@ func (s *Store) prune(now time.Time) {
 		return
 	}
 	s.nextExpiry = time.Time{}
-	var expired []string
+	var expired []storedArtifact
 	for id, artifact := range s.items {
 		if now.Before(artifact.reference.ExpiresAt) {
 			if s.nextExpiry.IsZero() || artifact.reference.ExpiresAt.Before(s.nextExpiry) {
@@ -138,12 +188,24 @@ func (s *Store) prune(now time.Time) {
 			}
 			continue
 		}
-		expired = append(expired, artifact.path)
+		expired = append(expired, artifact)
 		delete(s.items, id)
 	}
 	s.mu.Unlock()
-	for _, path := range expired {
-		_ = os.Remove(path)
+	for _, artifact := range expired {
+		if artifact.expiryTimer != nil {
+			artifact.expiryTimer.Stop()
+		}
+		_ = os.Remove(artifact.path)
+	}
+}
+
+func (s *Store) recomputeNextExpiryLocked() {
+	s.nextExpiry = time.Time{}
+	for _, artifact := range s.items {
+		if s.nextExpiry.IsZero() || artifact.reference.ExpiresAt.Before(s.nextExpiry) {
+			s.nextExpiry = artifact.reference.ExpiresAt
+		}
 	}
 }
 

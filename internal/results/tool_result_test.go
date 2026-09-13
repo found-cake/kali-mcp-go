@@ -87,3 +87,19 @@ func TestToToolResultDoesNotEstimateRetryCost(t *testing.T) {
 		t.Fatalf("result still exposes retry cost estimation: %s", payload)
 	}
 }
+
+func TestToToolResultPreservesCaptureTruncation(t *testing.T) {
+	// Given: an executor result whose complete output exceeded the capture limit.
+	result := executor.Result{
+		Stdout: "retained", StdoutBytes: 100, StdoutTruncated: true,
+		ReturnCode: 0, StartedAt: time.Now(), Timeout: time.Second,
+	}
+
+	// When: the result crosses the public DTO boundary.
+	toolResult := ToToolResult(&result)
+
+	// Then: callers can distinguish the retained prefix from the complete output.
+	if toolResult.StdoutBytes != 100 || !toolResult.StdoutTruncated || !toolResult.OutputTruncated {
+		t.Fatalf("capture truncation was lost: %+v", toolResult)
+	}
+}

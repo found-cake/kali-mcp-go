@@ -57,3 +57,19 @@ func TestCompactToolResultSeparatesFindingAndArtifactCompleteness(t *testing.T) 
 		t.Fatalf("missing finding or artifact completeness metadata: %+v", compacted)
 	}
 }
+
+func TestCompactToolResultDoesNotMarkPartialArtifactComplete(t *testing.T) {
+	// Given: a result artifact created after process output exceeded the capture limit.
+	result := dto.ToolResult{
+		Stdout: "retained", StdoutBytes: 100, OutputTruncated: true, StdoutTruncated: true,
+		Artifacts: []dto.ArtifactRef{{ID: "artifact_partial", Relation: dto.ArtifactRelationToolResult}},
+	}
+
+	// When: the result is prepared for inline MCP delivery.
+	compacted := compactToolResult("execute_command", result)
+
+	// Then: the artifact remains discoverable without being described as complete.
+	if compacted.ArtifactComplete || compacted.StdoutBytes != 100 {
+		t.Fatalf("partial artifact marked complete: %+v", compacted)
+	}
+}

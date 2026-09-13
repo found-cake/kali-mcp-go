@@ -8,12 +8,23 @@ import (
 )
 
 func ToToolResult(result *executor.Result) dto.ToolResult {
+	stdoutBytes := result.StdoutBytes
+	if stdoutBytes == 0 {
+		stdoutBytes = len(result.Stdout)
+	}
+	stderrBytes := result.StderrBytes
+	if stderrBytes == 0 {
+		stderrBytes = len(result.Stderr)
+	}
 	toolResult := dto.ToolResult{
 		CallID:             result.CallID,
 		Stdout:             result.Stdout,
 		Stderr:             result.Stderr,
-		StdoutBytes:        len(result.Stdout),
-		StderrBytes:        len(result.Stderr),
+		StdoutBytes:        stdoutBytes,
+		StderrBytes:        stderrBytes,
+		OutputTruncated:    result.StdoutTruncated || result.StderrTruncated,
+		StdoutTruncated:    result.StdoutTruncated,
+		StderrTruncated:    result.StderrTruncated,
 		ReturnCode:         result.ReturnCode,
 		TimedOut:           result.TimedOut,
 		Cancelled:          result.Cancelled,

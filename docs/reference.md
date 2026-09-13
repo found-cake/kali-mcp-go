@@ -97,7 +97,7 @@ Every HTTP call also emits one JSON telemetry record containing its `call_id`, M
 
 `http_requests` is populated only from a measured or parsed counter whose meaning is suitable for the completed result; `request_count_source` distinguishes `measured`, `parsed`, and `unknown`, and the count remains `null` rather than being estimated. Nuclei's runtime `requests` counter is retained separately with `requests_semantics: scheduled_or_generated`; timed-out and otherwise partial Nuclei runs do not expose that counter as delivered HTTP requests. Its `reported_rps` is the scanner's own runtime statistic, separate from the applied native limiter. Nikto's own maximum-execution-time termination is normalized to `timed_out`, with progress set to the same phase, even when Nikto exits with code zero. Findings remain independently `detected` when partial evidence exists. A failure with output sets `partial_results`.
 
-Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; Nuclei uses a 2 KiB cap and returns only complete lines so a large JSONL record is never presented as parseable partial JSON. `stdout_bytes` and `stderr_bytes` report the original output sizes. HTTP response metadata, SQLMap differential analysis, JWT structural analysis, and Nuclei preview metadata are also appended as one compact JSON summary for MCP hosts that do not surface structured content.
+Process stdout and stderr are retained up to 16 MiB per channel before artifact creation, bounding server and client memory even for unexpectedly noisy tools. `stdout_bytes`, `stderr_bytes`, and the channel truncation fields distinguish the retained prefix from the observed size; an artifact created after this boundary reports `artifact_complete: false`. Inline stdout and stderr are UTF-8-safe previews capped at 8 KiB each; Nuclei uses a 2 KiB cap and returns only complete lines so a large JSONL record is never presented as parseable partial JSON. HTTP response metadata, SQLMap differential analysis, JWT structural analysis, and Nuclei preview metadata are also appended as one compact JSON summary for MCP hosts that do not surface structured content.
 
 Discovery results use `discovered_paths[].response_bytes` for the response size reported by that scanner's own request. It is distinct from the scanner output size in `stdout_bytes`, the HTTP `Content-Length` in `http_response.content_length`, and the retained response body size in `http_response.body_bytes`; compression, chunked transfer, dynamic content, redirects, or different request headers can make those values differ.
 
@@ -105,7 +105,7 @@ Discovery results use `discovered_paths[].response_bytes` for the response size 
 
 `result_artifact_read` never searches, summarizes, or filters evidence. It only returns the requested section and range, so the orchestrator retains control over what it inspects:
 
-- Byte mode uses `offset` plus `limit` and works for every artifact. The default page is 16 KiB and each call may request 256 bytes through 64 KiB. Continue with `next_offset` while `has_more` is true; there is no cumulative read cap, so the complete artifact remains readable.
+- Byte mode uses `offset` plus `limit` and works for every artifact. The default page is 16 KiB and each call may request 256 bytes through 64 KiB. Continue with `next_offset` while `has_more` is true; there is no cumulative paging cap, so the complete retained artifact remains readable.
 - Line mode uses the 1-based `start_line` plus `line_count` for UTF-8 artifacts. It defaults to 100 lines and accepts at most 500 lines per call, while the returned content remains capped at 64 KiB. Continue with `next_line` unless `line_truncated` is true.
 - `section` defaults to `raw`. `stdout` and `stderr` decode those fields only from a `tool-result-json` artifact. Their offsets and byte/line totals are relative to the selected section.
 - If a single line exceeds 64 KiB, the response sets `line_truncated`. Continue that selected section in byte mode from `next_offset`; this preserves access to the remainder without silently dropping data.
@@ -198,7 +198,7 @@ John accepts either `hash_file` or an inline `hash`. Inline hashes and John stat
 
 ## Artifact retention and redaction
 
-Completed, failed, timed-out, and cancelled tool calls write a mode-`0600` JSON result into a private server directory before the MCP response is compacted. The result contains an opaque artifact ID and `/api/artifacts/...` location, both protected by the same bearer token. Artifacts expire after one hour and are removed when the server shuts down.
+Completed, failed, timed-out, and cancelled tool calls write a mode-`0600` JSON result into a private server directory before the MCP response is compacted. The result contains an opaque artifact ID and `/api/artifacts/...` location, both protected by the same bearer token. Artifacts are removed when their one-hour retention timer expires and when the server shuts down.
 
 Results are retained verbatim by default and carry `redaction_state: sensitive_unredacted`; callers can opt into exact-value replacement through `redact_values`, subject to bounded count and size limits, which marks affected result artifacts as `redacted`. Credential and privacy handling remains the caller or orchestrator's responsibility.
 

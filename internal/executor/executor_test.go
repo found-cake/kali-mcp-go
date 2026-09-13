@@ -38,6 +38,22 @@ func TestRunReportsScannerError(t *testing.T) {
 	}
 }
 
+func TestRunShellBoundsRetainedOutput(t *testing.T) {
+	// Given: a successful command that emits more output than one result may retain.
+	command := "yes 0123456789abcdef | head -c 17000000"
+
+	// When: the command runs through the production executor.
+	result := RunShell(context.Background(), 10*time.Second, command)
+
+	// Then: execution succeeds while retained memory is bounded and the original size is reported.
+	if result.ReturnCode != 0 || result.TimedOut {
+		t.Fatalf("large-output command failed: %+v", result)
+	}
+	if len(result.Stdout) > maximumRetainedOutputBytes || result.StdoutBytes <= len(result.Stdout) || !result.StdoutTruncated {
+		t.Fatalf("output was not bounded: retained=%d observed=%d truncated=%t", len(result.Stdout), result.StdoutBytes, result.StdoutTruncated)
+	}
+}
+
 func TestStreamReportsScannerError(t *testing.T) {
 	t.Parallel()
 

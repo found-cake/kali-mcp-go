@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -114,19 +113,19 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	defer close(cancelPipeClose)
 
 	var (
-		stdout, stderr strings.Builder
-		wg             sync.WaitGroup
-		scanErrCh      = make(chan error, 2)
+		stdout    = newOutputCapture(maximumRetainedOutputBytes)
+		stderr    = newOutputCapture(maximumRetainedOutputBytes)
+		wg        sync.WaitGroup
+		scanErrCh = make(chan error, 2)
 	)
 
-	collect := func(r io.Reader, stream string, buf *strings.Builder) {
+	collect := func(r io.Reader, stream string, capture *outputCapture) {
 		defer wg.Done()
 		sc := newScanner(r)
 		for sc.Scan() {
 			text := sc.Text()
 			sequence := progress.observe(text)
-			buf.WriteString(text)
-			buf.WriteByte('\n')
+			capture.WriteLine(text)
 			if emit != nil && !emit(ctx, Line{Stream: stream, Text: text, Sequence: sequence}) {
 				return
 			}
@@ -137,8 +136,8 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 
 	wg.Add(2)
-	go collect(stdoutPipe, "stdout", &stdout)
-	go collect(stderrPipe, "stderr", &stderr)
+	go collect(stdoutPipe, "stdout", stdout)
+	go collect(stderrPipe, "stderr", stderr)
 	wg.Wait()
 	close(scanErrCh)
 	waitErr := cmd.Wait()
@@ -161,9 +160,9 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 		var exitErr *exec.ExitError
 		if !errors.As(waitErr, &exitErr) {
 			if stderr.Len() > 0 {
-				stderr.WriteByte('\n')
+				_, _ = stderr.Write([]byte{'\n'})
 			}
-			fmt.Fprintf(&stderr, "wait: %v", waitErr)
+			fmt.Fprintf(stderr, "wait: %v", waitErr)
 			if rc == 0 {
 				rc = -1
 			}
@@ -174,9 +173,9 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	for scanErr := range scanErrCh {
 		scanFailed = true
 		if stderr.Len() > 0 {
-			stderr.WriteByte('\n')
+			_, _ = stderr.Write([]byte{'\n'})
 		}
-		stderr.WriteString(scanErr.Error())
+		_, _ = stderr.Write([]byte(scanErr.Error()))
 	}
 	if scanFailed && rc == 0 {
 		rc = -1
@@ -184,9 +183,9 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	if cleanupErr != nil {
 		if stderr.Len() > 0 {
-			stderr.WriteByte('\n')
+			_, _ = stderr.Write([]byte{'\n'})
 		}
-		fmt.Fprintf(&stderr, "cleanup process group: %v", cleanupErr)
+		fmt.Fprintf(stderr, "cleanup process group: %v", cleanupErr)
 		result.FailureCode = "process_cleanup_failed"
 		rc = -1
 	}
@@ -195,6 +194,10 @@ func execute(ctx context.Context, timeout time.Duration, cmdSpec commandSpec, em
 	}
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
+	result.StdoutBytes = stdout.TotalBytes()
+	result.StderrBytes = stderr.TotalBytes()
+	result.StdoutTruncated = stdout.Truncated()
+	result.StderrTruncated = stderr.Truncated()
 	result.ReturnCode = rc
 	result.TimedOut = timedOut
 	result.Cancelled = cancelled

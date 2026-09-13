@@ -17,6 +17,11 @@ import (
 type streamAccumulator struct {
 	stdout             []string
 	stderr             []string
+	stdoutBytes        int
+	stderrBytes        int
+	stdoutTruncated    bool
+	stderrTruncated    bool
+	outputLimit        int
 	returnCode         int
 	timedOut           bool
 	cancelled          bool
@@ -171,9 +176,26 @@ func (a *streamAccumulator) consume(event dto.StreamEvent) error {
 	}
 	switch event.Stream {
 	case "stdout":
-		a.stdout = append(a.stdout, event.Line)
+		retainStreamLine(&a.stdout, &a.stdoutBytes, &a.stdoutTruncated, event.Line, a.retentionLimit())
 	case "stderr":
-		a.stderr = append(a.stderr, event.Line)
+		retainStreamLine(&a.stderr, &a.stderrBytes, &a.stderrTruncated, event.Line, a.retentionLimit())
 	}
 	return nil
+}
+
+func (a *streamAccumulator) retentionLimit() int {
+	if a.outputLimit > 0 {
+		return a.outputLimit
+	}
+	return dto.MaximumRetainedOutputBytes
+}
+
+func retainStreamLine(lines *[]string, totalBytes *int, truncated *bool, line string, limit int) {
+	lineBytes := len(line) + 1
+	*totalBytes += lineBytes
+	if *truncated || *totalBytes > limit {
+		*truncated = true
+		return
+	}
+	*lines = append(*lines, line)
 }

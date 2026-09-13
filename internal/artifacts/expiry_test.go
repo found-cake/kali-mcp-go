@@ -3,11 +3,70 @@ package artifacts
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/found-cake/kali-mcp-go/pkg/dto"
 )
+
+type expiryTestTimer struct {
+	delay   time.Duration
+	fire    func()
+	stopped bool
+}
+
+func (timer *expiryTestTimer) Stop() bool {
+	wasActive := !timer.stopped
+	timer.stopped = true
+	return wasActive
+}
+
+func (timer *expiryTestTimer) Fire() {
+	if !timer.stopped {
+		timer.fire()
+	}
+}
+
+type expiryTestClock struct {
+	scheduled chan *expiryTestTimer
+}
+
+func (clock *expiryTestClock) AfterFunc(delay time.Duration, fire func()) timer {
+	timer := &expiryTestTimer{delay: delay, fire: fire}
+	clock.scheduled <- timer
+	return timer
+}
+
+func TestStoreRemovesExpiredFileWithoutFollowupRequest(t *testing.T) {
+	// Given: an artifact store whose expiry timer is observable.
+	clock := &expiryTestClock{scheduled: make(chan *expiryTestTimer, 1)}
+	store, err := newStore(clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	reference, err := store.Save(Content{Encoding: dto.ArtifactEncodingUTF8, Payload: []byte("sensitive")}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := store.items[reference.ID]
+	timer := <-clock.scheduled
+
+	// When: the one-hour retention timer fires without another store operation.
+	timer.Fire()
+
+	// Then: both metadata and the sensitive backing file are removed.
+	if timer.delay != artifactTTL {
+		t.Fatalf("expiry delay=%s want=%s", timer.delay, artifactTTL)
+	}
+	if _, found := store.items[reference.ID]; found {
+		t.Fatal("expired artifact metadata remains")
+	}
+	if _, err := os.Stat(stored.path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expired artifact file remains: %v", err)
+	}
+}
 
 func TestStoreExpiryPreservesOutOfOrderTimestamps(t *testing.T) {
 	store := newExpiryTestStore(t)
