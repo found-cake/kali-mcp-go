@@ -21,11 +21,11 @@ Detailed Docker operation, execution contracts, evidence handling, and tool-spec
 - `latest` and version tags use Kali's last release and are published with project releases.
 - `rolling` uses Kali Rolling and is rebuilt every two weeks and with project releases.
 - `--pull=always` checks the registry at startup but downloads layers only when the digest changes.
-- Persistent containers do not update automatically. Remove the existing managed container and rerun the Raw installer to recreate it from the desired tag.
+- Persistent containers do not update automatically. Remove the existing managed container and rerun the Raw shell or PowerShell installer to recreate it from the desired tag.
 
 ### Networking and files
 
-The Raw installer adds `host.docker.internal:host-gateway` when it creates the persistent container. For a manual deployment, add the same host mapping when Docker does not provide that alias. Mount host files explicitly and use their container paths in tool requests.
+The Raw installers add `host.docker.internal:host-gateway` when they create the persistent container. For a manual deployment, add the same host mapping when Docker does not provide that alias. Mount host files explicitly and use their container paths in tool requests.
 
 ### Chromium sandbox
 
@@ -35,7 +35,7 @@ The Docker image sets `KALI_MCP_BROWSER_OUTPUT_DIR=/var/lib/kali-mcp/browser` fo
 
 The image entrypoint already uses `tini` to reap browser subprocesses. Persistent mode keeps Docker's `--init` because its `--entrypoint` option replaces the image entrypoint.
 
-The Raw installer verifies and caches the profile, then applies it with shared IPC when creating the persistent container. For a manual deployment or repository checkout, download the matching profile first:
+The Raw installers verify and cache the profile, then apply it with shared IPC when creating the persistent container. The shell installer defaults to `$HOME/.cache`, while the PowerShell installer defaults to `%LOCALAPPDATA%`. For a manual deployment or repository checkout, download the matching profile first:
 
 ```bash
 curl -fsSLo chromium-seccomp.json \

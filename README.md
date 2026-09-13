@@ -122,7 +122,9 @@ The **MCP launcher** is the local STDIO command registered with your AI client. 
 
 #### Persistent Docker
 
-Run the installer directly from the repository's `master` branch. It verifies and caches the Chromium seccomp profile, generates the API token, creates the background `kali-mcp` container with the required runtime options, and checks its health. The script is not saved or used as the MCP launcher.
+Run the installer for your host directly from the repository's `master` branch. It verifies and caches the Chromium seccomp profile, generates the API token, creates the background `kali-mcp` container with the required runtime options, and checks its health. The script is not saved or used as the MCP launcher.
+
+Linux and macOS:
 
 ```bash
 curl -fsSL \
@@ -130,14 +132,20 @@ curl -fsSL \
   | sh
 ```
 
-The installer reads these variables from the `sh` process on the right side of the pipe:
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/found-cake/kali-mcp-go/refs/heads/master/scripts/run-docker.ps1 | iex
+```
+
+The installer reads these variables from the `sh` or PowerShell process that executes it:
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `KALI_MCP_DOCKER_IMAGE` | `ghcr.io/found-cake/kali-mcp-go:latest` | Image tag or digest to install |
 | `KALI_MCP_DOCKER_PULL` | `always` | Docker pull policy: `always`, `missing`, or `never` |
 | `KALI_MCP_CONTAINER_NAME` | `kali-mcp` | Persistent container name used by subsequent `docker exec` commands |
-| `XDG_CACHE_HOME` | `$HOME/.cache` | Parent directory for the verified Chromium seccomp profile |
+| `XDG_CACHE_HOME` | `$HOME/.cache` on Linux/macOS; `%LOCALAPPDATA%` on Windows | Parent directory for the verified Chromium seccomp profile |
 
 For example, install a locally built image under a separate container name without pulling:
 
@@ -148,6 +156,15 @@ curl -fsSL \
     KALI_MCP_DOCKER_PULL=never \
     KALI_MCP_CONTAINER_NAME=kali-mcp-dev \
     sh
+```
+
+The same overrides can be set in PowerShell before running its installer:
+
+```powershell
+$env:KALI_MCP_DOCKER_IMAGE = "kali-mcp-go:local"
+$env:KALI_MCP_DOCKER_PULL = "never"
+$env:KALI_MCP_CONTAINER_NAME = "kali-mcp-dev"
+irm https://raw.githubusercontent.com/found-cake/kali-mcp-go/refs/heads/master/scripts/run-docker.ps1 | iex
 ```
 
 Re-running the installer reuses a healthy managed container with the selected name. Remove that container before rerunning when changing its image or Docker options.
@@ -417,6 +434,7 @@ kali-mcp-go/
 │   ├── streaming/              # progress, heartbeat, and terminal events
 │   ├── targeting/              # target contexts, receipts, and provenance
 │   └── tools/                  # registry, policies, and argument builders
+├── scripts/                    # persistent Docker installers and platform tests
 └── pkg/
     └── dto/                    # shared request and result contracts
 ```
