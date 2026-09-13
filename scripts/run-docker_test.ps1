@@ -23,11 +23,15 @@ $global:KaliMCPTestDockerRunCount = 0
 $global:KaliMCPTestDockerRunArguments = @()
 $global:KaliMCPTestDockerPullCount = 0
 $global:KaliMCPTestDockerRemoveCount = 0
+$global:KaliMCPTestDockerRenameCount = 0
+$global:KaliMCPTestDockerCommands = @()
+$global:KaliMCPTestDockerRunFails = $false
 $global:KaliMCPTestExistingImageID = "sha256:current"
 $global:KaliMCPTestDesiredImageID = "sha256:current"
 
 function global:docker {
     $received = @($args | ForEach-Object { [string]$_ })
+    $global:KaliMCPTestDockerCommands += ,($received -join " ")
     if ($received.Count -ge 2 -and $received[0] -eq "container" -and $received[1] -eq "inspect") {
         if ($global:KaliMCPTestContainerExists) {
             $global:LASTEXITCODE = 0
@@ -63,8 +67,11 @@ function global:docker {
     if ($received.Count -ge 1 -and $received[0] -eq "run") {
         $global:KaliMCPTestDockerRunCount++
         $global:KaliMCPTestDockerRunArguments = $received
+        if ($global:KaliMCPTestDockerRunFails) {
+            $global:LASTEXITCODE = 1
+            return
+        }
         $global:KaliMCPTestContainerExists = $true
-        $global:KaliMCPTestExistingImageID = $global:KaliMCPTestDesiredImageID
         $global:LASTEXITCODE = 0
         "fake-container-id"
         return
@@ -75,7 +82,11 @@ function global:docker {
     }
     if ($received.Count -ge 1 -and $received[0] -eq "rm") {
         $global:KaliMCPTestDockerRemoveCount++
-        $global:KaliMCPTestContainerExists = $false
+        $global:LASTEXITCODE = 0
+        return
+    }
+    if ($received.Count -ge 1 -and $received[0] -eq "rename") {
+        $global:KaliMCPTestDockerRenameCount++
         $global:LASTEXITCODE = 0
         return
     }
@@ -136,11 +147,43 @@ try {
     if ($thirdOutput -notmatch "docker exec -i kali-mcp-windows-test mcp-client") {
         throw "updated-container output omitted the docker exec launcher"
     }
-    if ($global:KaliMCPTestDockerRunCount -ne 2 -or $global:KaliMCPTestDockerRemoveCount -ne 1) {
+    if ($global:KaliMCPTestDockerRunCount -ne 2 -or $global:KaliMCPTestDockerRemoveCount -ne 1 -or $global:KaliMCPTestDockerRenameCount -ne 2) {
         throw "new image did not replace the managed container"
     }
     if ($global:KaliMCPTestDockerRunArguments[1] -ne "--pull=never") {
         throw "pre-pulled image was pulled again during replacement"
+    }
+    $candidateName = $global:KaliMCPTestDockerRunArguments[4]
+    if ($candidateName -notlike "kali-mcp-windows-test-candidate-*") {
+        throw "replacement was not staged under a candidate container name"
+    }
+    if (-not ($global:KaliMCPTestDockerCommands | Where-Object { $_ -like "rename kali-mcp-windows-test kali-mcp-windows-test-previous-*" })) {
+        throw "existing container was not staged under a backup name"
+    }
+    if (-not ($global:KaliMCPTestDockerCommands -contains "rename $candidateName kali-mcp-windows-test")) {
+        throw "healthy replacement was not activated under the configured name"
+    }
+
+    $renameCountBeforeFailure = $global:KaliMCPTestDockerRenameCount
+    $commandCountBeforeFailure = $global:KaliMCPTestDockerCommands.Count
+    $global:KaliMCPTestExistingImageID = "sha256:updated"
+    $global:KaliMCPTestDesiredImageID = "sha256:newer"
+    $global:KaliMCPTestDockerRunFails = $true
+    $failedAsExpected = $false
+    try {
+        & $installer | Out-Null
+    } catch {
+        $failedAsExpected = $true
+    }
+    if (-not $failedAsExpected) {
+        throw "installer unexpectedly succeeded after replacement creation failed"
+    }
+    if ($global:KaliMCPTestDockerRenameCount -ne $renameCountBeforeFailure) {
+        throw "failed replacement renamed the existing container"
+    }
+    $failureCommands = @($global:KaliMCPTestDockerCommands[$commandCountBeforeFailure..($global:KaliMCPTestDockerCommands.Count - 1)])
+    if ($failureCommands -contains "rm -f kali-mcp-windows-test") {
+        throw "failed replacement removed the existing container"
     }
 } finally {
     Remove-Item Function:\docker -ErrorAction SilentlyContinue
@@ -153,6 +196,9 @@ try {
     Remove-Variable -Name KaliMCPTestDockerRunArguments -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name KaliMCPTestDockerPullCount -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name KaliMCPTestDockerRemoveCount -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name KaliMCPTestDockerRenameCount -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name KaliMCPTestDockerCommands -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name KaliMCPTestDockerRunFails -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name KaliMCPTestExistingImageID -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name KaliMCPTestDesiredImageID -Scope Global -ErrorAction SilentlyContinue
     Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue

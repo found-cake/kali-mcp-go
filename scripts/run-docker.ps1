@@ -101,6 +101,8 @@ The MCP launcher command for other clients is:
     $profileDirectory = Join-Path $cacheRoot "kali-mcp"
     $profilePath = Join-Path $profileDirectory "chromium-seccomp.json"
     $runPullPolicy = $pullPolicy
+    $runContainerName = $containerName
+    $replaceExisting = $false
 
     & docker container inspect $containerName *> $null
     if ($LASTEXITCODE -eq 0) {
@@ -120,12 +122,10 @@ The MCP launcher command for other clients is:
                 throw "kali-mcp installer: failed to inspect image '$imageName'"
             }
             if ($existingImageID -ne $desiredImageID) {
-                & docker rm -f $containerName | Out-Null
-                if ($LASTEXITCODE -ne 0) {
-                    throw "kali-mcp installer: failed to replace existing container '$containerName'"
-                }
                 $reuseExisting = $false
                 $runPullPolicy = "never"
+                $runContainerName = "{0}-candidate-{1}" -f $containerName, [guid]::NewGuid().ToString("N").Substring(0, 12)
+                $replaceExisting = $true
             }
         }
         if ($reuseExisting) {
@@ -150,7 +150,7 @@ The MCP launcher command for other clients is:
 
     $apiToken = New-ApiToken
     $dockerArguments = @(
-        "run", "--pull=$runPullPolicy", "-d", "--name", $containerName,
+        "run", "--pull=$runPullPolicy", "-d", "--name", $runContainerName,
         "--restart", "unless-stopped", "--init",
         "--add-host", "host.docker.internal:host-gateway", "--shm-size=512m",
         "--security-opt", "seccomp=$profilePath",
@@ -160,13 +160,33 @@ The MCP launcher command for other clients is:
     )
     & docker @dockerArguments | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        throw "kali-mcp installer: failed to create container '$containerName'"
+        & docker rm -f $runContainerName *> $null
+        throw "kali-mcp installer: failed to create replacement container"
     }
 
-    if (-not (Wait-KaliHealth -ContainerName $containerName)) {
-        & docker logs --tail 100 $containerName
-        & docker rm -f $containerName *> $null
+    if (-not (Wait-KaliHealth -ContainerName $runContainerName)) {
+        & docker logs --tail 100 $runContainerName
+        & docker rm -f $runContainerName *> $null
         throw "kali-mcp installer: new container failed its health check and was removed"
+    }
+
+    if ($replaceExisting) {
+        $backupName = "{0}-previous-{1}" -f $containerName, [guid]::NewGuid().ToString("N").Substring(0, 12)
+        & docker rename $containerName $backupName | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            & docker rm -f $runContainerName *> $null
+            throw "kali-mcp installer: failed to stage the existing container for replacement"
+        }
+        & docker rename $runContainerName $containerName | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            & docker rename $backupName $containerName *> $null
+            & docker rm -f $runContainerName *> $null
+            throw "kali-mcp installer: failed to activate the replacement container"
+        }
+        & docker rm -f $backupName | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "kali-mcp installer: replacement is healthy, but the previous container '$backupName' could not be removed"
+        }
     }
 
     Write-Registration -ContainerName $containerName

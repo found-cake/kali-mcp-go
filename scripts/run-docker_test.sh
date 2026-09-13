@@ -47,6 +47,9 @@ if [ "${1:-}" = "inspect" ]; then
 fi
 if [ "${1:-}" = "run" ]; then
   printf '%s\n' "$@" > "$KALI_MCP_DOCKER_CAPTURE"
+  if [ "${KALI_MCP_TEST_RUN_FAIL:-}" = "true" ]; then
+    exit 1
+  fi
   printf '%s\n' fake-container-id
   exit 0
 fi
@@ -54,6 +57,9 @@ if [ "${1:-}" = "exec" ]; then
   exit 0
 fi
 if [ "${1:-}" = "rm" ]; then
+  exit 0
+fi
+if [ "${1:-}" = "rename" ]; then
   exit 0
 fi
 printf '%s\n' "unexpected docker command: $*" >&2
@@ -78,8 +84,11 @@ EOF
 cat > "$fake_bin/openssl" <<'EOF'
 #!/bin/sh
 set -eu
-test "$*" = "rand -hex 32"
-printf '%s\n' test-api-token
+case "$*" in
+  'rand -hex 32') printf '%s\n' test-api-token ;;
+  'rand -hex 6') printf '%s\n' abcdef123456 ;;
+  *) exit 1 ;;
+esac
 EOF
 
 chmod +x "$fake_bin/docker" "$fake_bin/curl" "$fake_bin/openssl"
@@ -152,6 +161,29 @@ PATH="$fake_bin:$PATH" \
   KALI_MCP_TEST_DESIRED_IMAGE_ID=sha256:current \
   KALI_MCP_DOCKER_IMAGE="example.invalid/kali-mcp:test" \
   sh < "$repo_root/scripts/run-docker.sh" > "$test_root/update-output"
-grep -F 'rm -f kali-mcp' "$docker_log" >/dev/null
 test "$(sed -n '2p' "$capture_file")" = "--pull=never"
+test "$(sed -n '5p' "$capture_file")" = "kali-mcp-candidate-abcdef123456"
+grep -Fx 'rename kali-mcp kali-mcp-previous-abcdef123456' "$docker_log" >/dev/null
+grep -Fx 'rename kali-mcp-candidate-abcdef123456 kali-mcp' "$docker_log" >/dev/null
+grep -Fx 'rm -f kali-mcp-previous-abcdef123456' "$docker_log" >/dev/null
 grep -F 'docker exec -i kali-mcp mcp-client' "$test_root/update-output" >/dev/null
+
+failure_log="$test_root/failure-docker-log"
+if PATH="$fake_bin:$PATH" \
+  XDG_CACHE_HOME="$cache_root" \
+  KALI_MCP_DOCKER_CAPTURE="$capture_file" \
+  KALI_MCP_DOCKER_LOG="$failure_log" \
+  KALI_MCP_TEST_CONTAINER_EXISTS=true \
+  KALI_MCP_TEST_EXISTING_IMAGE_ID=sha256:current \
+  KALI_MCP_TEST_DESIRED_IMAGE_ID=sha256:newer \
+  KALI_MCP_TEST_RUN_FAIL=true \
+  KALI_MCP_DOCKER_IMAGE="example.invalid/kali-mcp:test" \
+  sh < "$repo_root/scripts/run-docker.sh" > "$test_root/failure-output" 2> "$test_root/failure-error"; then
+  printf '%s\n' "installer unexpectedly succeeded after replacement creation failed" >&2
+  exit 1
+fi
+grep -Fx 'rm -f kali-mcp-candidate-abcdef123456' "$failure_log" >/dev/null
+if grep -Eq '^rename kali-mcp |^rm -f kali-mcp$' "$failure_log"; then
+  printf '%s\n' "failed replacement modified the existing container" >&2
+  exit 1
+fi

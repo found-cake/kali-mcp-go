@@ -14,6 +14,8 @@ readonly managed_label="io.github.found-cake.kali-mcp.managed=true"
 
 temporary_profile=""
 run_pull_policy="$pull_policy"
+run_container_name="$container_name"
+replace_existing=false
 
 cleanup() {
   status=$?
@@ -73,9 +75,10 @@ EOF
 }
 
 wait_for_health() {
+  health_container=${1:-$container_name}
   attempts=0
   while test "$attempts" -lt 100; do
-    if docker exec "$container_name" curl -fsS --max-time 1 http://127.0.0.1:5000/health >/dev/null 2>&1; then
+    if docker exec "$health_container" curl -fsS --max-time 1 http://127.0.0.1:5000/health >/dev/null 2>&1; then
       return 0
     fi
     attempts=$((attempts + 1))
@@ -86,6 +89,14 @@ wait_for_health() {
 
 command -v docker >/dev/null 2>&1 || {
   printf '%s\n' "kali-mcp installer: docker is required" >&2
+  exit 1
+}
+command -v curl >/dev/null 2>&1 || {
+  printf '%s\n' "kali-mcp installer: curl is required" >&2
+  exit 1
+}
+command -v openssl >/dev/null 2>&1 || {
+  printf '%s\n' "kali-mcp installer: openssl is required" >&2
   exit 1
 }
 
@@ -101,16 +112,17 @@ if docker container inspect "$container_name" >/dev/null 2>&1; then
     existing_image_id=$(docker inspect --format '{{ .Image }}' "$container_name")
     desired_image_id=$(docker image inspect --format '{{ .Id }}' "$image_name")
     if test "$existing_image_id" != "$desired_image_id"; then
-      docker rm -f "$container_name" >/dev/null
       reuse_existing=false
       run_pull_policy=never
+      run_container_name="${container_name}-candidate-$(openssl rand -hex 6)"
+      replace_existing=true
     fi
   fi
   if test "$reuse_existing" = "true"; then
     if test "$(docker inspect --format '{{ .State.Running }}' "$container_name")" != "true"; then
       docker start "$container_name" >/dev/null
     fi
-    if ! wait_for_health; then
+    if ! wait_for_health "$container_name"; then
       printf '%s\n' "kali-mcp installer: existing container '$container_name' failed its health check" >&2
       exit 1
     fi
@@ -119,15 +131,6 @@ if docker container inspect "$container_name" >/dev/null 2>&1; then
   fi
 fi
 
-command -v curl >/dev/null 2>&1 || {
-  printf '%s\n' "kali-mcp installer: curl is required" >&2
-  exit 1
-}
-command -v openssl >/dev/null 2>&1 || {
-  printf '%s\n' "kali-mcp installer: openssl is required" >&2
-  exit 1
-}
-
 if ! profile_is_valid "$profile_path"; then
   install_profile
 fi
@@ -135,10 +138,10 @@ fi
 api_token=$(openssl rand -hex 32)
 test -n "$api_token"
 
-docker run \
+if ! docker run \
   --pull="$run_pull_policy" \
   -d \
-  --name "$container_name" \
+  --name "$run_container_name" \
   --restart unless-stopped \
   --init \
   --add-host host.docker.internal:host-gateway \
@@ -148,13 +151,36 @@ docker run \
   -e "KALI_MCP_API_TOKEN=$api_token" \
   --entrypoint kali-server \
   "$image_name" \
-  --ip 127.0.0.1 --port 5000 >/dev/null
+  --ip 127.0.0.1 --port 5000 >/dev/null; then
+  docker rm -f "$run_container_name" >/dev/null 2>&1 || true
+  printf '%s\n' "kali-mcp installer: failed to create replacement container" >&2
+  exit 1
+fi
 
-if ! wait_for_health; then
-  docker logs --tail 100 "$container_name" >&2 || true
-  docker rm -f "$container_name" >/dev/null 2>&1 || true
+if ! wait_for_health "$run_container_name"; then
+  docker logs --tail 100 "$run_container_name" >&2 || true
+  docker rm -f "$run_container_name" >/dev/null 2>&1 || true
   printf '%s\n' "kali-mcp installer: new container failed its health check and was removed" >&2
   exit 1
+fi
+
+if test "$replace_existing" = "true"; then
+  backup_name="${container_name}-previous-$(openssl rand -hex 6)"
+  if ! docker rename "$container_name" "$backup_name"; then
+    docker rm -f "$run_container_name" >/dev/null 2>&1 || true
+    printf '%s\n' "kali-mcp installer: failed to stage the existing container for replacement" >&2
+    exit 1
+  fi
+  if ! docker rename "$run_container_name" "$container_name"; then
+    docker rename "$backup_name" "$container_name" >/dev/null 2>&1 || true
+    docker rm -f "$run_container_name" >/dev/null 2>&1 || true
+    printf '%s\n' "kali-mcp installer: failed to activate the replacement container" >&2
+    exit 1
+  fi
+  if ! docker rm -f "$backup_name" >/dev/null; then
+    printf '%s\n' "kali-mcp installer: replacement is healthy, but the previous container '$backup_name' could not be removed" >&2
+    exit 1
+  fi
 fi
 
 print_registration
