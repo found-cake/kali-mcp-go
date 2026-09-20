@@ -5,7 +5,7 @@ go 1.27
 require (
 	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/google/jsonschema-go v0.4.3
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	golang.org/x/net v0.58.0
 )
 
