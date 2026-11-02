@@ -6,7 +6,7 @@ require (
 	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 )
 
 require (
